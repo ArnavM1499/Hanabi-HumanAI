@@ -1,3 +1,5 @@
+import random
+
 global HINT_COLOR, HINT_NUMBER, PLAY, DISCARD, CANDISCARD, GREEN, YELLOW, WHITE, BLUE, RED, ALL_COLORS, COLORNAMES, COUNTS
 
 HINT_COLOR = 0
@@ -30,7 +32,7 @@ def make_deck():
     deck = []
     for col in ALL_COLORS:
         for num, cnt in enumerate(COUNTS):
-            for i in xrange(cnt):
+            for i in range(cnt):
                 deck.append((col, num+1))
     random.shuffle(deck)
     return deck
