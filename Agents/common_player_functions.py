@@ -47,6 +47,15 @@ def playable(possible, board):
         if board[col][1] + 1 != nr:
             return False
     return True
+
+def percent_playable(possible, board):
+    num = 0
+
+    for (col,nr) in possible:
+        if board[col][1] + 1 == nr:
+            num += 1
+
+    return num/len(possible)
     
 def potentially_playable(possible, board):
     for (col,nr) in possible:

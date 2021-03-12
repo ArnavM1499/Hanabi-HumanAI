@@ -2,6 +2,7 @@ import random
 import sys
 import copy
 import time
+import csv
 from common_game_functions import *
 from Agents.player import Player, Action
         
@@ -14,7 +15,7 @@ def format_hand(hand):
         
 
 class Game(object):
-    def __init__(self, players, log=sys.stdout, format=0):
+    def __init__(self, players, data_file, log=sys.stdout, format=0):
         self.players = players
         self.hits = 3
         self.hints = 8
@@ -32,6 +33,9 @@ class Game(object):
         self.format = format
         self.dopostsurvey = False
         self.study = False
+        self.data_file = open(data_file, 'a')
+        self.data_writer = csv.writer(self.data_file, delimiter = ',')
+        #self.data_writer.writerow(["Player","Action Type","Board","Discards","Hints available","Knowledge from hints"])
         if self.format:
             print( self.log, self.deck)
     def make_hands(self):
@@ -136,12 +140,14 @@ class Game(object):
                 else:
                     hands.append(h)
             action = self.players[self.current_player].get_action(self.current_player, hands, self.knowledge, self.trash, self.played, self.board, self.valid_actions(), self.hints)
+            self.data_writer.writerow([self.current_player, action.type, self.board, self.trash, self.hints, self.knowledge[self.current_player]])
             self.perform(action)
             self.current_player += 1
             self.current_player %= len(self.players)
         print(self.log, "Game done, hits left:", self.hits)
         points = self.score()
         print(self.log, "Points:", points)
+        self.data_file.close()
         return points
     def score(self):
         return sum(map(lambda colnum: colnum[1], self.board))
