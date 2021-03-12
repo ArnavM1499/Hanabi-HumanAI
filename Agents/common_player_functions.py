@@ -1,3 +1,5 @@
+from common_game_functions import *
+
 def hint_color(knowledge, color, truth):
     result = []
     for col in ALL_COLORS:
@@ -19,8 +21,8 @@ def hint_rank(knowledge, rank, truth):
         result.append(colknow)
     return result
 
-def iscard(card):
-    (c,n) = card
+def iscard(colnum):
+    (c,n) = colnum
     knowledge = []
     for col in ALL_COLORS:
         knowledge.append(COUNTS[:])
@@ -45,6 +47,15 @@ def playable(possible, board):
         if board[col][1] + 1 != nr:
             return False
     return True
+
+def percent_playable(possible, board):
+    num = 0
+
+    for (col,nr) in possible:
+        if board[col][1] + 1 == nr:
+            num += 1
+
+    return num/len(possible)
 
 def potentially_playable(possible, board):
     for (col,nr) in possible:
