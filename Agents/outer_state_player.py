@@ -30,7 +30,7 @@ class OuterStatePlayer(Player):
                 for j,(col,n) in enumerate(h):
                     if board[col][1] + 1 == n:
                         playables.append((i,j))
-        playables.sort(key=lambda (i,j): -hands[i][j][1])
+        playables.sort(key=lambda i_j: -hands[i_j[0]][i_j[1]][1])
         while playables and hints > 0:
             i,j = playables[0]
             knows_rank = True
@@ -61,7 +61,7 @@ class OuterStatePlayer(Player):
         for i, k in enumerate(knowledge):
             if i == nr:
                 continue
-            cards = range(len(k))
+            cards = list(range(len(k)))
             random.shuffle(cards)
             c = cards[0]
             (col,num) = hands[i][c]            
@@ -78,13 +78,13 @@ class OuterStatePlayer(Player):
                     self.hints[(c,i)].append(HINT_NUMBER)
                     return Action(HINT_NUMBER, pnr=i, num=num)
 
-        return random.choice([Action(DISCARD, cnr=i) for i in xrange(handsize)])
+        return random.choice([Action(DISCARD, cnr=i) for i in range(handsize)])
     def inform(self, action, player, game):
         if action.type in [PLAY, DISCARD]:
             x = str(action)
             if (action.cnr,player) in self.hints:
                 self.hints[(action.cnr,player)] = []
-            for i in xrange(10):
+            for i in range(10):
                 if (action.cnr+i+1,player) in self.hints:
                     self.hints[(action.cnr+i,player)] = self.hints[(action.cnr+i+1,player)]
                     self.hints[(action.cnr+i+1,player)] = []

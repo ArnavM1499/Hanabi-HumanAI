@@ -39,7 +39,7 @@ class InnerStatePlayer(Player):
         for i, k in enumerate(knowledge):
             if i == nr:
                 continue
-            cards = range(len(k))
+            cards = list(range(len(k)))
             random.shuffle(cards)
             c = cards[0]
             (col,num) = hands[i][c]            
@@ -57,6 +57,6 @@ class InnerStatePlayer(Player):
         prefer = []
         if prefer and hints > 0:
             return random.choice(prefer)
-        return random.choice([Action(DISCARD, cnr=i) for i in xrange(len(knowledge[0]))])
+        return random.choice([Action(DISCARD, cnr=i) for i in range(len(knowledge[0]))])
     def inform(self, action, player, game):
         pass

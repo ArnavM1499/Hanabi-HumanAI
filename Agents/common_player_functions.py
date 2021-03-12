@@ -6,7 +6,7 @@ def hint_color(knowledge, color, truth):
         else:
             result.append([0 for i in knowledge[col]])
     return result
-    
+
 def hint_rank(knowledge, rank, truth):
     result = []
     for col in ALL_COLORS:
@@ -18,17 +18,18 @@ def hint_rank(knowledge, rank, truth):
                 colknow.append(0)
         result.append(colknow)
     return result
-    
-def iscard((c,n)):
+
+def iscard(card):
+    (c,n) = card
     knowledge = []
     for col in ALL_COLORS:
         knowledge.append(COUNTS[:])
-        for i in xrange(len(knowledge[-1])):
+        for i in range(len(knowledge[-1])):
             if col != c or i+1 != n:
                 knowledge[-1][i] = 0
             else:
                 knowledge[-1][i] = 1
-            
+
     return knowledge
 
 def get_possible(knowledge):
@@ -38,31 +39,31 @@ def get_possible(knowledge):
             if cnt > 0:
                 result.append((col,i+1))
     return result
-    
+
 def playable(possible, board):
     for (col,nr) in possible:
         if board[col][1] + 1 != nr:
             return False
     return True
-    
+
 def potentially_playable(possible, board):
     for (col,nr) in possible:
         if board[col][1] + 1 == nr:
             return True
     return False
-    
+
 def discardable(possible, board):
     for (col,nr) in possible:
         if board[col][1] < nr:
             return False
     return True
-    
+
 def potentially_discardable(possible, board):
     for (col,nr) in possible:
         if board[col][1] >= nr:
             return True
     return False
-    
+
 def update_knowledge(knowledge, used):
     result = copy.deepcopy(knowledge)
     for r in result:
@@ -74,14 +75,14 @@ def generate_hands(knowledge, used={}):
     if len(knowledge) == 0:
         yield []
         return
-    
-    
-    
+
+
+
     for other in generate_hands(knowledge[1:], used):
         for col in ALL_COLORS:
             for i,cnt in enumerate(knowledge[0][col]):
                 if cnt > 0:
-                    
+
                     result = [(col,i+1)] + other
                     ok = True
                     thishand = {}
@@ -115,12 +116,12 @@ def format_intention(i):
     elif i == CANDISCARD:
         return "Can Discard"
     return "Keep"
-    
+
 def whattodo(knowledge, pointed, board):
     possible = get_possible(knowledge)
     play = potentially_playable(possible, board)
     discard = potentially_discardable(possible, board)
-    
+
     if play and pointed:
         return PLAY
     if discard and pointed:
@@ -145,7 +146,7 @@ def pretend(action, knowledge, intentions, hand, board):
         newknowledge = []
         for i,(col,num) in enumerate(hand):
             positive.append(value==num)
-            
+
             newknowledge.append(hint_rank(knowledge[i], value, value == num))
             if value == num:
                 haspositive = True
@@ -159,17 +160,17 @@ def pretend(action, knowledge, intentions, hand, board):
     predictions = []
     pos = False
     for i,c,k,p in zip(intentions, hand, newknowledge, positive):
-        
+
         action = whattodo(k, p, board)
-        
+
         if action == PLAY and i != PLAY:
             #print "would cause them to play", f(c)
             return False, 0, predictions + [PLAY]
-        
+
         if action == DISCARD and i not in [DISCARD, CANDISCARD]:
             #print "would cause them to discard", f(c)
             return False, 0, predictions + [DISCARD]
-            
+
         if action == PLAY and i == PLAY:
             pos = True
             predictions.append(PLAY)
@@ -186,16 +187,16 @@ def pretend(action, knowledge, intentions, hand, board):
     if not pos:
         return False, score, predictions
     return True,score, predictions
-    
+
 HINT_VALUE = 0.5
-    
+
 def pretend_discard(act, knowledge, board, trash):
     which = copy.deepcopy(knowledge[act.cnr])
     for (col,num) in trash:
         if which[col][num-1]:
             which[col][num-1] -= 1
     for col in ALL_COLORS:
-        for i in xrange(board[col][1]):
+        for i in range(board[col][1]):
             if which[col][i]:
                 which[col][i] -= 1
     possibilities = sum(map(sum, which))
