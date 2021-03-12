@@ -37,7 +37,7 @@ class IntentionalPlayer(Player):
         useless = []
         discardables = []
         othercards = trash + board
-        intentions = [None for i in xrange(handsize)]
+        intentions = [None for i in range(handsize)]
         for i,h in enumerate(hands):
             if i != nr:
                 for j,(col,n) in enumerate(h):
@@ -68,7 +68,7 @@ class IntentionalPlayer(Player):
                 if isvalid:
                     valid.append((action,score))
             
-            for r in xrange(5):
+            for r in range(5):
                 r += 1
                 action = (HINT_NUMBER, r)
                 #print "HINT", r,
@@ -89,7 +89,7 @@ class IntentionalPlayer(Player):
                     result = Action(HINT_NUMBER, pnr=1-nr, num=a[1])
 
         self.explanation.append(["My Knowledge"] + map(format_knowledge, knowledge[nr]))
-        possible = [ Action(DISCARD, cnr=i) for i in xrange(handsize) ]
+        possible = [ Action(DISCARD, cnr=i) for i in range(handsize) ]
         
         scores = map(lambda p: pretend_discard(p, knowledge[nr], board, trash), possible)
         def format_term((col,rank,n,prob,val)):
@@ -101,13 +101,13 @@ class IntentionalPlayer(Player):
             return result
         return scores[0][0]
         
-        return random.choice([Action(DISCARD, cnr=i) for i in xrange(handsize)])
+        return random.choice([Action(DISCARD, cnr=i) for i in range(handsize)])
     def inform(self, action, player, game):
         if action.type in [PLAY, DISCARD]:
             x = str(action)
             if (action.cnr,player) in self.hints:
                 self.hints[(action.cnr,player)] = []
-            for i in xrange(10):
+            for i in range(10):
                 if (action.cnr+i+1,player) in self.hints:
                     self.hints[(action.cnr+i,player)] = self.hints[(action.cnr+i+1,player)]
                     self.hints[(action.cnr+i+1,player)] = []

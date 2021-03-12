@@ -29,3 +29,5 @@ class Player(object):
         pass
     def get_explanation(self):
         return self.explanation
+    def new_game(self, hands): # All the hands visible to the player
+        pass

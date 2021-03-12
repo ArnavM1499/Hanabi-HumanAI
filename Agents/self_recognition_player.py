@@ -48,8 +48,8 @@ class SelfRecognitionPlayer(Player):
             #print len(possiblehands), "would have led to", self.gothint[0], "and not:", wrong
             #print f(possiblehands)
             if possiblehands:
-                mostlikely = [(0,0) for i in xrange(len(possiblehands[0]))]
-                for i in xrange(len(possiblehands[0])):
+                mostlikely = [(0,0) for i in range(len(possiblehands[0]))]
+                for i in range(len(possiblehands[0])):
                     counts = {}
                     for h in possiblehands:
                         if h[i] not in counts:
@@ -134,13 +134,13 @@ class SelfRecognitionPlayer(Player):
                     self.hints[(c,i)].append(HINT_NUMBER)
                     return Action(HINT_NUMBER, pnr=i, num=num)
 
-        return random.choice([Action(DISCARD, cnr=i) for i in xrange(handsize)])
+        return random.choice([Action(DISCARD, cnr=i) for i in range(handsize)])
     def inform(self, action, player, game):
         if action.type in [PLAY, DISCARD]:
             x = str(action)
             if (action.cnr,player) in self.hints:
                 self.hints[(action.cnr,player)] = []
-            for i in xrange(10):
+            for i in range(10):
                 if (action.cnr+i+1,player) in self.hints:
                     self.hints[(action.cnr+i,player)] = self.hints[(action.cnr+i+1,player)]
                     self.hints[(action.cnr+i+1,player)] = []

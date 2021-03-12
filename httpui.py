@@ -347,8 +347,8 @@ class HTTPPlayer(hanabi.Player):
         self.name = name
         self.pnr = pnr
         self.actions = []
-        self.knows = [set() for i in xrange(5)]
-        self.aiknows = [set() for i in xrange(5)]
+        self.knows = [set() for i in range(5)]
+        self.aiknows = [set() for i in range(5)]
         self.show = []
     
     def inform(self, action, player, game):
@@ -734,7 +734,7 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             random.seed(deck)
             game = hanabi.Game(players, log=hanabi.NullStream())
             game.started = time.time()
-            for i in xrange(round):
+            for i in range(round):
                 game.single_turn()
             doaction = False
             turn = -1
@@ -801,7 +801,7 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             game.treatment = t
             game.ping = time.time()
             game.started = True
-            for i in xrange(round):
+            for i in range(round):
                 game.single_turn()
             game.players[0] = game.players[0].realplayer
             game.current_player = 1
