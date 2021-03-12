@@ -1,3 +1,4 @@
+import copy
 from common_game_functions import *
 
 def hint_color(knowledge, color, truth):

@@ -13,12 +13,12 @@ class FullyIntentionalPlayer(Player):
     def get_action(self, nr, hands, knowledge, trash, played, board, valid_actions, hints):
         handsize = len(knowledge[0])
         possible = []
-        
-        
+
+
         self.gothint = None
         for k in knowledge[nr]:
             possible.append(get_possible(k))
-        
+
         discards = []
         plays = []
         duplicates = []
@@ -27,7 +27,7 @@ class FullyIntentionalPlayer(Player):
                 plays.append(i)
             if discardable(p,board):
                 discards.append(i)
-            
+
         playables = []
         useless = []
         discardables = []
@@ -47,24 +47,24 @@ class FullyIntentionalPlayer(Player):
                         discardables.append((i,j))
                         if not intentions[j]:
                             intentions[j] = CANDISCARD
-        
-        
+
+
 
         if hints > 0:
             valid = []
             for c in ALL_COLORS:
                 action = (HINT_COLOR, c)
                 #print "HINT", COLORNAMES[c],
-                (isvalid,score) = pretend(action, knowledge[1-nr], intentions, hands[1-nr], board)
+                (isvalid,score, _) = pretend(action, knowledge[1-nr], intentions, hands[1-nr], board)
                 #print isvalid, score
                 if isvalid:
                     valid.append((action,score))
-            
+
             for r in range(5):
                 r += 1
                 action = (HINT_NUMBER, r)
                 #print "HINT", r,
-                (isvalid,score) = pretend(action, knowledge[1-nr], intentions, hands[1-nr], board)
+                (isvalid,score,_) = pretend(action, knowledge[1-nr], intentions, hands[1-nr], board)
                 #print isvalid, score
                 if isvalid:
                     valid.append((action,score))
@@ -76,15 +76,15 @@ class FullyIntentionalPlayer(Player):
                     return Action(HINT_COLOR, pnr=1-nr, col=a[1])
                 else:
                     return Action(HINT_NUMBER, pnr=1-nr, num=a[1])
-            
-        
+
+
         for i, k in enumerate(knowledge):
             if i == nr or True:
                 continue
             cards = list(range(len(k)))
             random.shuffle(cards)
             c = cards[0]
-            (col,num) = hands[i][c]            
+            (col,num) = hands[i][c]
             hinttype = [HINT_COLOR, HINT_NUMBER]
             if (c,i) not in self.hints:
                 self.hints[(c,i)] = []

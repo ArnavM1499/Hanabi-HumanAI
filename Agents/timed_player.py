@@ -1,3 +1,4 @@
+import time
 from Agents.common_player_functions import *
 from Agents.player import *
 
@@ -14,7 +15,7 @@ def priorities(c, board):
     if val == 5:
         return 15
     return 6 + (4 - val)
-    
+
 
 
 SENT = 0
@@ -22,7 +23,7 @@ ERRORS = 0
 COUNT = 0
 
 CAREFUL = True
-        
+
 class TimedPlayer(object):
     def __init__(self, name, pnr):
         self.name = name
