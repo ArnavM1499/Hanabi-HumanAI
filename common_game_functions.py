@@ -36,7 +36,7 @@ def make_deck():
                 deck.append((col, num+1))
     random.shuffle(deck)
     return deck
-    
+
 def initial_knowledge():
     knowledge = []
     for col in ALL_COLORS:

@@ -30,7 +30,7 @@ class OuterStatePlayer(Player):
                 for j,(col,n) in enumerate(h):
                     if board[col][1] + 1 == n:
                         playables.append((i,j))
-        playables.sort(key=lambda (i,j): -hands[i][j][1])
+        playables.sort(key=lambda i_j: -hands[i_j[0]][i_j[1]][1])
         while playables and hints > 0:
             i,j = playables[0]
             knows_rank = True
@@ -61,7 +61,7 @@ class OuterStatePlayer(Player):
         for i, k in enumerate(knowledge):
             if i == nr:
                 continue
-            cards = range(len(k))
+            cards = list(range(len(k)))
             random.shuffle(cards)
             c = cards[0]
             (col,num) = hands[i][c]            

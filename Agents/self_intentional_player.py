@@ -16,7 +16,7 @@ class SelfIntentionalPlayer(Player):
         possible = []
         result = None
         self.explanation = []
-        self.explanation.append(["Your Hand:"] + map(f, hands[1-nr]))
+        self.explanation.append(["Your Hand:"] + list(map(f, hands[1-nr])))
         action = []
         if self.gothint:
             (act,plr) = self.gothint
@@ -29,10 +29,10 @@ class SelfIntentionalPlayer(Player):
                     for c in ALL_COLORS:
                         cnt += k[c][act.num-1]
                     action.append(whattodo(k, cnt > 0, board))
-                    
+
 
         if action:
-            self.explanation.append(["What you want me to do"] + map(format_intention, action))
+            self.explanation.append(["What you want me to do"] + list(map(format_intention, action)))
             for i,a in enumerate(action):
                 if a == PLAY and (not result or result.type == DISCARD):
                     result = Action(PLAY, cnr=i)
@@ -42,7 +42,7 @@ class SelfIntentionalPlayer(Player):
         self.gothint = None
         for k in knowledge[nr]:
             possible.append(get_possible(k))
-        
+
         discards = []
         duplicates = []
         for i,p in enumerate(possible):
@@ -53,7 +53,7 @@ class SelfIntentionalPlayer(Player):
 
         if discards and hints < 8 and not result:
             result =  Action(DISCARD, cnr=random.choice(discards))
-            
+
         playables = []
         useless = []
         discardables = []
@@ -73,35 +73,35 @@ class SelfIntentionalPlayer(Player):
                         discardables.append((i,j))
                         if not intentions[j]:
                             intentions[j] = CANDISCARD
-        
-        self.explanation.append(["Intentions"] + map(format_intention, intentions))
-        
-        
-            
+
+        self.explanation.append(["Intentions"] + list(map(format_intention, intentions)))
+
+
+
         if hints > 0:
             valid = []
             for c in ALL_COLORS:
                 action = (HINT_COLOR, c)
                 #print "HINT", COLORNAMES[c],
                 (isvalid,score,expl) = pretend(action, knowledge[1-nr], intentions, hands[1-nr], board)
-                self.explanation.append(["Prediction for: Hint Color " + COLORNAMES[c]] + map(format_intention, expl))
+                self.explanation.append(["Prediction for: Hint Color " + COLORNAMES[c]] + list(map(format_intention, expl)))
                 #print isvalid, score
                 if isvalid:
                     valid.append((action,score))
-            
+
             for r in range(5):
                 r += 1
                 action = (HINT_NUMBER, r)
                 #print "HINT", r,
-                
+
                 (isvalid,score, expl) = pretend(action, knowledge[1-nr], intentions, hands[1-nr], board)
-                self.explanation.append(["Prediction for: Hint Rank " + str(r)] + map(format_intention, expl))
+                self.explanation.append(["Prediction for: Hint Rank " + str(r)] + list(map(format_intention, expl)))
                 #print isvalid, score
                 if isvalid:
                     valid.append((action,score))
-                 
+
             if valid and not result:
-                valid.sort(key=lambda (a,s): -s)
+                valid.sort(key=lambda a_s: -a_s[1])
                 #print valid
                 (a,s) = valid[0]
                 if a[0] == HINT_COLOR:
@@ -109,19 +109,20 @@ class SelfIntentionalPlayer(Player):
                 else:
                     result = Action(HINT_NUMBER, pnr=1-nr, num=a[1])
 
-        self.explanation.append(["My Knowledge"] + map(format_knowledge, knowledge[nr]))
+        self.explanation.append(["My Knowledge"] + list(map(format_knowledge, knowledge[nr])))
         possible = [ Action(DISCARD, cnr=i) for i in range(handsize) ]
-        
-        scores = map(lambda p: pretend_discard(p, knowledge[nr], board, trash), possible)
-        def format_term((col,rank,n,prob,val)):
+
+        scores = [pretend_discard(p, knowledge[nr], board, trash) for p in possible]
+        def format_term(xxx_todo_changeme):
+            (col,rank,n,prob,val) = xxx_todo_changeme
             return COLORNAMES[col] + " " + str(rank) + " (%.2f%%): %.2f"%(prob*100, val)
-            
-        self.explanation.append(["Discard Scores"] + map(lambda (a,s,t): "\n".join(map(format_term, t)) + "\n%.2f"%(s), scores))
-        scores.sort(key=lambda (a,s,t): -s)
+
+        self.explanation.append(["Discard Scores"] + ["\n".join(map(format_term, a_s_t[2])) + "\n%.2f"%(a_s_t[1]) for a_s_t in scores])
+        scores.sort(key=lambda a_s_t1: -a_s_t1[1])
         if result:
             return result
         return scores[0][0]
-        
+
         return random.choice([Action(DISCARD, cnr=i) for i in range(handsize)])
     def inform(self, action, player, game):
         if action.type in [PLAY, DISCARD]:

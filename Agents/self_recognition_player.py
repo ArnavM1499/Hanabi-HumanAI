@@ -1,5 +1,6 @@
 from Agents.common_player_functions import *
 from Agents.player import *
+from Agents.outer_state_player import OuterStatePlayer
 
 class SelfRecognitionPlayer(Player):
     def __init__(self, name, pnr, other=OuterStatePlayer):
@@ -15,9 +16,9 @@ class SelfRecognitionPlayer(Player):
     def get_action(self, nr, hands, knowledge, trash, played, board, valid_actions, hints):
         handsize = len(knowledge[0])
         possible = []
-        
+
         if self.gothint:
-            
+
             possiblehands = []
             wrong = 0
             used = {}
@@ -26,7 +27,7 @@ class SelfRecognitionPlayer(Player):
                     used[(c,i+1)] = 0
             for c in trash + played:
                 used[c] += 1
-            
+
             for h in generate_hands_simple(knowledge[nr], used):
                 newhands = hands[:]
                 newhands[nr] = h
@@ -40,7 +41,7 @@ class SelfRecognitionPlayer(Player):
                         h1 = h[:]
                         h1[i] = c
                         newhands[nr] = h1
-                        print other.get_action(self.gothint[1], newhands, self.last_knowledge, self.last_trash, self.last_played, self.last_board, valid_actions, hints + 1)
+                        print(other.get_action(self.gothint[1], newhands, self.last_knowledge, self.last_trash, self.last_played, self.last_board, valid_actions, hints + 1))
                     #import pdb
                     #pdb.set_trace()
                 else:
@@ -59,20 +60,20 @@ class SelfRecognitionPlayer(Player):
                         if counts[c] > mostlikely[i][1]:
                             mostlikely[i] = (c,counts[c])
                 #print "most likely:", mostlikely
-                m = max(mostlikely, key=lambda (card,cnt): cnt)
+                m = max(mostlikely, key=lambda card_cnt: card_cnt[1])
                 second = mostlikely[:]
                 second.remove(m)
-                m2 = max(second, key=lambda (card,cnt): cnt)
+                m2 = max(second, key=lambda card_cnt1: card_cnt1[1])
                 if m[1] >= m2[1]*a:
                     #print ">>>>>>> deduced!", f(m[0]), m[1],"vs", f(m2[0]), m2[1]
                     knowledge = copy.deepcopy(knowledge)
                     knowledge[nr][mostlikely.index(m)] = iscard(m[0])
 
-        
+
         self.gothint = None
         for k in knowledge[nr]:
             possible.append(get_possible(k))
-        
+
         discards = []
         duplicates = []
         for i,p in enumerate(possible):
@@ -83,44 +84,44 @@ class SelfRecognitionPlayer(Player):
 
         if discards:
             return Action(DISCARD, cnr=random.choice(discards))
-            
+
         playables = []
         for i,h in enumerate(hands):
             if i != nr:
                 for j,(col,n) in enumerate(h):
                     if board[col][1] + 1 == n:
                         playables.append((i,j))
-        playables.sort(key=lambda (i,j): -hands[i][j][1])
+        playables.sort(key=lambda i_j: -hands[i_j[0]][i_j[1]][1])
         while playables and hints > 0:
             i,j = playables[0]
             knows_rank = True
             real_color = hands[i][j][0]
             real_rank = hands[i][j][0]
             k = knowledge[i][j]
-            
+
             hinttype = [HINT_COLOR, HINT_NUMBER]
             if (j,i) not in self.hints:
                 self.hints[(j,i)] = []
-            
+
             for h in self.hints[(j,i)]:
                 hinttype.remove(h)
-            
+
             if HINT_NUMBER in hinttype:
                 self.hints[(j,i)].append(HINT_NUMBER)
                 return Action(HINT_NUMBER, pnr=i, num=hands[i][j][1])
             if HINT_COLOR in hinttype:
                 self.hints[(j,i)].append(HINT_COLOR)
                 return Action(HINT_COLOR, pnr=i, col=hands[i][j][0])
-            
+
             playables = playables[1:]
-        
+
         for i, k in enumerate(knowledge):
             if i == nr:
                 continue
-            cards = range(len(k))
+            cards = list(range(len(k)))
             random.shuffle(cards)
             c = cards[0]
-            (col,num) = hands[i][c]            
+            (col,num) = hands[i][c]
             hinttype = [HINT_COLOR, HINT_NUMBER]
             if (c,i) not in self.hints:
                 self.hints[(c,i)] = []
