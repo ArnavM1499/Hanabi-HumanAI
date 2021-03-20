@@ -1,4 +1,5 @@
 from common_game_functions import *
+from hanabi import *
 
 class Action(object):
     def __init__(self, type, pnr=None, col=None, num=None, cnr=None):
@@ -23,7 +24,7 @@ class Player(object):
     def __init__(self, name, pnr):
         self.name = name
         self.explanation = []
-    def get_action(self, nr, hands, knowledge, trash, played, board, valid_actions, hints):
+    def get_action(self, game_state, base_player_model):
         return random.choice(valid_actions)
     def inform(self, action, player, game):
         pass

@@ -12,7 +12,59 @@ def format_card(colnum):
         
 def format_hand(hand):
     return ", ".join(map(format_card, hand))
-        
+
+class BasePlayerModel(object):
+    def __init__(self, knowledge, hints):
+        self.knowledge = knowledge # This is the knowledge matrix based only on updates in game engine
+        self.hints = hints # These are the hints that this player has received (Format: List of (P,Hint) if recieved from player P)
+
+    def get_hints(self):
+        return self.hints
+
+    def get_knowledge(self):
+        return self.knowledge
+
+    def get_hints_from_player(self, p):
+        filtered_hints = []
+
+        for player, hint in hints:
+            if p == player:
+                filtered_hints.append(hint)
+
+        return filtered_hints
+
+
+class GameState(object):
+    def __init__(self, current_player, hands, trash, played, board, valid_actions, num_hints):
+        self.current_player = current_player
+        self.hands = hands
+        self.trash = trash
+        self.played = played
+        self.board = board
+        self.valid_actions = valid_actions
+        self.num_hints = num_hints
+
+    def get_current_player(self):
+        return self.current_player
+
+    def get_hands(self):
+        return self.hands
+
+    def get_trash(self):
+        return self.trash
+
+    def get_played(self):
+        return self.played
+
+    def get_board(self):
+        return self.board
+
+    def get_valid_actions(self):
+        return self.valid_actions
+
+    def get_num_hints(self):
+        return self.num_hints  
+
 
 class Game(object):
     def __init__(self, players, data_file, log=sys.stdout, format=0):
@@ -35,7 +87,7 @@ class Game(object):
         self.study = False
         self.data_file = open(data_file, 'a')
         self.data_writer = csv.writer(self.data_file, delimiter = ',')
-        #self.data_writer.writerow(["Player","Action Type","Board","Discards","Hints available","Knowledge from hints"])
+        self.hint_log = dict([(a,[]) for a in range(len(players))])
         if self.format:
             print( self.log, self.deck)
     def make_hands(self):
@@ -64,6 +116,7 @@ class Game(object):
             self.hints -= 1
             print(self.log, self.players[self.current_player].name, "hints", self.players[action.pnr].name, "about all their", COLORNAMES[action.col], "cards", "hints remaining:", self.hints)
             print(self.log, self.players[action.pnr].name, "has", format_hand(self.hands[action.pnr]))
+            self.hint_log[action.pnr].append((self.current_player, action))
             for (col,num),knowledge in zip(self.hands[action.pnr],self.knowledge[action.pnr]):
                 if col == action.col:
                     for i, k in enumerate(knowledge):
@@ -77,6 +130,7 @@ class Game(object):
             self.hints -= 1
             print(self.log, self.players[self.current_player].name, "hints", self.players[action.pnr].name, "about all their", action.num, "hints remaining:", self.hints)
             print(self.log, self.players[action.pnr].name, "has", format_hand(self.hands[action.pnr]))
+            self.hint_log[action.pnr].append((self.current_player, action))
             for (col,num),knowledge in zip(self.hands[action.pnr],self.knowledge[action.pnr]):
                 if num == action.num:
                     for k in knowledge:
@@ -139,7 +193,9 @@ class Game(object):
                     hands.append([])
                 else:
                     hands.append(h)
-            action = self.players[self.current_player].get_action(self.current_player, hands, self.knowledge, self.trash, self.played, self.board, self.valid_actions(), self.hints)
+            game_state = GameState(self.current_player, hands, self.trash, self.played, self.board, self.valid_actions(), self.hints)
+            player_model = BasePlayerModel(self.knowledge[self.current_player], self.hint_log[self.current_player])
+            action = self.players[self.current_player].get_action(game_state, player_model)
             self.data_writer.writerow([self.current_player, action.type, self.board, self.trash, self.hints, self.knowledge[self.current_player]])
             self.perform(action)
             self.current_player += 1
