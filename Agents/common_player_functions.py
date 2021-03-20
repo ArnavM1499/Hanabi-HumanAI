@@ -1,6 +1,7 @@
 import copy
 from common_game_functions import *
 
+
 def hint_color(knowledge, color, truth):
     result = []
     for col in ALL_COLORS:
@@ -10,11 +11,12 @@ def hint_color(knowledge, color, truth):
             result.append([0 for i in knowledge[col]])
     return result
 
+
 def hint_rank(knowledge, rank, truth):
     result = []
     for col in ALL_COLORS:
         colknow = []
-        for i,k in enumerate(knowledge[col]):
+        for i, k in enumerate(knowledge[col]):
             if truth == (i + 1 == rank):
                 colknow.append(k)
             else:
@@ -22,91 +24,99 @@ def hint_rank(knowledge, rank, truth):
         result.append(colknow)
     return result
 
+
 def iscard(colnum):
-    (c,n) = colnum
+    (c, n) = colnum
     knowledge = []
     for col in ALL_COLORS:
         knowledge.append(COUNTS[:])
         for i in range(len(knowledge[-1])):
-            if col != c or i+1 != n:
+            if col != c or i + 1 != n:
                 knowledge[-1][i] = 0
             else:
                 knowledge[-1][i] = 1
 
     return knowledge
 
+
 def get_possible(knowledge):
     result = []
     for col in ALL_COLORS:
-        for i,cnt in enumerate(knowledge[col]):
+        for i, cnt in enumerate(knowledge[col]):
             if cnt > 0:
-                result.append((col,i+1))
+                result.append((col, i + 1))
     return result
 
+
 def playable(possible, board):
-    for (col,nr) in possible:
+    for (col, nr) in possible:
         if board[col][1] + 1 != nr:
             return False
     return True
 
+
 def percent_playable(possible, board):
     num = 0
 
-    for (col,nr) in possible:
+    for (col, nr) in possible:
         if board[col][1] + 1 == nr:
             num += 1
 
-    return num/len(possible)
+    return num / len(possible)
+
 
 def potentially_playable(possible, board):
-    for (col,nr) in possible:
+    for (col, nr) in possible:
         if board[col][1] + 1 == nr:
             return True
     return False
 
+
 def discardable(possible, board):
-    for (col,nr) in possible:
+    for (col, nr) in possible:
         if board[col][1] < nr:
             return False
     return True
 
+
 def potentially_discardable(possible, board):
-    for (col,nr) in possible:
+    for (col, nr) in possible:
         if board[col][1] >= nr:
             return True
     return False
 
+
 def update_knowledge(knowledge, used):
     result = copy.deepcopy(knowledge)
     for r in result:
-        for (c,nr) in used:
-            r[c][nr-1] = max(r[c][nr-1] - used[c,nr], 0)
+        for (c, nr) in used:
+            r[c][nr - 1] = max(r[c][nr - 1] - used[c, nr], 0)
     return result
+
 
 def generate_hands(knowledge, used={}):
     if len(knowledge) == 0:
         yield []
         return
 
-
-
     for other in generate_hands(knowledge[1:], used):
         for col in ALL_COLORS:
-            for i,cnt in enumerate(knowledge[0][col]):
+            for i, cnt in enumerate(knowledge[0][col]):
                 if cnt > 0:
 
-                    result = [(col,i+1)] + other
+                    result = [(col, i + 1)] + other
                     ok = True
                     thishand = {}
-                    for (c,n) in result:
-                        if (c,n) not in thishand:
-                            thishand[(c,n)] = 0
-                        thishand[(c,n)] += 1
-                    for (c,n) in thishand:
-                        if used[(c,n)] + thishand[(c,n)] > COUNTS[n-1]:
-                           ok = False
+                    for (c, n) in result:
+                        if (c, n) not in thishand:
+                            thishand[(c, n)] = 0
+                        thishand[(c, n)] += 1
+                    for (c, n) in thishand:
+                        if used[(c, n)] + thishand[(c, n)] > COUNTS[n - 1]:
+                            ok = False
                     if ok:
-                        yield  result
+                        yield result
+
 
 def generate_hands_simple(knowledge, used={}):
     if len(knowledge) == 0:
@@ -114,9 +124,10 @@ def generate_hands_simple(knowledge, used={}):
         return
     for other in generate_hands_simple(knowledge[1:]):
         for col in ALL_COLORS:
-            for i,cnt in enumerate(knowledge[0][col]):
+            for i, cnt in enumerate(knowledge[0][col]):
                 if cnt > 0:
-                    yield [(col,i+1)] + other
+                    yield [(col, i + 1)] + other
+
 
 def format_intention(i):
     if isinstance(i, str):
@@ -129,6 +140,7 @@ def format_intention(i):
         return "Can Discard"
     return "Keep"
 
+
 def whattodo(knowledge, pointed, board):
     possible = get_possible(knowledge)
     play = potentially_playable(possible, board)
@@ -140,15 +152,16 @@ def whattodo(knowledge, pointed, board):
         return DISCARD
     return None
 
+
 def pretend(action, knowledge, intentions, hand, board):
-    (type,value) = action
+    (type, value) = action
     positive = []
     haspositive = False
     change = False
     if type == HINT_COLOR:
         newknowledge = []
-        for i,(col,num) in enumerate(hand):
-            positive.append(value==col)
+        for i, (col, num) in enumerate(hand):
+            positive.append(value == col)
             newknowledge.append(hint_color(knowledge[i], value, value == col))
             if value == col:
                 haspositive = True
@@ -156,8 +169,8 @@ def pretend(action, knowledge, intentions, hand, board):
                     change = True
     else:
         newknowledge = []
-        for i,(col,num) in enumerate(hand):
-            positive.append(value==num)
+        for i, (col, num) in enumerate(hand):
+            positive.append(value == num)
 
             newknowledge.append(hint_rank(knowledge[i], value, value == num))
             if value == num:
@@ -171,16 +184,16 @@ def pretend(action, knowledge, intentions, hand, board):
     score = 0
     predictions = []
     pos = False
-    for i,c,k,p in zip(intentions, hand, newknowledge, positive):
+    for i, c, k, p in zip(intentions, hand, newknowledge, positive):
 
         action = whattodo(k, p, board)
 
         if action == PLAY and i != PLAY:
-            #print "would cause them to play", f(c)
+            # print "would cause them to play", f(c)
             return False, 0, predictions + [PLAY]
 
         if action == DISCARD and i not in [DISCARD, CANDISCARD]:
-            #print "would cause them to discard", f(c)
+            # print "would cause them to discard", f(c)
             return False, 0, predictions + [DISCARD]
 
         if action == PLAY and i == PLAY:
@@ -198,15 +211,17 @@ def pretend(action, knowledge, intentions, hand, board):
             predictions.append(None)
     if not pos:
         return False, score, predictions
-    return True,score, predictions
+    return True, score, predictions
+
 
 HINT_VALUE = 0.5
 
+
 def pretend_discard(act, knowledge, board, trash):
     which = copy.deepcopy(knowledge[act.cnr])
-    for (col,num) in trash:
-        if which[col][num-1]:
-            which[col][num-1] -= 1
+    for (col, num) in trash:
+        if which[col][num - 1]:
+            which[col][num - 1] -= 1
     for col in ALL_COLORS:
         for i in range(board[col][1]):
             if which[col][i]:
@@ -215,30 +230,31 @@ def pretend_discard(act, knowledge, board, trash):
     expected = 0
     terms = []
     for col in ALL_COLORS:
-        for i,cnt in enumerate(which[col]):
-            rank = i+1
+        for i, cnt in enumerate(which[col]):
+            rank = i + 1
             if cnt > 0:
-                prob = cnt*1.0/possibilities
+                prob = cnt * 1.0 / possibilities
                 if board[col][1] >= rank:
-                    expected += prob*HINT_VALUE
-                    terms.append((col,rank,cnt,prob,prob*HINT_VALUE))
+                    expected += prob * HINT_VALUE
+                    terms.append((col, rank, cnt, prob, prob * HINT_VALUE))
                 else:
                     dist = rank - board[col][1]
                     if cnt > 1:
-                        value = prob*(6-rank)/(dist*dist)
+                        value = prob * (6 - rank) / (dist * dist)
                     else:
-                        value = (6-rank)
+                        value = 6 - rank
                     if rank == 5:
                         value += HINT_VALUE
                     value *= prob
                     expected -= value
-                    terms.append((col,rank,cnt,prob,-value))
+                    terms.append((col, rank, cnt, prob, -value))
     return (act, expected, terms)
+
 
 def format_knowledge(k):
     result = ""
     for col in ALL_COLORS:
-        for i,cnt in enumerate(k[col]):
+        for i, cnt in enumerate(k[col]):
             if cnt > 0:
-                result += COLORNAMES[col] + " " + str(i+1) + ": " + str(cnt) + "\n"
+                result += COLORNAMES[col] + " " + str(i + 1) + ": " + str(cnt) + "\n"
     return result
