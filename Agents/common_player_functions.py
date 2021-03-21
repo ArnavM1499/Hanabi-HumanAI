@@ -35,6 +35,7 @@ def iscard(colnum):
 
     return knowledge
 
+
 def get_possible(knowledge):
     result = []
     for col in ALL_COLORS:
@@ -42,6 +43,44 @@ def get_possible(knowledge):
             if cnt > 0:
                 result.append((col,i+1))
     return result
+
+
+# card = (col, nr)
+def card_playable(card, board):
+    return board[card[0]][1] + 1 == card[1]
+
+
+def card_discardable(card, board):
+    return board[card[0]][1] >= card[1]
+
+
+# slot is one of the entries in the knowledge list: a 2D list w/ #'s of possible cards
+# ie slot[1][3] = 2 means the card in the slot could be color 1 and number 3
+# and there are 2 (1, 3) cards unseen so far
+def slot_playable_pct(slot, board):
+    total_combos = 0
+    playable_combos = 0
+    for col in range(len(slot)):
+        # there are 5 possible numbers
+        for num in range(5):
+            total_combos += slot[col][num]
+            if card_playable((col, num + 1), board):
+                playable_combos += slot[col][num]
+    return playable_combos / total_combos
+
+
+def slot_discardable_pct(slot, board):
+    total_combos = 0
+    discardable_combos = 0
+    for col in range(len(slot)):
+        # there are 5 possible numbers
+        for num in range(5):
+            total_combos += slot[col][num]
+            if card_discardable((col, num + 1), board):
+                discardable_combos += slot[col][num]
+    return discardable_combos / total_combos
+
+
 
 def playable(possible, board):
     for (col,nr) in possible:
