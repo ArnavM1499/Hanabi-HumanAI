@@ -26,7 +26,7 @@ class Player(object):
         self.pnr = pnr
         self.explanation = []
     def get_action(self, game_state, base_player_model):
-        return random.choice(valid_actions)
+        return random.choice(game_state.get_valid_actions())
     def inform(self, action, player, game):
         pass
     def get_explanation(self):

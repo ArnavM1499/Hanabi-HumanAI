@@ -10,6 +10,7 @@ class BasicProtocolPlayer(Player):
         self.explanation = []
         self.personal_knowledge = None
 
+    # not currently used
     def update_new_card_knowledge(self, other_cards):
         if self.strategies["count_cards"]:
             for hand in self.personal_knowledge:
