@@ -23,13 +23,32 @@ with open(file_name, "w") as f:
     )
 
 results = []
+hints = []
+hits = []
+turns = []
 num_games = 10000
 for i in range(num_games):
-    G = Game([P1,P2], file_name)
+    G = Game([P1, P2], file_name)
     Result = G.run(100)
     print(Result)
     results.append(Result)
+    hints.append(G.hints)
+    hits.append(G.hits)
+    turns.append(G.turn)
 
 results.sort()
-print("{} games: avg: {}, min: {}, max: {}, median: {}".format(
-    num_games, sum(results) / num_games, results[0], results[-1], results[num_games // 2]))
+print(
+    "{} games: avg: {}, min: {}, max: {}, median: {}, mode: {}".format(
+        num_games,
+        sum(results) / num_games,
+        results[0],
+        results[-1],
+        results[num_games // 2],
+        max(set(results), key=results.count),
+    ),
+)
+print(
+    "average: hints left: {}, hits left: {}, turns: {}".format(
+        sum(hints) / num_games, sum(hits) / num_games, sum(turns) / num_games
+    )
+)
