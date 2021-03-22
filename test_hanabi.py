@@ -7,11 +7,20 @@ from Agents.hardcode_player import HardcodePlayer
 P1 = HardcodePlayer("player 0", 0)
 P2 = HardcodePlayer("palyer 1", 1)
 
-file_name = 'hanabi_data_nocardcounting_left1.csv'
+file_name = "hanabi_data_nocardcounting_left1.csv"
 
-with open(file_name, 'w') as f:
-	writer = csv.writer(f, delimiter=',')
-	writer.writerow(["Player","Action Type","Board","Discards","Hints available","Knowledge from hints"])
+with open(file_name, "w") as f:
+    writer = csv.writer(f, delimiter=",")
+    writer.writerow(
+        [
+            "Player",
+            "Action Type",
+            "Board",
+            "Discards",
+            "Hints available",
+            "Knowledge from hints",
+        ]
+    )
 
 results = []
 num_games = 10000
