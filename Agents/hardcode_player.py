@@ -183,7 +183,7 @@ class HardcodePlayer(Player):
         if self.todo != []:
             action, turn = self.todo.pop()
             if action.type == PLAY and (
-                not potentially_playable(
+                0.4 > percent_playable(
                     get_possible(self.last_model.get_knowledge()[action.cnr]),
                     self.last_state.get_board(),
                 )
@@ -219,7 +219,7 @@ class HardcodePlayer(Player):
             #         protect.add(i)
 
         if len(play) != 0:
-            # hint samllest unambiguous number
+            # hint smallest unambiguous number
             nums = sorted({card[1] for i, card in play})
             for candidate in nums:
                 flag = True
