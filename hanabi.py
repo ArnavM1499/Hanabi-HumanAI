@@ -6,6 +6,7 @@ import csv
 from common_game_functions import *
 from Agents.player import Player, Action
 
+random.seed(0) # for reproducing results
 
 def format_card(colnum):
     col, num = colnum
@@ -17,9 +18,10 @@ def format_hand(hand):
 
 
 class BasePlayerModel(object):
-    def __init__(self, knowledge, hints):
-        self.knowledge = knowledge # This is the knowledge matrix based only on updates in game engine
-        self.hints = hints # These are the hints that this player has received (Format: List of (P,Hint) if recieved from player P)
+    def __init__(self, knowledge, hints, actions):
+        self.knowledge = knowledge  # This is the knowledge matrix based only on updates in game engine
+        self.hints = hints  # These are the hints that this player has received (Format: List of (P,Hint) if recieved from player P)
+        self.actions = actions  # These are the actions taken by all players in the past (Format: Dictionary with player as keys and actions as values)
 
     def get_hints(self):
         return self.hints
@@ -27,10 +29,13 @@ class BasePlayerModel(object):
     def get_knowledge(self):
         return self.knowledge
 
+    def get_actions(self):
+        return self.actions
+
     def get_hints_from_player(self, p):
         filtered_hints = []
 
-        for player, hint in hints:
+        for player, hint in self.hints:
             if p == player:
                 filtered_hints.append(hint)
 
@@ -38,7 +43,9 @@ class BasePlayerModel(object):
 
 
 class GameState(object):
-    def __init__(self, current_player, hands, trash, played, board, valid_actions, num_hints):
+    def __init__(
+        self, current_player, hands, trash, played, board, valid_actions, num_hints
+    ):
         self.current_player = current_player
         self.hands = hands
         self.trash = trash
@@ -66,7 +73,7 @@ class GameState(object):
         return self.valid_actions
 
     def get_num_hints(self):
-        return self.num_hints  
+        return self.num_hints
 
 
 class Game(object):
@@ -75,7 +82,7 @@ class Game(object):
         self.hits = 3
         self.hints = 8
         self.current_player = 0
-        self.board = list(map(lambda c: (c,0), ALL_COLORS))
+        self.board = list(map(lambda c: (c, 0), ALL_COLORS))
         self.played = []
         self.deck = make_deck()
         self.extra_turns = 0
@@ -87,9 +94,10 @@ class Game(object):
         self.format = format
         self.dopostsurvey = False
         self.study = False
-        self.data_file = open(data_file, 'a')
-        self.data_writer = csv.writer(self.data_file, delimiter = ',')
-        self.hint_log = dict([(a,[]) for a in range(len(players))])
+        self.data_file = open(data_file, "a")
+        self.data_writer = csv.writer(self.data_file, delimiter=",")
+        self.hint_log = dict([(a, []) for a in range(len(players))])
+        self.action_log = dict([(a, []) for a in range(len(players))])
         if self.format:
             print(self.deck)
 
@@ -121,8 +129,11 @@ class Game(object):
             self.hints -= 1
             print(self.players[self.current_player].name, "hints", self.players[action.pnr].name, "about all their", COLORNAMES[action.col], "cards", "hints remaining:", self.hints)
             print(self.players[action.pnr].name, "has", format_hand(self.hands[action.pnr]))
+            self.action_log[self.current_player].append(action)
             self.hint_log[action.pnr].append((self.current_player, action))
-            for (col,num),knowledge in zip(self.hands[action.pnr],self.knowledge[action.pnr]):
+            for (col, num), knowledge in zip(
+                self.hands[action.pnr], self.knowledge[action.pnr]
+            ):
                 if col == action.col:
                     for i, k in enumerate(knowledge):
                         if i != col:
@@ -136,15 +147,17 @@ class Game(object):
             print(self.players[self.current_player].name, "hints", self.players[action.pnr].name, "about all their", action.num, "hints remaining:", self.hints)
             print(self.players[action.pnr].name, "has", format_hand(self.hands[action.pnr]))
             self.hint_log[action.pnr].append((self.current_player, action))
-            for (col,num),knowledge in zip(self.hands[action.pnr],self.knowledge[action.pnr]):
+            for (col, num), knowledge in zip(
+                self.hands[action.pnr], self.knowledge[action.pnr]
+            ):
                 if num == action.num:
                     for k in knowledge:
                         for i in range(len(COUNTS)):
-                            if i+1 != num:
+                            if i + 1 != num:
                                 k[i] = 0
                 else:
                     for k in knowledge:
-                        k[action.num-1] = 0
+                        k[action.num - 1] = 0
         elif action.type == PLAY:
             (col,num) = self.hands[self.current_player][action.cnr]
             print(self.players[self.current_player].name, "plays", format_card((col,num)))
@@ -156,7 +169,7 @@ class Game(object):
                     self.hints = min(self.hints, 8)
                 print("successfully! Board is now", format_hand(self.board))
             else:
-                self.trash.append((col,num))
+                self.trash.append((col, num))
                 self.hits -= 1
                 print("and fails. Board was", format_hand(self.board))
             del self.hands[self.current_player][action.cnr]
@@ -164,7 +177,7 @@ class Game(object):
             self.draw_card()
             print(self.players[self.current_player].name, "now has", format_hand(self.hands[self.current_player]))
         else:
-            self.hints += 1 
+            self.hints += 1
             self.hints = min(self.hints, 8)
             self.trash.append(self.hands[self.current_player][action.cnr])
             print(self.players[self.current_player].name, "discards", format_card(self.hands[self.current_player][action.cnr]))
@@ -186,6 +199,7 @@ class Game(object):
                     for num in set(map(lambda colnum: colnum[1], self.hands[i])):
                         valid.append(Action(HINT_NUMBER, pnr=i, num=num))
         return valid
+
     def run(self, turns=-1):
         self.turn = 1
         while not self.done() and (turns < 0 or self.turn < turns):
@@ -198,10 +212,33 @@ class Game(object):
                     hands.append([])
                 else:
                     hands.append(h)
-            game_state = GameState(self.current_player, hands, self.trash, self.played, self.board, self.valid_actions(), self.hints)
-            player_model = BasePlayerModel(self.knowledge[self.current_player], self.hint_log[self.current_player])
-            action = self.players[self.current_player].get_action(game_state, player_model)
-            self.data_writer.writerow([self.current_player, action.type, self.board, self.trash, self.hints, self.knowledge[self.current_player]])
+            game_state = GameState(
+                self.current_player,
+                hands,
+                self.trash,
+                self.played,
+                self.board,
+                self.valid_actions(),
+                self.hints,
+            )
+            player_model = BasePlayerModel(
+                self.knowledge[self.current_player],
+                self.hint_log[self.current_player],
+                self.action_log,
+            )
+            action = self.players[self.current_player].get_action(
+                game_state, player_model
+            )
+            self.data_writer.writerow(
+                [
+                    self.current_player,
+                    action.type,
+                    self.board,
+                    self.trash,
+                    self.hints,
+                    self.knowledge[self.current_player],
+                ]
+            )
             self.perform(action)
             self.current_player += 1
             self.current_player %= len(self.players)
@@ -210,8 +247,10 @@ class Game(object):
         print("Points:", points)
         self.data_file.close()
         return points
+
     def score(self):
         return sum(map(lambda colnum: colnum[1], self.board))
+
     def single_turn(self):
         if not self.done():
             if not self.deck:
@@ -222,39 +261,52 @@ class Game(object):
                     hands.append([])
                 else:
                     hands.append(h)
-            action = self.players[self.current_player].get_action(self.current_player, hands, self.knowledge, self.trash, self.played, self.board, self.valid_actions(), self.hints)
+            action = self.players[self.current_player].get_action(
+                self.current_player,
+                hands,
+                self.knowledge,
+                self.trash,
+                self.played,
+                self.board,
+                self.valid_actions(),
+                self.hints,
+            )
             self.perform(action)
             self.current_player += 1
             self.current_player %= len(self.players)
-    def external_turn(self, action): 
+
+    def external_turn(self, action):
         if not self.done():
             if not self.deck:
                 self.extra_turns += 1
             self.perform(action)
             self.current_player += 1
             self.current_player %= len(self.players)
+
     def done(self):
         if self.extra_turns == len(self.players) or self.hits == 0:
             return True
-        for (col,num) in self.board:
+        for (col, num) in self.board:
             if num != 5:
                 return False
         return True
+
     def finish(self):
         if self.format:
             print("Score", self.score())
-        
-    
+            
+            
 class NullStream(object):
     def write(self, *args):
         pass
-        
+
+
 # random.seed(123)
 
 # playertypes = {"random": Player, "inner": InnerStatePlayer, "outer": OuterStatePlayer, "self": SelfRecognitionPlayer, "intentional": IntentionalPlayer, "sample": SamplingRecognitionPlayer, "full": SelfIntentionalPlayer, "timed": TimedPlayer}
 # names = ["Shangdi", "Yu Di", "Tian", "Nu Wa", "Pangu"]
-        
-        
+
+
 # def make_player(player, i):
 #     if player in playertypes:
 #         return playertypes[player](names[i], i)
@@ -269,8 +321,8 @@ class NullStream(object):
 #             maxtime = int(maxtime.strip())
 #             return SamplingRecognitionPlayer(names[i], i, playertypes[othername], maxtime=maxtime)
 #         return SamplingRecognitionPlayer(names[i], i, playertypes[other])
-#     return None 
-    
+#     return None
+
 # def main(args):
 #     if not args:
 #         args = ["random"]*3
@@ -299,15 +351,15 @@ class NullStream(object):
 #             print "scores:",result
 #             print "times:", times
 #             print "avg times:", avgtimes
-        
+
 #         return
-        
-        
+
+
 #     players = []
-    
+
 #     for i,a in enumerate(args):
 #         players.append(make_player(a, i))
-        
+
 #     n = 10000
 #     out = NullStream()
 #     if n < 3:
@@ -331,7 +383,7 @@ class NullStream(object):
 #     print "average:", numpy.mean(pts)
 #     print "stddev:", numpy.std(pts, ddof=1)
 #     print "range", min(pts), max(pts)
-    
-    
+
+
 # if __name__ == "__main__":
 #     main(sys.argv[1:])
