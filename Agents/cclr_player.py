@@ -18,9 +18,7 @@ class CardCountingLeftRightPlayer(Player):
             for (col, num) in other_cards:
                 hand[col][num - 1] = max(0, hand[col][num - 1])
 
-    def get_action(
-        self, nr, hands, knowledge, trash, played, board, valid_actions, hints
-    ):
+    def get_action(self, nr, hands, knowledge, trash, played, board, valid_actions, hints):
         if self.personal_knowledge == None:
             self.personal_knowledge = knowledge[nr].copy()
 
