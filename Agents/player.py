@@ -45,6 +45,7 @@ class Action(object):
 class Player(object):
     def __init__(self, name, pnr):
         self.name = name
+        self.pnr = pnr
         self.explanation = []
 
     def get_action(self, game_state, base_player_model):

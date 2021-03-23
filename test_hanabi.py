@@ -2,10 +2,14 @@ from hanabi import Game
 import csv
 from Agents.inner_state_player import InnerStatePlayer
 from Agents.cclr_player import CardCountingLeftRightPlayer
+from Agents.basic_protocol_player import BasicProtocolPlayer
 from Agents.hardcode_player import HardcodePlayer
 
 P1 = HardcodePlayer("player 0", 0)
 P2 = HardcodePlayer("palyer 1", 1)
+
+# P1 = BasicProtocolPlayer("player 1", 0, {})
+# P2 = BasicProtocolPlayer("player 2", 1, {})
 
 file_name = "hanabi_data_nocardcounting_left1.csv"
 
