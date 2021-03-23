@@ -78,7 +78,7 @@ class GameState(object):
 
 
 class Game(object):
-    def __init__(self, players, data_file, log=sys.stdout, format=0):
+    def __init__(self, players, data_file, format=0):
         self.players = players
         self.hits = 3
         self.hints = 8
@@ -91,7 +91,6 @@ class Game(object):
         self.knowledge = []
         self.make_hands()
         self.trash = []
-        self.log = ""
         self.turn = 1
         self.format = format
         self.dopostsurvey = False
@@ -101,7 +100,7 @@ class Game(object):
         self.hint_log = dict([(a, []) for a in range(len(players))])
         self.action_log = dict([(a, []) for a in range(len(players))])
         if self.format:
-            print(self.log, self.deck)
+            print(self.deck)
 
     def make_hands(self):
         handsize = 4
@@ -127,8 +126,7 @@ class Game(object):
             p.inform(action, self.current_player, self)
         if format:
             print(
-                self.log,
-                "MOVE:",
+                "\nMOVE:",
                 self.current_player,
                 action.type,
                 action.cnr,
@@ -140,7 +138,6 @@ class Game(object):
         if action.type == HINT_COLOR:
             self.hints -= 1
             print(
-                self.log,
                 self.players[self.current_player].name,
                 "hints",
                 self.players[action.pnr].name,
@@ -151,7 +148,6 @@ class Game(object):
                 self.hints,
             )
             print(
-                self.log,
                 self.players[action.pnr].name,
                 "has",
                 format_hand(self.hands[action.pnr]),
@@ -171,7 +167,6 @@ class Game(object):
         elif action.type == HINT_NUMBER:
             self.hints -= 1
             print(
-                self.log,
                 self.players[self.current_player].name,
                 "hints",
                 self.players[action.pnr].name,
@@ -181,7 +176,6 @@ class Game(object):
                 self.hints,
             )
             print(
-                self.log,
                 self.players[action.pnr].name,
                 "has",
                 format_hand(self.hands[action.pnr]),
@@ -201,7 +195,6 @@ class Game(object):
         elif action.type == PLAY:
             (col, num) = self.hands[self.current_player][action.cnr]
             print(
-                self.log,
                 self.players[self.current_player].name,
                 "plays",
                 format_card((col, num)),
@@ -212,16 +205,15 @@ class Game(object):
                 if num == 5:
                     self.hints += 1
                     self.hints = min(self.hints, 8)
-                print(self.log, "successfully! Board is now", format_hand(self.board))
+                print("successfully! Board is now", format_hand(self.board))
             else:
                 self.trash.append((col, num))
                 self.hits -= 1
-                print(self.log, "and fails. Board was", format_hand(self.board))
+                print("and fails. Board was", format_hand(self.board))
             del self.hands[self.current_player][action.cnr]
             del self.knowledge[self.current_player][action.cnr]
             self.draw_card()
             print(
-                self.log,
                 self.players[self.current_player].name,
                 "now has",
                 format_hand(self.hands[self.current_player]),
@@ -231,17 +223,15 @@ class Game(object):
             self.hints = min(self.hints, 8)
             self.trash.append(self.hands[self.current_player][action.cnr])
             print(
-                self.log,
                 self.players[self.current_player].name,
                 "discards",
                 format_card(self.hands[self.current_player][action.cnr]),
             )
-            print(self.log, "trash is now", format_hand(self.trash))
+            print("trash is now", format_hand(self.trash))
             del self.hands[self.current_player][action.cnr]
             del self.knowledge[self.current_player][action.cnr]
             self.draw_card()
             print(
-                self.log,
                 self.players[self.current_player].name,
                 "now has",
                 format_hand(self.hands[self.current_player]),
@@ -303,9 +293,9 @@ class Game(object):
             self.perform(action)
             self.current_player += 1
             self.current_player %= len(self.players)
-        print(self.log, "Game done, hits left:", self.hits)
+        print("Game done, hits left:", self.hits)
         points = self.score()
-        print(self.log, "Points:", points)
+        print("Points:", points)
         self.data_file.close()
         return points
 
@@ -354,8 +344,7 @@ class Game(object):
 
     def finish(self):
         if self.format:
-            print(self.log, "Score", self.score())
-            self.log.close()
+            print("Score", self.score())
 
 
 class NullStream(object):
