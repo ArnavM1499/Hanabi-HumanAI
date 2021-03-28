@@ -30,9 +30,9 @@ class HardcodePlayer(Player):
         # play from highest confidence
         to_play = sorted(
             [(a, t) for a, t in self.todo if a.type == PLAY],
-            key=lambda x: percent_playable(
-                get_possible(self.last_model.get_knowledge()[x[0].cnr]),
-                self.last_state.get_board(),
+            key=lambda x: slot_playable_pct(
+                self.last_model.get_knowledge()[x[0].cnr],
+                self.last_state.get_board()
             ),
         )
 
@@ -289,7 +289,7 @@ class HardcodePlayer(Player):
             if not i in self.protect:
                 return Action(DISCARD, cnr=i)
 
-        # deiscard oldest
+        # discard oldest
         return Action(DISCARD, cnr=0)
 
     def get_action(self, game_state, player_model):

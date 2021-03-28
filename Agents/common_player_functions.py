@@ -61,14 +61,17 @@ def card_discardable(card, board):
 # ie slot[1][3] = 2 means the card in the slot could be color 1 and number 3
 # and there are 2 (1, 3) cards unseen so far
 def slot_playable_pct(slot, board):
-    total_combos = 0
-    playable_combos = 0
+    total_combos = 0.0
+    playable_combos = 0.0
     for col in range(len(slot)):
         # there are 5 possible numbers
         for num in range(5):
             total_combos += slot[col][num]
             if card_playable((col, num + 1), board):
                 playable_combos += slot[col][num]
+    if total_combos < 1:
+        print(slot)
+        print(board)
     return playable_combos / total_combos
 
 

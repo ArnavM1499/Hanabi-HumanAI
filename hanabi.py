@@ -19,7 +19,8 @@ def format_hand(hand):
 
 
 class BasePlayerModel(object):
-    def __init__(self, knowledge, hints, actions):
+    def __init__(self, nr, knowledge, hints, actions):
+        self.nr = nr
         self.knowledge = knowledge  # This is the knowledge matrix based only on updates in game engine
         self.hints = hints  # These are the hints that this player has received (Format: List of (P,Hint) if recieved from player P)
         self.actions = actions  # These are the actions taken by all players in the past (Format: Dictionary with player as keys and actions as values)
@@ -28,7 +29,7 @@ class BasePlayerModel(object):
         return self.hints
 
     def get_knowledge(self):
-        return self.knowledge
+        return self.knowledge[self.nr]
 
     def get_actions(self):
         return self.actions
@@ -42,6 +43,8 @@ class BasePlayerModel(object):
 
         return filtered_hints
 
+    def get_all_knowledge(self):
+        return self.knowledge
 
 class GameState(object):
     def __init__(
@@ -102,6 +105,32 @@ class Game(object):
         if self.format:
             print(self.deck)
 
+    # returns blank array for player_nr's own hand
+    def _make_game_state(self, player_nr):
+        hands = []
+        for i, h in enumerate(self.hands):
+            if i == player_nr:
+                hands.append([])
+            else:
+                hands.append(h)
+        return GameState(
+            self.current_player,
+            hands,
+            self.trash,
+            self.played,
+            self.board,
+            self.valid_actions(),
+            self.hints
+        )
+
+    def _make_player_model(self, player_nr):
+        return BasePlayerModel(
+            player_nr,
+            self.knowledge,
+            self.hint_log[player_nr],
+            self.action_log
+        )
+
     def make_hands(self):
         handsize = 4
         if len(self.players) < 4:
@@ -122,8 +151,7 @@ class Game(object):
         del self.deck[0]
 
     def perform(self, action):
-        for p in self.players:
-            p.inform(action, self.current_player, self)
+        hint_indices = []
         if format:
             print(
                 "\nMOVE:",
@@ -153,10 +181,12 @@ class Game(object):
                 format_hand(self.hands[action.pnr]),
             )
             self.hint_log[action.pnr].append((self.current_player, action))
+            slot_index = 0
             for (col, num), knowledge in zip(
                 self.hands[action.pnr], self.knowledge[action.pnr]
             ):
                 if col == action.col:
+                    hint_indices.append(slot_index)
                     for i, k in enumerate(knowledge):
                         if i != col:
                             for i in range(len(k)):
@@ -164,6 +194,8 @@ class Game(object):
                 else:
                     for i in range(len(knowledge[action.col])):
                         knowledge[action.col][i] = 0
+                slot_index += 1
+
         elif action.type == HINT_NUMBER:
             self.hints -= 1
             print(
@@ -181,10 +213,12 @@ class Game(object):
                 format_hand(self.hands[action.pnr]),
             )
             self.hint_log[action.pnr].append((self.current_player, action))
+            slot_index = 0
             for (col, num), knowledge in zip(
                 self.hands[action.pnr], self.knowledge[action.pnr]
             ):
                 if num == action.num:
+                    hint_indices.append(slot_index)
                     for k in knowledge:
                         for i in range(len(COUNTS)):
                             if i + 1 != num:
@@ -192,6 +226,8 @@ class Game(object):
                 else:
                     for k in knowledge:
                         k[action.num - 1] = 0
+                slot_index += 1
+
         elif action.type == PLAY:
             (col, num) = self.hands[self.current_player][action.cnr]
             print(
@@ -236,6 +272,7 @@ class Game(object):
                 "now has",
                 format_hand(self.hands[self.current_player]),
             )
+        return hint_indices
 
     def valid_actions(self):
         valid = []
@@ -254,31 +291,20 @@ class Game(object):
     def run(self, turns=-1):
         self.turn = 1
         while not self.done() and (turns < 0 or self.turn < turns):
+            # assert(self.players[0].todo == self.players[1].partner_todo)
+            # assert (self.players[1].todo == self.players[0].partner_todo)
             self.turn += 1
             if not self.deck:
                 self.extra_turns += 1
-            hands = []
-            for i, h in enumerate(self.hands):
-                if i == self.current_player:
-                    hands.append([])
-                else:
-                    hands.append(h)
-            game_state = GameState(
-                self.current_player,
-                hands,
-                self.trash,
-                self.played,
-                self.board,
-                self.valid_actions(),
-                self.hints,
-            )
             player_model = BasePlayerModel(
-                self.knowledge[self.current_player],
+                self.current_player,
+                self.knowledge,
                 self.hint_log[self.current_player],
                 self.action_log,
             )
             action = self.players[self.current_player].get_action(
-                game_state, player_model
+                self._make_game_state(self.current_player),
+                self._make_player_model(self.current_player)
             )
             self.data_writer.writerow(
                 [
@@ -290,7 +316,11 @@ class Game(object):
                     self.knowledge[self.current_player],
                 ]
             )
-            self.perform(action)
+            hint_indices = self.perform(action)
+            for p in self.players:
+                p.inform(action, self.current_player,
+                         self._make_game_state(p.get_nr()),
+                         self._make_player_model(p.get_nr()), hint_indices)
             self.current_player += 1
             self.current_player %= len(self.players)
         print("Game done, hits left:", self.hits)

@@ -48,10 +48,13 @@ class Player(object):
         self.pnr = pnr
         self.explanation = []
 
+    def get_nr(self):
+        return self.pnr
+
     def get_action(self, game_state, base_player_model):
         return random.choice(valid_actions)
 
-    def inform(self, action, player, game):
+    def inform(self, action, player, new_state, new_model, hint_indices):
         pass
 
     def get_explanation(self):
