@@ -88,28 +88,39 @@ def slot_discardable_pct(slot, board):
     return discardable_combos / total_combos
 
 
-def hint_info_gain(hint, knowledge):
-    #print(hint)
-    #print(knowledge)
+# returns the # of combos of cards removed from a hint
+# if a hint
+def hint_info_gain(hint, hand, target, knowledge):
     combos_removed = 0
     if hint.type == HINT_COLOR:
         for slot in knowledge:
             for nr in slot[hint.col]:
                 combos_removed += nr
+        for i in range(target + 1, len(hand)):
+            if hint.col == hand[i][0]:
+                return -1
     elif hint.type == HINT_NUMBER:
         for slot in knowledge:
             for col in slot:
                 combos_removed += col[hint.num - 1]
+        for i in range(target + 1, len(hand)):
+            if hint.num == hand[i][1]:
+                return -1
 
     return combos_removed
 
-def best_hint_type(card, knowledge):
-    color_info_gain = hint_info_gain(Action(HINT_COLOR, 0, col=card[0]), knowledge)
-    num_info_gain = hint_info_gain(Action(HINT_NUMBER, 0, num=card[1]), knowledge)
-    if color_info_gain > num_info_gain:
+
+def best_hint_type(hand, target, knowledge):
+    card = hand[target]
+    color_info_gain = hint_info_gain(Action(HINT_COLOR, 0, col=card[0]), hand, target, knowledge)
+    num_info_gain = hint_info_gain(Action(HINT_NUMBER, 0, num=card[1]), hand, target, knowledge)
+    if color_info_gain <= 0 and num_info_gain <= 0:
+        return None
+    elif color_info_gain > num_info_gain:
         return HINT_COLOR
     else:
         return HINT_NUMBER
+
 
 def playable(possible, board):
     for (col, nr) in possible:

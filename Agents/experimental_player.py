@@ -59,36 +59,36 @@ class ExperimentalPlayer(Player):
         # play has higher priority than discard
 #        return to_discard + to_play
 
-    def _update_index(self, idx):
-        return
+#    def _update_index(self, idx):
+#        return#
 
-        i = 0
-        while i < len(self.todo):
-            action, turn = self.todo[i]
-            if action.cnr == idx:
-                del self.todo[i]
-            else:
-                if action.cnr > idx:
-                    action.cnr -= 1
-                i += 1
+#        i = 0
+#        while i < len(self.todo):
+#            action, turn = self.todo[i]
+#            if action.cnr == idx:
+#                del self.todo[i]
+#            else:
+#                if action.cnr > idx:
+#                    action.cnr -= 1
+#                i += 1#
 
-        i = 0
-        while i < len(self.protect):
-            if self.protect[i] == idx:
-                del self.protect[i]
-            else:
-                if self.protect[i] > idx:
-                    self.protect[i] -= 1
-                i += 1
+#        i = 0
+#        while i < len(self.protect):
+#            if self.protect[i] == idx:
+#                del self.protect[i]
+#            else:
+#                if self.protect[i] > idx:
+#                    self.protect[i] -= 1
+#                i += 1#
 
-        i = 0
-        while i < len(self.hinted):
-            if self.hinted[i] == idx:
-                del self.hinted[i]
-            else:
-                if self.hinted[i] > idx:
-                    self.hinted[i] -= 1
-                i += 1
+#        i = 0
+#        while i < len(self.hinted):
+#            if self.hinted[i] == idx:
+#                del self.hinted[i]
+#            else:
+#                if self.hinted[i] > idx:
+#                    self.hinted[i] -= 1
+#                i += 1
 
     def _decide(self):
 
@@ -159,7 +159,12 @@ class ExperimentalPlayer(Player):
                 del playable[-1]
                 continue
             if newest_playable >= 0:
-                if best_hint_type(partner_hand[newest_playable], weighted_partner_knowledge) == HINT_COLOR:
+                hint_type = best_hint_type(partner_hand, newest_playable,
+                                      weighted_partner_knowledge)
+                if hint_type is None:
+                    del playable[-1]
+                    continue
+                elif hint_type == HINT_COLOR:
                     return Action(HINT_COLOR, self.partner_nr, col=partner_hand[newest_playable][0])
                 else:
                     return Action(HINT_NUMBER, self.partner_nr, num=partner_hand[newest_playable][1])
@@ -180,7 +185,12 @@ class ExperimentalPlayer(Player):
                 del discardable[-1]
                 continue
             if newest_discardable >= 0:
-                if best_hint_type(partner_hand[newest_discardable], weighted_partner_knowledge) == HINT_COLOR:
+                hint_type = best_hint_type(partner_hand, newest_discardable,
+                                           weighted_partner_knowledge)
+                if hint_type is None:
+                    del discardable[-1]
+                    continue
+                elif hint_type == HINT_COLOR:
                     return Action(HINT_COLOR, self.partner_nr, col=partner_hand[newest_discardable][0])
                 else:
                     return Action(HINT_NUMBER, self.partner_nr, num=partner_hand[newest_discardable][1])
@@ -301,13 +311,8 @@ class ExperimentalPlayer(Player):
 
         action_type = self._decide()
         action = getattr(self, action_type)()
-        if action.type in [PLAY, DISCARD]:
-            self._update_index(action.cnr)
-
-        #print("Player " + str(self.pnr))
-        #print(self.knowledge)
-        #print(weight_knowledge(self.knowledge, self.hint_weights))
-        #print(self.todo)
+        #if action.type in [PLAY, DISCARD]:
+        #    self._update_index(action.cnr)
         #time.sleep(1)
         return action
 
