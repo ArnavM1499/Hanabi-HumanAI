@@ -6,8 +6,8 @@ from Agents.basic_protocol_player import BasicProtocolPlayer
 from Agents.hardcode_player import HardcodePlayer
 from Agents.experimental_player import ExperimentalPlayer
 
-P1 = ExperimentalPlayer("player 0", 0)
-P2 = ExperimentalPlayer("player 1", 1)
+#P1 = ExperimentalPlayer("player 0", 0)
+#P2 = ExperimentalPlayer("player 1", 1)
 
 # P1 = BasicProtocolPlayer("player 1", 0, {})
 # P2 = BasicProtocolPlayer("player 2", 1, {})
@@ -31,10 +31,12 @@ results = []
 hints = []
 hits = []
 turns = []
-num_games = 1
+num_games = 500
 for i in range(num_games):
+    P1 = ExperimentalPlayer("player 0", 0)
+    P2 = ExperimentalPlayer("player 1", 1)
     G = Game([P1, P2], file_name)
-    Result = G.run(100)
+    Result = G.run(500)
     print(Result)
     results.append(Result)
     hints.append(G.hints)

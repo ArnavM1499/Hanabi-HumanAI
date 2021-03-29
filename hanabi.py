@@ -296,12 +296,6 @@ class Game(object):
             self.turn += 1
             if not self.deck:
                 self.extra_turns += 1
-            player_model = BasePlayerModel(
-                self.current_player,
-                self.knowledge,
-                self.hint_log[self.current_player],
-                self.action_log,
-            )
             action = self.players[self.current_player].get_action(
                 self._make_game_state(self.current_player),
                 self._make_player_model(self.current_player)

@@ -1,4 +1,5 @@
 import copy
+from Agents.player import Action
 from common_game_functions import *
 
 
@@ -85,6 +86,30 @@ def slot_discardable_pct(slot, board):
             if card_discardable((col, num + 1), board):
                 discardable_combos += slot[col][num]
     return discardable_combos / total_combos
+
+
+def hint_info_gain(hint, knowledge):
+    #print(hint)
+    #print(knowledge)
+    combos_removed = 0
+    if hint.type == HINT_COLOR:
+        for slot in knowledge:
+            for nr in slot[hint.col]:
+                combos_removed += nr
+    elif hint.type == HINT_NUMBER:
+        for slot in knowledge:
+            for col in slot:
+                combos_removed += col[hint.num - 1]
+
+    return combos_removed
+
+def best_hint_type(card, knowledge):
+    color_info_gain = hint_info_gain(Action(HINT_COLOR, 0, col=card[0]), knowledge)
+    num_info_gain = hint_info_gain(Action(HINT_NUMBER, 0, num=card[1]), knowledge)
+    if color_info_gain > num_info_gain:
+        return HINT_COLOR
+    else:
+        return HINT_NUMBER
 
 def playable(possible, board):
     for (col, nr) in possible:
