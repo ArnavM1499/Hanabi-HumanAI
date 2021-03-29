@@ -1,4 +1,5 @@
 import copy
+from Agents.player import Action
 from common_game_functions import *
 
 
@@ -61,14 +62,17 @@ def card_discardable(card, board):
 # ie slot[1][3] = 2 means the card in the slot could be color 1 and number 3
 # and there are 2 (1, 3) cards unseen so far
 def slot_playable_pct(slot, board):
-    total_combos = 0
-    playable_combos = 0
+    total_combos = 0.0
+    playable_combos = 0.0
     for col in range(len(slot)):
         # there are 5 possible numbers
         for num in range(5):
             total_combos += slot[col][num]
             if card_playable((col, num + 1), board):
                 playable_combos += slot[col][num]
+    if total_combos < 1:
+        print(slot)
+        print(board)
     return playable_combos / total_combos
 
 
@@ -82,6 +86,41 @@ def slot_discardable_pct(slot, board):
             if card_discardable((col, num + 1), board):
                 discardable_combos += slot[col][num]
     return discardable_combos / total_combos
+
+
+# returns the # of combos of cards removed from a hint
+# if a hint
+def hint_info_gain(hint, hand, target, knowledge):
+    combos_removed = 0
+    if hint.type == HINT_COLOR:
+        for slot in knowledge:
+            for nr in slot[hint.col]:
+                combos_removed += nr
+        for i in range(target + 1, len(hand)):
+            if hint.col == hand[i][0]:
+                return -1
+    elif hint.type == HINT_NUMBER:
+        for slot in knowledge:
+            for col in slot:
+                combos_removed += col[hint.num - 1]
+        for i in range(target + 1, len(hand)):
+            if hint.num == hand[i][1]:
+                return -1
+
+    return combos_removed
+
+
+def best_hint_type(hand, target, knowledge):
+    card = hand[target]
+    color_info_gain = hint_info_gain(Action(HINT_COLOR, 0, col=card[0]), hand, target, knowledge)
+    num_info_gain = hint_info_gain(Action(HINT_NUMBER, 0, num=card[1]), hand, target, knowledge)
+    if color_info_gain <= 0 and num_info_gain <= 0:
+        return None
+    elif color_info_gain > num_info_gain:
+        return HINT_COLOR
+    else:
+        return HINT_NUMBER
+
 
 def playable(possible, board):
     for (col, nr) in possible:
