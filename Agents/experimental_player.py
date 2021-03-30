@@ -83,7 +83,7 @@ class ExperimentalPlayer(Player):
             return self._discard(True)
 
         partner_hand = self.last_state.get_hands()[self.partner_nr]
-        partner_knowledge = copy.deepcopy(self.last_model.get_all_knowledge())[
+        partner_knowledge = copy.deepcopy(self.last_state.get_all_knowledge())[
             self.partner_nr
         ]
 
@@ -232,7 +232,7 @@ class ExperimentalPlayer(Player):
         self.last_model = new_model
         self.last_state = new_state
         self.partner_todo = [i for i in self.partner_todo if i != action.cnr]
-        if len(self.partner_hint_weights) == len(new_model.get_all_knowledge()[self.partner_nr]):
+        if len(self.partner_hint_weights) == len(new_state.get_all_knowledge()[self.partner_nr]):
             self.partner_hint_weights[action.cnr] = [
                 [1 for _ in range(5)] for _ in range(5)
             ]
@@ -243,7 +243,7 @@ class ExperimentalPlayer(Player):
         self.last_model = new_model
         self.last_state = new_state
         self.partner_todo = [i for i in self.partner_todo if i != action.cnr]
-        if len(self.partner_hint_weights) == len(new_model.get_all_knowledge()[self.partner_nr]):
+        if len(self.partner_hint_weights) == len(new_state.get_all_knowledge()[self.partner_nr]):
             self.partner_hint_weights[action.cnr] = [
                 [1 for _ in range(5)] for _ in range(5)
             ]
@@ -270,7 +270,7 @@ class ExperimentalPlayer(Player):
             elif action.type in [HINT_COLOR, HINT_NUMBER]:
                 new_board = new_state.get_board()
                 partner_knowledge = copy.deepcopy(
-                    new_model.get_all_knowledge()[self.partner_nr]
+                    new_state.get_all_knowledge()[self.partner_nr]
                 )
 
                 # empty list: no new info gained; bad hint
