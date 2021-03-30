@@ -172,6 +172,19 @@ class ExperimentalPlayer(Player):
         if self.last_state.get_num_hints() == 8:
             return self._hint(True)
 
+        discard_index = -1
+        highest_discard_probability = 0.0
+        # discard highest probability discardable
+        weighted_knowledge = weight_knowledge(self.knowledge, self.hint_weights)
+
+        for i in range(len(weighted_knowledge)):
+            discard_probability = slot_discardable_pct(weighted_knowledge[i], self.last_state.get_board())
+            if discard_probability > highest_discard_probability:
+                highest_discard_probability = discard_probability
+                discard_index = i
+
+        if discard_index != -1:
+            return Action(DISCARD, cnr=discard_index)
         # discard oldest
         return Action(DISCARD, cnr=0)
 
@@ -257,7 +270,6 @@ class ExperimentalPlayer(Player):
             # maybe this part should be moved up to before playing?
             # reset knowledge if we played or discarded
             if action.type == PLAY or action.type == DISCARD:
-                # print(action.cnr)
                 self.knowledge = copy.deepcopy(new_model.get_knowledge())
                 if len(self.knowledge) == len(self.hint_weights):
                     self.hint_weights[action.cnr] = [
@@ -308,12 +320,10 @@ class ExperimentalPlayer(Player):
 
         # for 2 player games there's only 1 other player
         # assert player == self.partner_nr
-        last_action = action
-
-        if last_action.type in [HINT_COLOR, HINT_NUMBER]:
+        if action.type in [HINT_COLOR, HINT_NUMBER]:
             self._receive_hint(action, player, new_state, new_model, hint_indices)
 
-        elif last_action.type == PLAY:
+        elif action.type == PLAY:
             self._receive_play(action, player, new_state, new_model)
 
         # discard

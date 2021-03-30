@@ -6,7 +6,8 @@ import csv
 from common_game_functions import *
 from Agents.player import Player, Action
 
-random.seed(0)  # for reproducing results
+# comment this line out when running multithreaded tests
+# random.seed(0)  # for reproducing results
 
 
 def format_card(colnum):

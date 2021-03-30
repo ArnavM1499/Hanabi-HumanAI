@@ -6,14 +6,16 @@ import os
 from hanabi import Game
 from Agents import *
 
-P1 = HardcodePlayer("player 0", 0)
-P2 = HardcodePlayer("player 1", 1)
+# P1 = HardcodePlayer("player 0", 0)
+# P2 = HardcodePlayer("player 1", 1)
 
 
 def run_single(file_name, clean=False):
 
     print("running hanabi game")
-    G = Game([deepcopy(P1), deepcopy(P2)], file_name)
+    P1 = ExperimentalPlayer("player 0", 0)
+    P2 = ExperimentalPlayer("player 1", 1)
+    G = Game([P1, P2], file_name)
     score = G.run(100)
     hints = G.hints
     hits = G.hits
@@ -46,7 +48,7 @@ def record_game(file_name="hanabi_data.csv", mode="w", iters=1):
         )
 
 
-def test_player(iters=10000):
+def test_player(iters=5000):
     p = Pool(16)
     res = p.starmap_async(
         run_single, [("sink_{}.csv".format(i), True) for i in range(iters)]
