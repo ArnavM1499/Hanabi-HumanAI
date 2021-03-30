@@ -4,7 +4,7 @@ from Agents.player import *
 
 
 class HardcodePlayer(Player):
-    def __init__(self, name, pnr, **kwargs):
+    def __init__(self, name, pnr, play_thresh, **kwargs):
         self.name = name
         self.pnr = pnr
         self.partner_nr = 1 - self.pnr  # hard code for two players
@@ -17,6 +17,7 @@ class HardcodePlayer(Player):
         self.protect = []
         self.hinted = []
         self.log = []
+        self.play_thresh = play_thresh
         self.nr_cards = 5
         for k, v in kwargs.items():
             setattr(self, k, v)
@@ -89,7 +90,7 @@ class HardcodePlayer(Player):
                 for i, possible in index2possible.items():
                     flag = True
                     for (col, num) in possible:
-                        if (new_hint.type == HINT_COLOR and col != new_hint.color) or (
+                        if (new_hint.type == HINT_COLOR and col != new_hint.col) or (
                             new_hint.type == HINT_NUMBER and num != new_hint.num
                         ):
                             flag = False
@@ -182,8 +183,12 @@ class HardcodePlayer(Player):
 
         if self.todo != []:
             action, turn = self.todo.pop()
+            print(percent_playable(
+                    get_possible(self.last_model.get_knowledge()[action.cnr]),
+                    self.last_state.get_board(),
+                ))
             if action.type == PLAY and (
-                0.4 > percent_playable(
+                self.play_thresh > percent_playable(
                     get_possible(self.last_model.get_knowledge()[action.cnr]),
                     self.last_state.get_board(),
                 )

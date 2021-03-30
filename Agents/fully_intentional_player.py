@@ -13,8 +13,18 @@ class FullyIntentionalPlayer(Player):
         self.last_board = []
 
     def get_action(
-        self, nr, hands, knowledge, trash, played, board, valid_actions, hints
+        self, game_state, player_model
     ):
+        nr = game_state.get_current_player()
+        hands = game_state.get_hands()
+        trash = game_state.get_trash()
+        played = game_state.get_played()
+        board = game_state.get_board()
+        valid_actions = game_state.get_valid_actions()
+        hints = game_state.get_num_hints()
+        knowledge = game_state.all_knowledge
+
+
         handsize = len(knowledge[0])
         possible = []
 

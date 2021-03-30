@@ -158,7 +158,7 @@ class ExperimentalPlayer(Player):
             return self._discard(True)
 
         partner_hand = self.last_state.get_hands()[self.partner_nr]
-        partner_knowledge = copy.deepcopy(self.last_model.get_all_knowledge())[
+        partner_knowledge = copy.deepcopy(self.last_state.get_all_knowledge())[
             self.partner_nr
         ]
 
@@ -477,7 +477,7 @@ class ExperimentalPlayer(Player):
             elif action.type in [HINT_COLOR, HINT_NUMBER]:
                 new_board = new_state.get_board()
                 partner_knowledge = copy.deepcopy(
-                    new_model.get_all_knowledge()[self.partner_nr]
+                    new_state.get_all_knowledge()[self.partner_nr]
                 )
 
                 # empty list: no new info gained; bad hint

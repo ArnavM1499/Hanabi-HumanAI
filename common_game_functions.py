@@ -71,9 +71,48 @@ class BasePlayerModel(object):
         return filtered_hints
 
 
+class BasePlayerModel(object):
+    def __init__(self, nr, knowledge, hints, actions):
+        self.nr = nr
+        self.knowledge = knowledge  # This is the knowledge matrix based only on updates in game engine
+        self.hints = hints  # These are the hints that this player has received (Format: List of (P,Hint) if recieved from player P)
+        self.actions = actions  # These are the actions taken by all players in the past (Format: Dictionary with player as keys and actions as values)
+
+    def get_hints(self):
+        return self.hints
+
+    def get_knowledge(self):
+        return self.knowledge[self.nr]
+
+    def get_actions(self):
+        return self.actions
+
+    def get_hints_from_player(self, p):
+        filtered_hints = []
+
+        for player, hint in self.hints:
+            if p == player:
+                filtered_hints.append(hint)
+
+        return filtered_hints
+
+    def get_all_knowledge(self):
+        return self.knowledge
+
+
 class GameState(object):
     def __init__(
-        self, current_player, hands, trash, played, board, valid_actions, num_hints, all_knowledge
+        self,
+        current_player,
+        hands,
+        trash,
+        played,
+        board,
+        valid_actions,
+        num_hints,
+        all_knowledge,
+        hinted_indices=[],
+        card_changed=None,
     ):
         self.current_player = current_player
         self.hands = hands
@@ -82,7 +121,9 @@ class GameState(object):
         self.board = board
         self.valid_actions = valid_actions
         self.num_hints = num_hints
+        self.hinted_indices = hinted_indices
         self.all_knowledge = all_knowledge
+        self.card_changed = card_changed
 
     def get_current_player(self):
         return self.current_player
@@ -104,3 +145,12 @@ class GameState(object):
 
     def get_num_hints(self):
         return self.num_hints
+
+    def get_all_knowledge(self):
+        return self.all_knowledge
+
+    def get_hinted_indices(self):
+        return self.hinted_indices
+
+    def get_card_changed(self):
+        return self.card_changed

@@ -17,88 +17,8 @@ def format_hand(hand):
     return ", ".join(map(format_card, hand))
 
 
-class BasePlayerModel(object):
-    def __init__(self, nr, knowledge, hints, actions):
-        self.nr = nr
-        self.knowledge = knowledge  # This is the knowledge matrix based only on updates in game engine
-        self.hints = hints  # These are the hints that this player has received (Format: List of (P,Hint) if recieved from player P)
-        self.actions = actions  # These are the actions taken by all players in the past (Format: Dictionary with player as keys and actions as values)
-
-    def get_hints(self):
-        return self.hints
-
-    def get_knowledge(self):
-        return self.knowledge[self.nr]
-
-    def get_actions(self):
-        return self.actions
-
-    def get_hints_from_player(self, p):
-        filtered_hints = []
-
-        for player, hint in self.hints:
-            if p == player:
-                filtered_hints.append(hint)
-
-        return filtered_hints
-
-    def get_all_knowledge(self):
-        return self.knowledge
-
-
-class GameState(object):
-    def __init__(
-        self,
-        current_player,
-        hands,
-        trash,
-        played,
-        board,
-        valid_actions,
-        num_hints,
-        hinted_indices=[],
-        card_changed=None,
-    ):
-        self.current_player = current_player
-        self.hands = hands
-        self.trash = trash
-        self.played = played
-        self.board = board
-        self.valid_actions = valid_actions
-        self.num_hints = num_hints
-        self.hinted_indices = hinted_indices
-        self.card_changed = card_changed
-
-    def get_current_player(self):
-        return self.current_player
-
-    def get_hands(self):
-        return self.hands
-
-    def get_trash(self):
-        return self.trash
-
-    def get_played(self):
-        return self.played
-
-    def get_board(self):
-        return self.board
-
-    def get_valid_actions(self):
-        return self.valid_actions
-
-    def get_num_hints(self):
-        return self.num_hints
-
-    def get_hinted_indices(self):
-        return self.hinted_indices
-
-    def get_card_changed(self):
-        return self.card_changed
-
-
 class Game(object):
-    def __init__(self, players, data_file, format=0, http_player=-1):
+    def __init__(self, players, data_file, pickle_file, format=0, http_player=-1):
         self.players = players
         self.hits = 3
         self.hints = 8
@@ -132,6 +52,7 @@ class Game(object):
                 hands.append([])
             else:
                 hands.append(h)
+
         return GameState(
             self.current_player,
             hands,
@@ -140,13 +61,14 @@ class Game(object):
             self.board,
             self.valid_actions(),
             self.hints,
+            self.knowledge,
             hinted_indices,
             card_changed,
         )
 
     def _make_player_model(self, player_nr):
         return BasePlayerModel(
-            player_nr, self.knowledge, self.hint_log[player_nr], self.action_log
+            player_nr, self.knowledge[player_nr], self.hint_log[player_nr], self.action_log
         )
 
     def make_hands(self):
@@ -314,84 +236,8 @@ class Game(object):
 
         while not self.done() and (turns < 0 or self.turn < turns):
             self.turn += 1
-
-            if not self.deck:
-                self.extra_turns += 1
-
-            hands = []
-
-            for i, h in enumerate(self.hands):
-                if i == self.current_player:
-                    hands.append([])
-                else:
-                    hands.append(h)
-
-            game_state = GameState(
-                self.current_player,
-                hands,
-                self.trash,
-                self.played,
-                self.board,
-                self.valid_actions(),
-                self.hints,
-                self.knowledge,
-            )
-            player_model = BasePlayerModel(
-                self.knowledge[self.current_player],
-                self.hint_log[self.current_player],
-                self.action_log,
-            )
-
-            action = self.players[self.current_player].get_action(
-                game_state, player_model
-            )
-
-            valid_action_list = [(valid_action.type, valid_action.pnr, valid_action.col, valid_action.num, valid_action.cnr) for valid_action in self.valid_actions()]
-
-            pickle.dump([
-                    self.current_player,
-                    hands,
-                    self.trash,
-                    self.played,
-                    self.board,
-                    self.valid_actions(),
-                    self.hints,
-                    self.knowledge,
-                    self.knowledge[self.current_player],
-                    self.hint_log[self.current_player],
-                    self.action_log,
-                    action.type,
-                    action.pnr,
-                    action.col,
-                    action.num,
-                    action.cnr,
-                ], self.pickle_file
-            )
-
-            self.data_writer.writerow(
-                [
-                    self.current_player,
-                    hands,
-                    self.trash,
-                    self.played,
-                    self.board,
-                    valid_action_list,
-                    self.hints,
-                    self.knowledge[self.current_player],
-                    [], ##self.hint_log[self.current_player],
-                    [], ##self.action_log,
-                    action.type,
-                    action.pnr,
-                    action.col,
-                    action.num,
-                    action.cnr,
-                ]
-            )
-
-            self.perform(action)
-            self.current_player += 1
-            self.current_player %= len(self.players)
             self.single_turn()
+
         print("Game done, hits left:", self.hits)
         points = self.score()
         print("Points:", points)
@@ -405,10 +251,15 @@ class Game(object):
         if not self.done():
             if not self.deck:
                 self.extra_turns += 1
+
+            game_state = self._make_game_state(self.current_player)
+            player_model = self._make_player_model(self.current_player)
+
             action = self.players[self.current_player].get_action(
-                self._make_game_state(self.current_player),
-                self._make_player_model(self.current_player),
+                game_state,
+                player_model,
             )
+
             self.data_writer.writerow(
                 [
                     self.current_player,
@@ -419,6 +270,14 @@ class Game(object):
                     self.knowledge[self.current_player],
                 ]
             )
+
+            pickle.dump([
+                    game_state,
+                    player_model,
+                    action,
+                ], self.pickle_file
+            )
+
             hint_indices, card_changed = self.perform(action)
             for p in self.players:
                 p.inform(
