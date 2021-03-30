@@ -1,5 +1,4 @@
 from common_game_functions import *
-from hanabi import *
 
 
 class Action(object):
