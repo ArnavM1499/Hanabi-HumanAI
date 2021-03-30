@@ -6,7 +6,7 @@ import csv
 from common_game_functions import *
 from Agents.player import Player, Action
 
-random.seed(0) # for reproducing results
+random.seed(0)  # for reproducing results
 
 
 def format_card(colnum):
@@ -46,9 +46,19 @@ class BasePlayerModel(object):
     def get_all_knowledge(self):
         return self.knowledge
 
+
 class GameState(object):
     def __init__(
-        self, current_player, hands, trash, played, board, valid_actions, num_hints
+        self,
+        current_player,
+        hands,
+        trash,
+        played,
+        board,
+        valid_actions,
+        num_hints,
+        hinted_indices=[],
+        card_changed=None,
     ):
         self.current_player = current_player
         self.hands = hands
@@ -57,6 +67,8 @@ class GameState(object):
         self.board = board
         self.valid_actions = valid_actions
         self.num_hints = num_hints
+        self.hinted_indices = hinted_indices
+        self.card_changed = card_changed
 
     def get_current_player(self):
         return self.current_player
@@ -79,9 +91,15 @@ class GameState(object):
     def get_num_hints(self):
         return self.num_hints
 
+    def get_hinted_indices(self):
+        return self.hinted_indices
+
+    def get_card_changed(self):
+        return self.card_changed
+
 
 class Game(object):
-    def __init__(self, players, data_file, format=0):
+    def __init__(self, players, data_file, format=0, http_player=-1):
         self.players = players
         self.hits = 3
         self.hints = 8
@@ -102,14 +120,15 @@ class Game(object):
         self.data_writer = csv.writer(self.data_file, delimiter=",")
         self.hint_log = dict([(a, []) for a in range(len(players))])
         self.action_log = dict([(a, []) for a in range(len(players))])
+        self.http_player = http_player
         if self.format:
             print(self.deck)
 
-    # returns blank array for player_nr's own hand
-    def _make_game_state(self, player_nr):
+    # returns blank array for player_nr's own hand if not httpui
+    def _make_game_state(self, player_nr, hinted_indices=[], card_changed=None):
         hands = []
         for i, h in enumerate(self.hands):
-            if i == player_nr:
+            if i == player_nr and i != self.http_player:
                 hands.append([])
             else:
                 hands.append(h)
@@ -120,15 +139,14 @@ class Game(object):
             self.played,
             self.board,
             self.valid_actions(),
-            self.hints
+            self.hints,
+            hinted_indices,
+            card_changed,
         )
 
     def _make_player_model(self, player_nr):
         return BasePlayerModel(
-            player_nr,
-            self.knowledge,
-            self.hint_log[player_nr],
-            self.action_log
+            player_nr, self.knowledge, self.hint_log[player_nr], self.action_log
         )
 
     def make_hands(self):
@@ -152,6 +170,7 @@ class Game(object):
 
     def perform(self, action):
         hint_indices = []
+        card_changed = None
         if format:
             print(
                 "\nMOVE:",
@@ -230,6 +249,7 @@ class Game(object):
 
         elif action.type == PLAY:
             (col, num) = self.hands[self.current_player][action.cnr]
+            card_changed = (col, num)
             print(
                 self.players[self.current_player].name,
                 "plays",
@@ -257,7 +277,8 @@ class Game(object):
         else:
             self.hints += 1
             self.hints = min(self.hints, 8)
-            self.trash.append(self.hands[self.current_player][action.cnr])
+            card_changed = self.hands[self.current_player][action.cnr]
+            self.trash.append(card_changed)
             print(
                 self.players[self.current_player].name,
                 "discards",
@@ -272,7 +293,7 @@ class Game(object):
                 "now has",
                 format_hand(self.hands[self.current_player]),
             )
-        return hint_indices
+        return hint_indices, card_changed
 
     def valid_actions(self):
         valid = []
@@ -291,32 +312,8 @@ class Game(object):
     def run(self, turns=-1):
         self.turn = 1
         while not self.done() and (turns < 0 or self.turn < turns):
-            # assert(self.players[0].todo == self.players[1].partner_todo)
-            # assert (self.players[1].todo == self.players[0].partner_todo)
             self.turn += 1
-            if not self.deck:
-                self.extra_turns += 1
-            action = self.players[self.current_player].get_action(
-                self._make_game_state(self.current_player),
-                self._make_player_model(self.current_player)
-            )
-            self.data_writer.writerow(
-                [
-                    self.current_player,
-                    action.type,
-                    self.board,
-                    self.trash,
-                    self.hints,
-                    self.knowledge[self.current_player],
-                ]
-            )
-            hint_indices = self.perform(action)
-            for p in self.players:
-                p.inform(action, self.current_player,
-                         self._make_game_state(p.get_nr()),
-                         self._make_player_model(p.get_nr()), hint_indices)
-            self.current_player += 1
-            self.current_player %= len(self.players)
+            self.single_turn()
         print("Game done, hits left:", self.hits)
         points = self.score()
         print("Points:", points)
@@ -330,23 +327,28 @@ class Game(object):
         if not self.done():
             if not self.deck:
                 self.extra_turns += 1
-            hands = []
-            for i, h in enumerate(self.hands):
-                if i == self.current_player:
-                    hands.append([])
-                else:
-                    hands.append(h)
             action = self.players[self.current_player].get_action(
-                self.current_player,
-                hands,
-                self.knowledge,
-                self.trash,
-                self.played,
-                self.board,
-                self.valid_actions(),
-                self.hints,
+                self._make_game_state(self.current_player),
+                self._make_player_model(self.current_player),
             )
-            self.perform(action)
+            self.data_writer.writerow(
+                [
+                    self.current_player,
+                    action.type,
+                    self.board,
+                    self.trash,
+                    self.hints,
+                    self.knowledge[self.current_player],
+                ]
+            )
+            hint_indices, card_changed = self.perform(action)
+            for p in self.players:
+                p.inform(
+                    action,
+                    self.current_player,
+                    self._make_game_state(p.get_nr(), hint_indices, card_changed),
+                    self._make_player_model(p.get_nr()),
+                )
             self.current_player += 1
             self.current_player %= len(self.players)
 
@@ -354,7 +356,24 @@ class Game(object):
         if not self.done():
             if not self.deck:
                 self.extra_turns += 1
-            self.perform(action)
+            self.data_writer.writerow(
+                [
+                    self.current_player,
+                    action.type,
+                    self.board,
+                    self.trash,
+                    self.hints,
+                    self.knowledge[self.current_player],
+                ]
+            )
+            hint_indices, card_changed = self.perform(action)
+            for p in self.players:
+                p.inform(
+                    action,
+                    self.current_player,
+                    self._make_game_state(p.get_nr(), hint_indices, card_changed),
+                    self._make_player_model(p.get_nr()),
+                )
             self.current_player += 1
             self.current_player %= len(self.players)
 

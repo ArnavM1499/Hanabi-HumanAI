@@ -54,7 +54,7 @@ class Player(object):
     def get_action(self, game_state, base_player_model):
         return random.choice(valid_actions)
 
-    def inform(self, action, player, new_state, new_model, hint_indices):
+    def inform(self, action, player, new_state, new_model):
         pass
 
     def get_explanation(self):
