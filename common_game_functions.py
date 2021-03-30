@@ -44,3 +44,63 @@ def initial_knowledge():
     for col in ALL_COLORS:
         knowledge.append(COUNTS[:])
     return knowledge
+
+
+class BasePlayerModel(object):
+    def __init__(self, knowledge, hints, actions):
+        self.knowledge = knowledge  # This is the knowledge matrix based only on updates in game engine
+        self.hints = hints  # These are the hints that this player has received (Format: List of (P,Hint) if recieved from player P)
+        self.actions = actions  # These are the actions taken by all players in the past (Format: Dictionary with player as keys and actions as values)
+
+    def get_hints(self):
+        return self.hints
+
+    def get_knowledge(self):
+        return self.knowledge
+
+    def get_actions(self):
+        return self.actions
+
+    def get_hints_from_player(self, p):
+        filtered_hints = []
+
+        for player, hint in self.hints:
+            if p == player:
+                filtered_hints.append(hint)
+
+        return filtered_hints
+
+
+class GameState(object):
+    def __init__(
+        self, current_player, hands, trash, played, board, valid_actions, num_hints, all_knowledge
+    ):
+        self.current_player = current_player
+        self.hands = hands
+        self.trash = trash
+        self.played = played
+        self.board = board
+        self.valid_actions = valid_actions
+        self.num_hints = num_hints
+        self.all_knowledge = all_knowledge
+
+    def get_current_player(self):
+        return self.current_player
+
+    def get_hands(self):
+        return self.hands
+
+    def get_trash(self):
+        return self.trash
+
+    def get_played(self):
+        return self.played
+
+    def get_board(self):
+        return self.board
+
+    def get_valid_actions(self):
+        return self.valid_actions
+
+    def get_num_hints(self):
+        return self.num_hints
