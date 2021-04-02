@@ -1,3 +1,4 @@
+import random
 import csv
 import fire
 from multiprocessing import Pool
@@ -10,8 +11,8 @@ def run_single(file_name, player="ExperimentalPlayer", clean=False):
 
     print("running hanabi game")
     player_class = getattr(Agents, player)
-    P1 = player_class("player 0", 0)
-    P2 = player_class("player 1", 1)
+    P1 = player_class("player A", 0)
+    P2 = player_class("player B", 1)
     G = Game([P1, P2], file_name)
     score = G.run(100)
     hints = G.hints

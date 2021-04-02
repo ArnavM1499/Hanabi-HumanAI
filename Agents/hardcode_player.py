@@ -1,3 +1,4 @@
+from copy import deepcopy
 from pprint import pprint
 from common_game_functions import *
 from Agents.common_player_functions import *
@@ -11,7 +12,7 @@ class HardcodePlayer2(Player):
         self.name = name
         self.pnr = pnr
         self.turn = 0
-        self.debug = True
+        self.debug = False
 
         # TOFIX Hardcoded for 2 players
         self.partner_nr = 1 - self.pnr
@@ -38,9 +39,9 @@ class HardcodePlayer2(Player):
         # Decision pattern matches
         # [(func : Player -> bool, action : Action Type)]
         self.decision_protocol = [
-            # (lambda p, s, m: p.index_play != [] and p.partner_play != [], "_execute"),
-            # (lambda p, s, m: p.index_play != [] and s.get_num_hints() > 1, "_execute"),
-            (lambda p, s, m: p.index_play != [], "_execute"),
+            (lambda p, s, m: p.index_play != [] and p.partner_play != [], "_execute"),
+            (lambda p, s, m: p.index_play != [] and s.get_num_hints() > 1, "_execute"),
+            # (lambda p, s, m: p.index_play != [], "_execute"),
             (lambda p, s, m: p.partner_play == [] and s.get_num_hints() > 0, "_hint"),
             (lambda p, s, m: p.index_play == [], "_hint"),
         ]
@@ -54,27 +55,28 @@ class HardcodePlayer2(Player):
     def inform(self, action, player, new_state, new_model):
 
         self._update_state(new_state, new_model)
-        if action.pnr == self.pnr:
+        if action.pnr != self.pnr:
             return
 
         board = new_state.get_board()
         knowledge = new_model.get_knowledge()
 
-        if self.turn == 1:
+        if self.turn == 0:
             if action.type == HINT_COLOR:
-                hinted_indices = action.get_hinted_indices()
+                hinted_indices = new_state.get_hinted_indices()
                 self.index_play.append(hinted_indices[0])
                 self.index_discard.extend(hinted_indices[1:])
             elif action.type == HINT_NUMBER:
                 if action.num == 1:
                     self.index_play.extend(new_state.get_hinted_indices())
-                # else:
-                #     for i in range(self.card_nr):
-                #         for j in range(5):
-                #             for k in range(action.num - 1):
-                #                 self.knowledge[i][j][k] = 0
+                else:
+                    for i in range(self.card_nr):
+                        for j in range(5):
+                            for k in range(action.num - 1):
+                                self.knowledge[i][j][k] = 0
             if self.debug:
                 pprint(self.__dict__)
+                print("\n\n\n")
             return
 
         if action.type in [HINT_COLOR, HINT_NUMBER]:
@@ -83,53 +85,25 @@ class HardcodePlayer2(Player):
             assert hinted_indices != []
             hinted_indices.sort()
 
-            new_play, new_play_candidate, new_discard, new_protect = self._interpret(
+            (
+                self.index_play,
+                self.index_play_candidate,
+                self.index_discard,
+                self.index_protect,
+            ) = self._interpret(
                 hinted_indices,
                 knowledge,
                 board,
+                self.index_play,
+                self.index_play_candidate,
+                self.index_discard,
+                self.index_protect,
                 is_five=(action.type == HINT_NUMBER and action.num == 5),
             )
-            for i in new_play:
-                if i not in self.index_play:
-                    self.index_play.append(i)
-            for i in new_play_candidate:
-                if i not in self.index_play_candidate:
-                    self.index_play_candidate.append(i)
-            for i in new_discard:
-                if i not in self.index_discard:
-                    self.index_discard.append(i)
-            for i in new_protect:
-                if i not in self.index_protect:
-                    self.index_protect.append(i)
-            self.index_play.sort()
-            self.index_play_candidate.sort()
-            self.index_discard.sort()
-            self.index_protect.sort()
 
             if self.debug:
                 pprint(self.__dict__)
-
-            # flag = False
-            # for idx in hinted_indices:
-            #     card = knowledge[idx]
-            #     if slot_playable_pct(card, board) > 0.8:
-            #         self.index_play.append(idx)
-            #         flag = True
-            #     elif slot_discardable_pct(card, board) > 0.98:
-            #         self.index_discard.append(idx)
-            #     elif action.type == HINT_NUMBER and action.num == 5:
-            #         self.index_protect.append(idx)
-            #         flag = True
-
-            # if not flag:
-            #     newest = hinted_indices[-1]
-            #     card = knowledge[newest]
-            #     if slot_playable_pct(card, board) > 0:
-            #         self.index_play.append(newest)
-            #     else:
-            #         self.index_protect.append(newest)
-            #     # TODO add rest of the cards to candidate play list for more
-            #     # aggressive play
+                print("\n\n\n")
 
             for idx in hinted_indices:
                 if idx not in self.index_hinted:
@@ -151,12 +125,22 @@ class HardcodePlayer2(Player):
         else:
             assert False
 
-    def _interpret(self, hinted_indices, knowledge, board, is_five=False):
+    def _interpret(
+        self,
+        hinted_indices,
+        knowledge,
+        board,
+        cur_play,
+        cur_play_candidate,
+        cur_discard,
+        cur_protect,
+        is_five=False,
+    ):
 
-        play = []
-        play_candidate = []
-        discard = []
-        protect = []
+        play = cur_play.copy()
+        play_candidate = cur_play_candidate.copy()
+        discard = cur_discard.copy()
+        protect = cur_protect.copy()
 
         flag = False
         for idx in hinted_indices:
@@ -181,18 +165,52 @@ class HardcodePlayer2(Player):
                 if slot_playable_pct(card, board) > 0:
                     play_candidate.append(idx)
 
-        return play, play_candidate, discard, protect
+        i = 0
+        while i < len(play):
+            card = knowledge[play[i]]
+            if slot_playable_pct(card, board) < 0.02:
+                del play[i]
+            else:
+                i += 1
+        i = 0
+        while i < len(play_candidate):
+            card = knowledge[play_candidate[i]]
+            if slot_playable_pct(card, board) < 0.02:
+                del play_candidate[i]
+            else:
+                i += 1
+        i = 0
+        while i < len(discard):
+            card = knowledge[discard[i]]
+            if slot_discardable_pct(card, board) < 0.02:
+                del discard[i]
+            else:
+                i += 1
+        i = 0
+        while i < len(protect):
+            card = knowledge[protect[i]]
+            if slot_discardable_pct(card, board) > 0.5:
+                del protect[i]
+            else:
+                i += 1
+
+        return sorted(play), sorted(play_candidate), sorted(discard), sorted(protect)
 
     def get_action(self, state, model):
 
         self.turn += 1
-        self._update_state(state, model)
 
         # Always hint the smallest number in the first turn
         if self.turn == 1 and self.last_state is None:
             partner = state.get_hands()[self.partner_nr]
             min_num = min([x[1] for x in partner])
+
+            if self.debug:
+                print("first turn")
+
             return Action(HINT_NUMBER, self.partner_nr, num=min_num)
+
+        self._update_state(state, model)
 
         # Pattern matcing [self._decide() in version 1]
         chosen_action = None
@@ -238,7 +256,7 @@ class HardcodePlayer2(Player):
         risk_threshold = 0
         for turn, thresh in self.risk_play.items():
             if turn >= self.turn:
-                risk_threshold = thresh
+                risk_threshold = 1 - thresh
                 break
         idx = None
         max_pct = 0
@@ -324,8 +342,17 @@ class HardcodePlayer2(Player):
         partner_knowledge = self.last_state.get_all_knowledge()[self.partner_nr]
         board = self.last_state.get_board()
 
-        max_score = -100
+        max_score = self._evaluate_partner(
+            partner_hand,
+            self.partner_play,
+            self.partner_play_candidate,
+            self.partner_discard,
+        )
         best_action = None
+
+        if self.debug:
+            print("comparing hints")
+
         for action in self.last_state.get_valid_actions():
 
             if action.type not in [HINT_NUMBER, HINT_COLOR]:
@@ -336,48 +363,48 @@ class HardcodePlayer2(Player):
             pred_protect = self.partner_protect.copy()
 
             hinted = []
-            for i in range(self.card_nr):
-                if (
-                    action.type == HINT_NUMBER and partner_hand[i][1] == action.num
-                ) or (action.type == HINT_COLOR and partner_hand[i][0]):
+            for i, card in enumerate(partner_hand):
+                if (action.type == HINT_NUMBER and card[1] == action.num) or (
+                    action.type == HINT_COLOR and card[0] == action.col
+                ):
                     hinted.append(i)
 
-            try:
-                (
-                    new_play,
-                    new_play_candidate,
-                    new_discard,
-                    new_protect,
-                ) = self._interpret(
-                    hinted,
-                    partner_knowledge,
-                    board,
-                    is_five=(action.type == HINT_NUMBER and action.num == 5),
-                )
-            except:
-                import pdb
-
-                pdb.set_trace()
-
-            for i in new_play:
-                if i not in pred_play:
-                    pred_play.append(i)
-            for i in new_play_candidate:
-                if i not in pred_play_candidate:
-                    pred_play_candidate.append(i)
-            for i in new_discard:
-                if i not in pred_discard:
-                    pred_discard.append(i)
-            for i in new_protect:
-                if i not in pred_protect:
-                    pred_protect.append(i)
+            (
+                pred_play,
+                pred_play_candidate,
+                pred_discard,
+                pred_protect,
+            ) = self._interpret(
+                hinted,
+                partner_knowledge,
+                board,
+                pred_play,
+                pred_play_candidate,
+                pred_discard,
+                pred_protect,
+                is_five=(action.type == HINT_NUMBER and action.num == 5),
+            )
 
             score = self._evaluate_partner(
-                sorted(partner_hand),
-                sorted(pred_play),
-                sorted(pred_play_candidate),
-                sorted(pred_discard),
+                partner_hand,
+                pred_play,
+                pred_play_candidate,
+                pred_discard,
             )
+
+            if self.debug:
+                print("Action: ", str(action), " evaluates to: ")
+                print("  score: ", score)
+                print("  play: ", self.partner_play, " >> ", pred_play)
+                print(
+                    "  candidate: ",
+                    self.partner_play_candidate,
+                    " >> ",
+                    pred_play_candidate,
+                )
+                print("  discard: ", self.partner_discard, " >> ", pred_discard)
+                print("")
+
             if score > max_score:
                 max_score = score
                 best_action = action
@@ -405,19 +432,19 @@ class HardcodePlayer2(Player):
 
     def _update_state(self, new_state, new_model):
 
-        self.last_model = new_model
-        self.last_state = new_state
+        self.last_model = deepcopy(new_model)
+        self.last_state = deepcopy(new_state)
         new_knowledge = new_model.get_knowledge()
-        self.knowledge = new_knowledge
-        # if self.knowledge:
-        #     for i in range(self.card_nr):
-        #         for j in range(5):
-        #             for k in range(5):
-        #                 self.knowledge[i][j][k] = min(
-        #                     [
-        #                         self.knowledge[i][j][k],
-        #                         new_knowledge[i][j][k],
-        #                     ]
-        #                 )
-        # else:
-        #     self.knowledge = new_model.get_knowledge()
+        # self.knowledge = new_knowledge
+        if self.knowledge:
+            merged = []
+            for old, new in zip(self.knowledge, new_knowledge):
+                temp = []
+                for i in range(5):
+                    temp.append([])
+                    for j in range(5):
+                        temp[-1].append(min(old[i][j], new[i][j]))
+                merged.append(temp)
+            self.knowledge = merged
+        else:
+            self.knowledge = deepcopy(new_model.get_knowledge())
