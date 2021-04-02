@@ -1,20 +1,17 @@
-from copy import deepcopy
 import csv
 import fire
 from multiprocessing import Pool
 import os
 from hanabi import Game
-from Agents import *
-
-# P1 = HardcodePlayer("player 0", 0)
-# P2 = HardcodePlayer("player 1", 1)
+import Agents
 
 
-def run_single(file_name, clean=False):
+def run_single(file_name, player="ExperimentalPlayer", clean=False):
 
     print("running hanabi game")
-    P1 = ExperimentalPlayer("player 0", 0)
-    P2 = ExperimentalPlayer("player 1", 1)
+    player_class = getattr(Agents, player)
+    P1 = player_class("player 0", 0)
+    P2 = player_class("player 1", 1)
     G = Game([P1, P2], file_name)
     score = G.run(100)
     hints = G.hints
@@ -48,10 +45,10 @@ def record_game(file_name="hanabi_data.csv", mode="w", iters=1):
         )
 
 
-def test_player(iters=5000):
+def test_player(player="ExperimentalPlayer", iters=5000):
     p = Pool(16)
     res = p.starmap_async(
-        run_single, [("sink_{}.csv".format(i), True) for i in range(iters)]
+        run_single, [("sink_{}.csv".format(i), player, True) for i in range(iters)]
     )
     p.close()
     results = [list(x) for x in zip(*res.get())]  # [[scores], [hints], [hits], [turns]

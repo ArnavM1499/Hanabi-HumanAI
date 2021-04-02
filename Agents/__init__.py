@@ -1,3 +1,3 @@
 from Agents.cclr_player import CardCountingLeftRightPlayer
-from Agents.hardcode_player import HardcodePlayer
+from Agents.hardcode_player import HardcodePlayer2
 from Agents.experimental_player import ExperimentalPlayer

@@ -4,7 +4,7 @@ import copy
 import time
 import csv
 from common_game_functions import *
-from Agents.player import Player, Action
+from Agents.player import Action
 
 # comment this line out when running multithreaded tests
 # random.seed(0)  # for reproducing results
@@ -57,7 +57,7 @@ class GameState(object):
         num_hints,
         all_knowledge,
         hinted_indices=[],
-        card_changed=None
+        card_changed=None,
     ):
         self.current_player = current_player
         self.hands = hands
@@ -150,7 +150,10 @@ class Game(object):
 
     def _make_player_model(self, player_nr):
         return BasePlayerModel(
-            player_nr, self.knowledge[player_nr], self.hint_log[player_nr], self.action_log
+            player_nr,
+            self.knowledge[player_nr],
+            self.hint_log[player_nr],
+            self.action_log,
         )
 
     def make_hands(self):
@@ -328,33 +331,12 @@ class Game(object):
         return sum(map(lambda colnum: colnum[1], self.board))
 
     def single_turn(self):
-        if not self.done():
-            if not self.deck:
-                self.extra_turns += 1
-            action = self.players[self.current_player].get_action(
+        self.external_turn(
+            self.players[self.current_player].get_action(
                 self._make_game_state(self.current_player),
                 self._make_player_model(self.current_player),
             )
-            self.data_writer.writerow(
-                [
-                    self.current_player,
-                    action.type,
-                    self.board,
-                    self.trash,
-                    self.hints,
-                    self.knowledge[self.current_player],
-                ]
-            )
-            hint_indices, card_changed = self.perform(action)
-            for p in self.players:
-                p.inform(
-                    action,
-                    self.current_player,
-                    self._make_game_state(p.get_nr(), hint_indices, card_changed),
-                    self._make_player_model(p.get_nr()),
-                )
-            self.current_player += 1
-            self.current_player %= len(self.players)
+        )
 
     def external_turn(self, action):
         if not self.done():
@@ -397,91 +379,3 @@ class Game(object):
 class NullStream(object):
     def write(self, *args):
         pass
-
-
-# random.seed(123)
-
-# playertypes = {"random": Player, "inner": InnerStatePlayer, "outer": OuterStatePlayer, "self": SelfRecognitionPlayer, "intentional": IntentionalPlayer, "sample": SamplingRecognitionPlayer, "full": SelfIntentionalPlayer, "timed": TimedPlayer}
-# names = ["Shangdi", "Yu Di", "Tian", "Nu Wa", "Pangu"]
-
-
-# def make_player(player, i):
-#     if player in playertypes:
-#         return playertypes[player](names[i], i)
-#     elif player.startswith("self("):
-#         other = player[5:-1]
-#         return SelfRecognitionPlayer(names[i], i, playertypes[other])
-#     elif player.startswith("sample("):
-#         other = player[7:-1]
-#         if "," in other:
-#             othername, maxtime = other.split(",")
-#             othername = othername.strip()
-#             maxtime = int(maxtime.strip())
-#             return SamplingRecognitionPlayer(names[i], i, playertypes[othername], maxtime=maxtime)
-#         return SamplingRecognitionPlayer(names[i], i, playertypes[other])
-#     return None
-
-# def main(args):
-#     if not args:
-#         args = ["random"]*3
-#     if args[0] == "trial":
-#         treatments = [["intentional", "intentional"], ["intentional", "outer"], ["outer", "outer"]]
-#         #[["sample(intentional, 50)", "sample(intentional, 50)"], ["sample(intentional, 100)", "sample(intentional, 100)"]] #, ["self(intentional)", "self(intentional)"], ["self", "self"]]
-#         results = []
-#         print treatments
-#         for i in range(int(args[1])):
-#             result = []
-#             times = []
-#             avgtimes = []
-#             print "trial", i+1
-#             for t in treatments:
-#                 random.seed(i)
-#                 players = []
-#                 for i,player in enumerate(t):
-#                     players.append(make_player(player,i))
-#                 g = Game(players, NullStream())
-#                 t0 = time.time()
-#                 result.append(g.run())
-#                 times.append(time.time() - t0)
-#                 avgtimes.append(times[-1]*1.0/g.turn)
-#                 print ".",
-#             print
-#             print "scores:",result
-#             print "times:", times
-#             print "avg times:", avgtimes
-
-#         return
-
-
-#     players = []
-
-#     for i,a in enumerate(args):
-#         players.append(make_player(a, i))
-
-#     n = 10000
-#     out = NullStream()
-#     if n < 3:
-#         out = sys.stdout
-#     pts = []
-#     for i in range(n):
-#         if (i+1)%100 == 0:
-#             print "Starting game", i+1
-#         random.seed(i+1)
-#         g = Game(players, out)
-#         try:
-#             pts.append(g.run())
-#             if (i+1)%100 == 0:
-#                 print "score", pts[-1]
-#         except Exception:
-#             import traceback
-#             traceback.print_exc()
-#     if n < 10:
-#         print pts
-#     import numpy
-#     print "average:", numpy.mean(pts)
-#     print "stddev:", numpy.std(pts, ddof=1)
-#     print "range", min(pts), max(pts)
-
-
-# if __name__ == "__main__":
-#     main(sys.argv[1:])
