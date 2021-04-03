@@ -58,9 +58,10 @@ def card_discardable(card, board, trash=None):
     col, nr = card
     if board[col][1] >= card[1]:
         return True
-    for i in range(1, nr):
-        if trash.count((col, i)) == COUNTS[i]:
-            return True
+    if trash:
+        for i in range(1, nr):
+            if trash.count((col, i)) == COUNTS[i]:
+                return True
     return False
 
 
