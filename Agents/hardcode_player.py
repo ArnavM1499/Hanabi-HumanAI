@@ -13,6 +13,7 @@ class HardcodePlayer2(Player):
         self.pnr = pnr
         self.turn = 0
         self.debug = False
+        self.return_rank = False
 
         # TOFIX Hardcoded for 2 players
         self.partner_nr = 1 - self.pnr
