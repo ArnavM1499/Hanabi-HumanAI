@@ -47,7 +47,7 @@ class HardcodePlayer2(Player):
         ]
 
         # Parameters
-        self.risk_play = {10: 0, 30: 0.4, 50: 1}
+        self.risk_play = {0: 0.5, 5: 0, 12: 0.4, 30: 1}
 
         for k, v in kwargs.items():
             setattr(self, k, v)
@@ -59,6 +59,7 @@ class HardcodePlayer2(Player):
             return
 
         board = new_state.get_board()
+        trash = new_state.get_trash()
         knowledge = new_model.get_knowledge()
 
         if self.turn == 0:
@@ -94,6 +95,7 @@ class HardcodePlayer2(Player):
                 hinted_indices,
                 knowledge,
                 board,
+                trash,
                 self.index_play,
                 self.index_play_candidate,
                 self.index_discard,
@@ -130,6 +132,7 @@ class HardcodePlayer2(Player):
         hinted_indices,
         knowledge,
         board,
+        trash,
         cur_play,
         cur_play_candidate,
         cur_discard,
@@ -148,7 +151,7 @@ class HardcodePlayer2(Player):
             if cpf.slot_playable_pct(card, board) > 0.8:
                 play.append(idx)
                 flag = True
-            elif cpf.slot_discardable_pct(card, board) > 0.98:
+            elif cpf.slot_discardable_pct(card, board, trash) > 0.98:
                 discard.append(idx)
             elif is_five:
                 protect.append(idx)
@@ -182,14 +185,14 @@ class HardcodePlayer2(Player):
         i = 0
         while i < len(discard):
             card = knowledge[discard[i]]
-            if cpf.slot_discardable_pct(card, board) < 0.02:
+            if cpf.slot_discardable_pct(card, board, trash) < 0.02:
                 del discard[i]
             else:
                 i += 1
         i = 0
         while i < len(protect):
             card = knowledge[protect[i]]
-            if cpf.slot_discardable_pct(card, board) > 0.5:
+            if cpf.slot_discardable_pct(card, board, trash) > 0.5:
                 del protect[i]
             else:
                 i += 1
@@ -312,6 +315,7 @@ class HardcodePlayer2(Player):
         # having unplayable cards in play candidates is BAD -0.8pt
 
         board = self.last_state.get_board()
+        trash = self.last_state.get_trash()
 
         score = 0
         for i in predicted_play:
@@ -331,7 +335,7 @@ class HardcodePlayer2(Player):
                 score -= 0.8
 
         for i in predicted_discard:
-            if cpf.card_discardable(hands[i], board):
+            if cpf.card_discardable(hands[i], board, trash):
                 score += 1
 
         return score
@@ -341,6 +345,7 @@ class HardcodePlayer2(Player):
         partner_hand = self.last_state.get_hands()[self.partner_nr]
         partner_knowledge = self.last_state.get_all_knowledge()[self.partner_nr]
         board = self.last_state.get_board()
+        trash = self.last_state.get_trash()
 
         max_score = self._evaluate_partner(
             partner_hand,
@@ -378,6 +383,7 @@ class HardcodePlayer2(Player):
                 hinted,
                 partner_knowledge,
                 board,
+                trash,
                 pred_play,
                 pred_play_candidate,
                 pred_discard,
@@ -419,7 +425,7 @@ class HardcodePlayer2(Player):
         if self:
             prefix = "index_"
             del self.knowledge[idx]
-            self.knowledge.append([[3, 2, 2, 2, 1] for _ in range(5)])
+            self.knowledge.append([cgf.COUNTS.copy() for _ in range(5)])
         else:
             prefix = "partner_"
 
@@ -435,7 +441,6 @@ class HardcodePlayer2(Player):
         self.last_model = deepcopy(new_model)
         self.last_state = deepcopy(new_state)
         new_knowledge = new_model.get_knowledge()
-        # self.knowledge = new_knowledge
         if self.knowledge:
             merged = []
             for old, new in zip(self.knowledge, new_knowledge):
