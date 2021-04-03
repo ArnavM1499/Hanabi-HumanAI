@@ -1,8 +1,8 @@
-import random
 import csv
 import fire
 from multiprocessing import Pool
 import os
+import time
 from hanabi import Game
 import Agents
 
@@ -54,6 +54,7 @@ def test_player(player="ExperimentalPlayer", iters=5000):
     p.close()
     results = [list(x) for x in zip(*res.get())]  # [[scores], [hints], [hits], [turns]
     results[0].sort()
+    time.sleep(5)  # wait for async file writes
     print(
         "{} games: avg: {}, min: {}, max: {}, median: {}, mode: {}".format(
             iters,
