@@ -54,8 +54,14 @@ def card_playable(card, board):
     return board[card[0]][1] + 1 == card[1]
 
 
-def card_discardable(card, board):
-    return board[card[0]][1] >= card[1]
+def card_discardable(card, board, trash=None):
+    col, nr = card
+    if board[col][1] >= card[1]:
+        return True
+    for i in range(1, nr):
+        if trash.count((col, i)) == COUNTS[i]:
+            return True
+    return False
 
 
 # slot is one of the entries in the knowledge list: a 2D list w/ #'s of possible cards
@@ -76,14 +82,14 @@ def slot_playable_pct(slot, board):
     return playable_combos / total_combos
 
 
-def slot_discardable_pct(slot, board):
+def slot_discardable_pct(slot, board, trash=None):
     total_combos = 0
     discardable_combos = 0
     for col in range(len(slot)):
         # there are 5 possible numbers
         for num in range(5):
             total_combos += slot[col][num]
-            if card_discardable((col, num + 1), board):
+            if card_discardable((col, num + 1), board, trash):
                 discardable_combos += slot[col][num]
     return discardable_combos / total_combos
 
@@ -112,8 +118,12 @@ def hint_info_gain(hint, hand, target, knowledge):
 
 def best_hint_type(hand, target, knowledge):
     card = hand[target]
-    color_info_gain = hint_info_gain(Action(HINT_COLOR, 0, col=card[0]), hand, target, knowledge)
-    num_info_gain = hint_info_gain(Action(HINT_NUMBER, 0, num=card[1]), hand, target, knowledge)
+    color_info_gain = hint_info_gain(
+        Action(HINT_COLOR, 0, col=card[0]), hand, target, knowledge
+    )
+    num_info_gain = hint_info_gain(
+        Action(HINT_NUMBER, 0, num=card[1]), hand, target, knowledge
+    )
     if color_info_gain <= 0 and num_info_gain <= 0:
         return None
     elif color_info_gain > num_info_gain:
