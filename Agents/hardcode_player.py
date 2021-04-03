@@ -41,7 +41,6 @@ class HardcodePlayer2(Player):
         self.decision_protocol = [
             (lambda p, s, m: p.index_play != [] and p.partner_play != [], "_execute"),
             (lambda p, s, m: p.index_play != [] and s.get_num_hints() > 1, "_execute"),
-            # (lambda p, s, m: p.index_play != [], "_execute"),
             (lambda p, s, m: p.partner_play == [] and s.get_num_hints() > 0, "_hint"),
             (lambda p, s, m: p.index_play == [], "_hint"),
         ]
@@ -167,6 +166,12 @@ class HardcodePlayer2(Player):
                 card = knowledge[idx]
                 if cpf.slot_playable_pct(card, board) > 0:
                     play_candidate.append(idx)
+
+        for i, card in enumerate(knowledge):
+            if cpf.slot_playable_pct(card, board) > 0.98:
+                self.index_play.append(i)
+            elif cpf.slot_discardable_pct(card, board, trash) > 0.9:
+                self.index_discard.append(i)
 
         i = 0
         while i < len(play):

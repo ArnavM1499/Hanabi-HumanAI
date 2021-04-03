@@ -127,6 +127,11 @@ class Game(object):
         if self.format:
             print(self.deck)
 
+        if http_player != -1:
+            for i, player in enumerate(self.players):
+                if i != http_player and hasattr(player, "debug"):
+                    player.debug = True
+
     # returns blank array for player_nr's own hand if not httpui
     def _make_game_state(self, player_nr, hinted_indices=[], card_changed=None):
         hands = []
