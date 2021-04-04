@@ -57,7 +57,7 @@ class BasePlayerModel(object):
         return self.hints
 
     def get_knowledge(self):
-        return self.knowledge[self.nr]
+        return self.knowledge
 
     def get_actions(self):
         return self.actions
@@ -71,9 +71,6 @@ class BasePlayerModel(object):
 
         return filtered_hints
 
-    def get_all_knowledge(self):
-        return self.knowledge
-
 
 class GameState(object):
     def __init__(
@@ -85,6 +82,7 @@ class GameState(object):
         board,
         valid_actions,
         num_hints,
+        all_knowledge,
         hinted_indices=[],
         card_changed=None,
     ):
@@ -95,6 +93,7 @@ class GameState(object):
         self.board = board
         self.valid_actions = valid_actions
         self.num_hints = num_hints
+        self.all_knowledge = all_knowledge
         self.hinted_indices = hinted_indices
         self.card_changed = card_changed
 
@@ -124,3 +123,6 @@ class GameState(object):
 
     def get_card_changed(self):
         return self.card_changed
+
+    def get_all_knowledge(self):
+        return self.all_knowledge

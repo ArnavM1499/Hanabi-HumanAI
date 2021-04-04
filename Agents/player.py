@@ -39,6 +39,9 @@ class Action(object):
             other.cnr,
         )
 
+    def __hash__(self):
+        return hash(str(self))
+
 
 class Player(object):
     def __init__(self, name, pnr):

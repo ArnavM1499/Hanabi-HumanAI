@@ -17,6 +17,7 @@ from cgi import parse_header, parse_multipart
 from urllib.parse import parse_qs
 from serverconf import HOST_NAME, PORT_NUMBER
 
+from Agents.player import Player
 
 HAND = 0
 TRASH = 1
@@ -461,7 +462,7 @@ participants = {}
 participantstarts = {}
 
 
-class HTTPPlayer(hanabi.Player):
+class HTTPPlayer(Player):
     def __init__(self, name, pnr):
         self.name = name
         self.pnr = pnr
@@ -557,7 +558,7 @@ class ReplayHTTPPlayer(HTTPPlayer):
         return self.actions.pop(0)
 
 
-class ReplayPlayer(hanabi.Player):
+class ReplayPlayer(Player):
     def __init__(self, name, pnr):
         super(ReplayPlayer, self).__init__(name, pnr)
         self.actions = []
