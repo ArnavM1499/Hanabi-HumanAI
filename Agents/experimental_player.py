@@ -130,11 +130,8 @@ class ExperimentalPlayer(Player):
             if card_discardable(partner_hand[i], self.last_state.get_board()):
                 discardable.append(i)
 
-        weighted_partner_knowledge = weight_knowledge(
-            partner_knowledge, self.partner_hint_weights
-        )
-
-        # if card is playable, hint it with the most info gain
+        # if card is discardable, hint it with the most info gain
+        # make sure it cannot be "confused" with playable
         while discardable:
             newest_discardable = discardable[-1]
             if newest_discardable in self.partner_todo:
@@ -144,11 +141,14 @@ class ExperimentalPlayer(Player):
                 hint_type = best_hint_type(
                     partner_hand, newest_discardable, weighted_partner_knowledge
                 )
+                #hint_type = best_discard_hint_type(
+                #    partner_hand, newest_discardable, weighted_partner_knowledge, self.last_state.get_board()
+                #)
                 if hint_type is None:
                     del discardable[-1]
                     continue
                 elif hint_type == HINT_COLOR:
-                    return Action(
+                   return Action(
                         HINT_COLOR,
                         self.partner_nr,
                         col=partner_hand[newest_discardable][0],
