@@ -184,7 +184,7 @@ class ExperimentalPlayer(Player):
 
         if force:
             nums = [card[1] for card in partner_hand]
-            return Action(HINT_NUMBER, self.partner_nr, num=min(nums))
+            return Action(HINT_NUMBER, self.partner_nr, num=max(nums))
         else:
             return self._discard(True)
 
@@ -220,7 +220,7 @@ class ExperimentalPlayer(Player):
             self.last_state = game_state
         self.knowledge = copy.deepcopy(self.last_model.get_knowledge())
         #print("player " + str(self.pnr) + " knowledge: " + str(self.knowledge))
-        #self._count_cards()
+        self._count_cards()
         #print("player " + str(self.pnr) + " knowledge: " + str(self.knowledge))
         #print("partner hand:" + str(self.last_state.get_hands()[self.partner_nr]))
         action_type = self._decide()
