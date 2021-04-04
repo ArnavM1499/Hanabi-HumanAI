@@ -2,17 +2,24 @@ import csv
 import fire
 from multiprocessing import Pool
 import os
+import random
 import time
 from hanabi import Game
 import Agents
 
 
-def run_single(file_name, player="ExperimentalPlayer", clean=False):
+def run_single(
+    file_name, player="ExperimentalPlayer", clean=False, player2=None, **kwargs
+):
 
-    print("running hanabi game")
+    print("running hanabi game on ", player, " and ", player2 if player2 else "itself")
     player_class = getattr(Agents, player)
-    P1 = player_class("player A", 0)
-    P2 = player_class("player B", 1)
+    if player2 and hasattr(Agents, player2):
+        player2_class = getattr(Agents, player)
+    else:
+        player2_class = player_class
+    P1 = player_class("player A", 0, **kwargs)
+    P2 = player2_class("player B", 1, **kwargs)
     G = Game([P1, P2], file_name)
     score = G.run(100)
     hints = G.hints
@@ -23,7 +30,13 @@ def run_single(file_name, player="ExperimentalPlayer", clean=False):
     return (score, hints, hits, turns)
 
 
-def record_game(file_name="hanabi_data.csv", mode="w", iters=1):
+def record_game(
+    player="ExperimentalPlayer",
+    file_name="hanabi_data.csv",
+    mode="w",
+    iters=1,
+    player2=None,
+):
     with open(file_name, mode) as f:
         writer = csv.writer(f, delimiter=",")
         writer.writerow(
@@ -38,7 +51,7 @@ def record_game(file_name="hanabi_data.csv", mode="w", iters=1):
         )
 
     for i in range(iters):
-        (score, hints, hits, turns) = run_single(file_name)
+        (score, hints, hits, turns) = run_single(player, file_name, player2=player2)
         print(
             "score: {}, hints left: {}, hits left: {}, turns: {}".format(
                 score, hints, hits, turns
@@ -46,10 +59,11 @@ def record_game(file_name="hanabi_data.csv", mode="w", iters=1):
         )
 
 
-def test_player(player="ExperimentalPlayer", iters=5000):
+def test_player(player="ExperimentalPlayer", player2=None, iters=5000):
     p = Pool(16)
     res = p.starmap_async(
-        run_single, [("sink_{}.csv".format(i), player, True) for i in range(iters)]
+        run_single,
+        [("sink_{}.csv".format(i), player, True, player2) for i in range(iters)],
     )
     p.close()
     results = [list(x) for x in zip(*res.get())]  # [[scores], [hints], [hits], [turns]
@@ -70,6 +84,12 @@ def test_player(player="ExperimentalPlayer", iters=5000):
             sum(results[1]) / iters, sum(results[2]) / iters, sum(results[3]) / iters
         )
     )
+
+
+def sequential_test(player, player2=None, iters=5000):
+    random.seed(0)
+    for i in range(iters):
+        run_single("sink_{}.csv".format(i), player, True, player)
 
 
 if __name__ == "__main__":
