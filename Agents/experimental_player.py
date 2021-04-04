@@ -18,6 +18,7 @@ def weight_knowledge(knowledge, weights):
                 new_knowledge[slot][col][num] *= knowledge[slot][col][num]
     return new_knowledge
 
+
 # This is actually bugged at the moment -- it can't handle when one player has
 # less than 5 cards (close to the end of the game). it doesn't crash, but
 # things like self.todo won't behave properly
@@ -200,7 +201,9 @@ class ExperimentalPlayer(Player):
         weighted_knowledge = weight_knowledge(self.knowledge, self.hint_weights)
 
         for i in range(len(weighted_knowledge)):
-            discard_probability = slot_discardable_pct(weighted_knowledge[i], self.last_state.get_board())
+            discard_probability = slot_discardable_pct(
+                weighted_knowledge[i], self.last_state.get_board()
+            )
             if discard_probability > highest_discard_probability:
                 highest_discard_probability = discard_probability
                 discard_index = i
@@ -270,7 +273,9 @@ class ExperimentalPlayer(Player):
         self.last_model = new_model
         self.last_state = new_state
         self.partner_todo = [i for i in self.partner_todo if i != action.cnr]
-        if len(self.partner_hint_weights) == len(new_state.get_all_knowledge()[self.partner_nr]):
+        if len(self.partner_hint_weights) == len(
+            new_state.get_all_knowledge()[self.partner_nr]
+        ):
             self.partner_hint_weights[action.cnr] = [
                 [1 for _ in range(5)] for _ in range(5)
             ]
@@ -281,7 +286,9 @@ class ExperimentalPlayer(Player):
         self.last_model = new_model
         self.last_state = new_state
         self.partner_todo = [i for i in self.partner_todo if i != action.cnr]
-        if len(self.partner_hint_weights) == len(new_state.get_all_knowledge()[self.partner_nr]):
+        if len(self.partner_hint_weights) == len(
+            new_state.get_all_knowledge()[self.partner_nr]
+        ):
             self.partner_hint_weights[action.cnr] = [
                 [1 for _ in range(5)] for _ in range(5)
             ]
