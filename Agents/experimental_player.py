@@ -5,6 +5,11 @@ import time
 import copy
 
 
+def remove_card(card, knowledge):
+    for slot in knowledge:
+        slot[card[0]][card[1] - 1] = max(0, slot[card[0]][card[1] - 1] - 1)
+
+
 def weight_knowledge(knowledge, weights):
     new_knowledge = copy.deepcopy(weights)
     for slot in range(len(new_knowledge)):
@@ -41,12 +46,29 @@ class ExperimentalPlayer(Player):
         self.log = []
         self.nr_cards = 5
         # should be accepted as a parameter
-        self.hint_weight = 1000.0
+        self.hint_weight = 20.0
         for k, v in kwargs.items():
             setattr(self, k, v)
 
-    def _sort_todo(self):
-        pass
+    def _take_out_trash(self):
+        #print(self.last_state.get_trash())
+        for card in self.last_state.get_trash():
+            remove_card(card, self.knowledge)
+
+    def _take_out_board(self):
+        board = self.last_state.get_board()
+        for i in range(len(board)):
+            for j in range(1, board[i][1]):
+                remove_card((i, j), self.knowledge)
+
+    def _take_out_other(self):
+        for card in self.last_state.get_hands()[self.partner_nr]:
+            remove_card(card, self.knowledge)
+
+    def _count_cards(self):
+        self._take_out_trash()
+        self._take_out_board()
+        self._take_out_other()
 
     def _decide(self):
         return "_execute"
@@ -148,7 +170,7 @@ class ExperimentalPlayer(Player):
                     del discardable[-1]
                     continue
                 elif hint_type == HINT_COLOR:
-                   return Action(
+                    return Action(
                         HINT_COLOR,
                         self.partner_nr,
                         col=partner_hand[newest_discardable][0],
@@ -194,13 +216,16 @@ class ExperimentalPlayer(Player):
         # first turn
         if self.last_model is None:
             self.last_model = player_model
-            self.knowledge = copy.deepcopy(self.last_model.get_knowledge())
         if self.last_state is None:
             self.last_state = game_state
-
+        self.knowledge = copy.deepcopy(self.last_model.get_knowledge())
+        #print("player " + str(self.pnr) + " knowledge: " + str(self.knowledge))
+        #self._count_cards()
+        #print("player " + str(self.pnr) + " knowledge: " + str(self.knowledge))
+        #print("partner hand:" + str(self.last_state.get_hands()[self.partner_nr]))
         action_type = self._decide()
         action = getattr(self, action_type)()
-        # time.sleep(1)
+        #time.sleep(3)
         return action
 
     # for 2 player the only hints we need to consider are hints about our cards
