@@ -46,7 +46,7 @@ class ExperimentalPlayer(Player):
         self.log = []
         self.nr_cards = 5
         # should be accepted as a parameter
-        self.hint_weight = 20.0
+        self.hint_weight = 1000.0
         for k, v in kwargs.items():
             setattr(self, k, v)
 
@@ -160,12 +160,12 @@ class ExperimentalPlayer(Player):
                 del discardable[-1]
                 continue
             if newest_discardable >= 0:
-                hint_type = best_hint_type(
-                    partner_hand, newest_discardable, weighted_partner_knowledge
-                )
-                #hint_type = best_discard_hint_type(
-                #    partner_hand, newest_discardable, weighted_partner_knowledge, self.last_state.get_board()
+                #hint_type = best_hint_type(
+                #    partner_hand, newest_discardable, weighted_partner_knowledge
                 #)
+                hint_type = best_discard_hint_type(
+                    partner_hand, newest_discardable, weighted_partner_knowledge, self.last_state.get_board()
+                )
                 if hint_type is None:
                     del discardable[-1]
                     continue
