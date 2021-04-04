@@ -13,8 +13,17 @@ class FullyIntentionalPlayer(Player):
         self.last_board = []
 
     def get_action(
-        self, nr, hands, knowledge, trash, played, board, valid_actions, hints
+        self, game_state, player_model#nr, hands, knowledge, trash, played, board, valid_actions, hints
     ):
+        nr = game_state.get_current_player()
+        hands = game_state.get_hands()
+        trash = game_state.get_trash()
+        played = game_state.get_played()
+        board = game_state.get_board()
+        valid_actions = game_state.get_valid_actions()
+        hints = game_state.get_num_hints()
+        knowledge = player_model.get_all_knowledge()
+
         handsize = len(knowledge[0])
         possible = []
 
@@ -104,7 +113,7 @@ class FullyIntentionalPlayer(Player):
 
         return random.choice([Action(DISCARD, cnr=i) for i in range(handsize)])
 
-    def inform(self, action, player, game):
+    def inform(self, action, player, game, x):
         if action.type in [PLAY, DISCARD]:
             x = str(action)
             if (action.cnr, player) in self.hints:
@@ -117,7 +126,7 @@ class FullyIntentionalPlayer(Player):
                     self.hints[(action.cnr + i + 1, player)] = []
         elif action.pnr == self.pnr:
             self.gothint = (action, player)
-            self.last_knowledge = game.knowledge[:]
+            self.last_knowledge = x.knowledge[:]
             self.last_board = game.board[:]
             self.last_trash = game.trash[:]
             self.played = game.played[:]
