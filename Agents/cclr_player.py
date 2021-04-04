@@ -5,6 +5,7 @@ from Agents.player import *
 class CardCountingLeftRightPlayer(Player):
     def __init__(self, name, pnr, count_cards, play_left):
         self.name = name
+        self.pnr = pnr
         self.count_cards = count_cards
         self.play_left = play_left
         self.explanation = []
@@ -19,8 +20,17 @@ class CardCountingLeftRightPlayer(Player):
                 hand[col][num - 1] = max(0, hand[col][num - 1])
 
     def get_action(
-        self, nr, hands, knowledge, trash, played, board, valid_actions, hints
+        self, game_state, player_model#, nr, hands, knowledge, trash, played, board, valid_actions, hints
     ):
+        nr = game_state.get_current_player()
+        hands = game_state.get_hands()
+        trash = game_state.get_trash()
+        played = game_state.get_played()
+        board = game_state.get_board()
+        valid_actions = game_state.get_valid_actions()
+        hints = game_state.get_num_hints()
+        knowledge = player_model.get_all_knowledge()
+
         if self.personal_knowledge == None:
             self.personal_knowledge = knowledge[nr].copy()
 
@@ -93,5 +103,5 @@ class CardCountingLeftRightPlayer(Player):
         return random.choice([Action(DISCARD, cnr=i) for i in range(len(knowledge[0]))])
         return [Action(DISCARD, cnr=i) for i in range(len(knowledge[0]))][0]
 
-    def inform(self, action, player, game):
+    def inform(self, action, player, game, model):
         pass

@@ -8,6 +8,9 @@ import copy
 def weight_knowledge(knowledge, weights):
     new_knowledge = copy.deepcopy(weights)
     for slot in range(len(new_knowledge)):
+        if (slot >= len(knowledge)):
+            continue
+
         for col in range(5):
             for num in range(5):
                 new_knowledge[slot][col][num] *= knowledge[slot][col][num]

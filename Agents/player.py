@@ -1,6 +1,4 @@
 from common_game_functions import *
-from hanabi import *
-
 
 class Action(object):
     def __init__(self, type, pnr=None, col=None, num=None, cnr=None):
