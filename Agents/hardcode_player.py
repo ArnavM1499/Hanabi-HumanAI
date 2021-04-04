@@ -13,7 +13,9 @@ class HardcodePlayer2(Player):
         self.pnr = pnr
         self.turn = 0
         self.debug = False
-        self.return_rank = False
+        self.return_value = True
+        self.value_wrap = True
+        self.action_classes = ["_execute", "_hint", "_discard"]
 
         # TOFIX Hardcoded for 2 players
         self.partner_nr = 1 - self.pnr
@@ -54,9 +56,9 @@ class HardcodePlayer2(Player):
 
     def inform(self, action, player, new_state, new_model):
 
-        self._update_state(new_state, new_model)
         if action.pnr != self.pnr:
             return
+        self._update_state(new_state, new_model)
 
         board = new_state.get_board()
         trash = new_state.get_trash()
@@ -176,6 +178,9 @@ class HardcodePlayer2(Player):
 
         i = 0
         while i < len(play):
+            if i >= len(knowledge):
+                play = play[:i]
+                break
             card = knowledge[play[i]]
             if cpf.slot_playable_pct(card, board) < 0.02:
                 del play[i]
@@ -183,6 +188,9 @@ class HardcodePlayer2(Player):
                 i += 1
         i = 0
         while i < len(play_candidate):
+            if i >= len(knowledge):
+                play_candidate = play_candidate[:i]
+                break
             card = knowledge[play_candidate[i]]
             if cpf.slot_playable_pct(card, board) < 0.02:
                 del play_candidate[i]
@@ -190,6 +198,9 @@ class HardcodePlayer2(Player):
                 i += 1
         i = 0
         while i < len(discard):
+            if i >= len(knowledge):
+                discard = discard[:i]
+                break
             card = knowledge[discard[i]]
             if cpf.slot_discardable_pct(card, board, trash) < 0.02:
                 del discard[i]
@@ -197,6 +208,9 @@ class HardcodePlayer2(Player):
                 i += 1
         i = 0
         while i < len(protect):
+            if i >= len(knowledge):
+                protect = protect[:i]
+                break
             card = knowledge[protect[i]]
             if cpf.slot_discardable_pct(card, board, trash) > 0.5:
                 del protect[i]
@@ -206,6 +220,20 @@ class HardcodePlayer2(Player):
         return sorted(play), sorted(play_candidate), sorted(discard), sorted(protect)
 
     def get_action(self, state, model):
+        def _wrapper(value_dict, best=None):
+            if self.return_value and self.value_wrap:
+                if not best:
+                    best = max(value_dict.keys(), key=lambda k: value_dict[k])
+                if self.debug:
+                    print("value_wrap enabled:")
+                    print("original value dict:")
+                    for k, v in sorted(value_dict.items(), key=lambda x: -x[1]):
+                        print("    ", str(k), "has value: ", v)
+                    print("wrapped to:")
+                    print("    ", str(best))
+                return best
+            else:
+                return value_dict
 
         self.turn += 1
 
@@ -217,7 +245,15 @@ class HardcodePlayer2(Player):
             if self.debug:
                 print("first turn")
 
-            return Action(cgf.HINT_NUMBER, self.partner_nr, num=min_num)
+            action = Action(cgf.HINT_NUMBER, self.partner_nr, num=min_num)
+            if self.return_value:
+                value_dict = {}
+                for A in state.get_valid_actions():
+                    value_dict[A] = 0
+                value_dict[action] = 1
+                return _wrapper(value_dict)
+            else:
+                return action
 
         self._update_state(state, model)
 
@@ -237,27 +273,46 @@ class HardcodePlayer2(Player):
         # Default action
         if chosen_action is None:
             if self.debug:
-                print("Using Defualt action!")
+                print("Using Default action!")
             chosen_action = self._execute()
         # TODO change to other class for less agressive play
 
-        # Post processes
-        if chosen_action.type in [cgf.PLAY, cgf.DISCARD]:
-            self._update_index(chosen_action.cnr)
+        if self.return_value:
+            final_action = max(chosen_action.keys(), key=lambda a: chosen_action[a])
+        else:
+            final_action = chosen_action
 
-        return chosen_action
+        # Post processes
+        if final_action.type in [cgf.PLAY, cgf.DISCARD]:
+            self._update_index(final_action.cnr)
+
+        if self.return_value:
+            value_dict = chosen_action
+            for cls in self.action_classes:
+                for k, v in getattr(self, cls)(force=True).items():
+                    if k not in value_dict.keys():
+                        value_dict[k] = max(-1, v - 0.1)
+            return _wrapper(value_dict, final_action)
+        else:
+            return chosen_action
 
     def _execute(self, force=False):
 
         board = self.last_state.get_board()
-        knowledge = self.knowledge
+        knowledge = deepcopy(self.knowledge)
+        if self.return_value:
+            order = []
 
         self.index_play.sort()
         while self.index_play != []:
             idx = self.index_play.pop()
             card = knowledge[idx]
             if cpf.slot_playable_pct(card, board) > 0:
-                return Action(cgf.PLAY, cnr=idx)
+                action = Action(cgf.PLAY, cnr=idx)
+                if self.return_value:
+                    order.append(action)
+                else:
+                    return action
             else:
                 self.index_discard.append(idx)
 
@@ -275,39 +330,98 @@ class HardcodePlayer2(Player):
                 idx = i
                 max_pct = cpf.slot_playable_pct(card, board)
         if idx and max_pct > risk_threshold:
-            return Action(cgf.PLAY, cnr=idx)
+            action = Action(cgf.PLAY, cnr=idx)
+            if self.return_value:
+                order.append(action)
+            else:
+                return action
 
         # TODO add more conditions for more aggressive play
+
+        if ((self.return_value and not order) or not self.return_value) and not force:
+            if self.last_state.get_num_hints() > 1:
+                if self.debug:
+                    print("redirected from execute to hint")
+                return self._hint()
+            else:
+                if self.debug:
+                    print("redirected from execute to discard")
+                return self._discard(force=True)
 
         if force:
             self.index_play_candidate.sort()
             while self.index_play_candidate != []:
                 idx = self.index_play_candidate.pop()
                 card = knowledge[idx]
-                if cpf.slot_playable(card, board) > 0.02:
-                    return Action(cgf.PLAY, cnr=idx)
+                if cpf.slot_playable_pct(card, board) > 0.02:
+                    action = Action(cgf.PLAY, cnr=idx)
+                    if self.return_value:
+                        order.append(action)
+                    else:
+                        return action
                 else:
                     self.index_discard.append(idx)
-            return Action(cgf.PLAY, cnr=self.card_nr - 1)
-        else:
-            if self.last_state.get_num_hints() > 1:
-                return self._hint(force=True)
+            action = Action(cgf.PLAY, cnr=self.card_nr - 1)
+            if self.return_value:
+                order.append(action)
             else:
-                return self._discard(force=True)
+                return action
+
+        # only reachable for self.return_value
+        value_dict = {}
+        for i, action in enumerate(order):
+            value_dict[action] = 1 - 0.1 * i
+        for action in self.last_state.get_valid_actions():
+            if action.type == cgf.PLAY and action not in value_dict.keys():
+                value_dict[action] = -1
+        return value_dict
 
     def _discard(self, force=False):
 
+        if self.return_value:
+            order = []
+
         if self.index_discard != []:
-            return Action(cgf.DISCARD, cnr=min(self.index_discard))
+            action = Action(cgf.DISCARD, cnr=min(self.index_discard))
+            if self.return_value:
+                order.append(action)
+            else:
+                return action
 
         if self.index_discard_candidate != []:
-            return Action(cgf.DISCARD, cnr=min(self.index_discard_candidate))
+            action = Action(cgf.DISCARD, cnr=min(self.index_discard_candidate))
+            if self.return_value:
+                order.append(action)
+            else:
+                return action
 
         for i in range(self.card_nr):
             if i not in self.index_protect:
-                return Action(cgf.DISCARD, cnr=i)
+                action = Action(cgf.DISCARD, cnr=i)
+                if self.return_value:
+                    order.append(action)
+                else:
+                    return action
 
-        return Action(cgf.DISCARD, cnr=0)
+        if self.return_value:
+            if order:
+                value_dict = {}
+                for i, action in enumerate(order):
+                    value_dict[action] = 1 - 0.1 * i
+                for action in self.last_state.get_valid_actions():
+                    if action.type == cgf.DISCARD and action not in value_dict.keys():
+                        value_dict[action] = -1
+            else:
+                value_dict = {
+                    action: 0
+                    for action in self.last_state.get_valid_actions()
+                    if action.type == cgf.DISCARD
+                }
+                value_dict[Action(cgf.DISCARD, cnr=0)] = 1
+            return value_dict
+
+        else:
+            return Action(cgf.DISCARD, cnr=0)
 
     def _evaluate_partner(
         self, hands, predicted_play, predicted_play_candidate, predicted_discard
@@ -349,17 +463,23 @@ class HardcodePlayer2(Player):
     def _hint(self, force=False):
 
         partner_hand = self.last_state.get_hands()[self.partner_nr]
-        partner_knowledge = self.last_state.get_all_knowledge()[self.partner_nr]
+        partner_knowledge = deepcopy(
+            self.last_state.get_all_knowledge()[self.partner_nr]
+        )
         board = self.last_state.get_board()
         trash = self.last_state.get_trash()
 
-        max_score = self._evaluate_partner(
+        baseline = max_score = self._evaluate_partner(
             partner_hand,
             self.partner_play,
             self.partner_play_candidate,
             self.partner_discard,
         )
         best_action = None
+        some_score = -100
+        some_action = None
+        if self.return_value:
+            value_dict = {}
 
         if self.debug:
             print("comparing hints")
@@ -421,10 +541,51 @@ class HardcodePlayer2(Player):
                 max_score = score
                 best_action = action
 
-        if best_action is None:
-            return self._discard(force=True)
+            if score > some_score:
+                some_score = score
+                some_action = action
 
-        return best_action
+            if self.return_value:
+                value_dict[action] = score
+
+        if best_action is None:
+            if force:
+                if not self.return_value:
+                    return some_action
+            else:
+                if self.debug:
+                    print("redirected from hint to discard")
+                return self._discard(force=True)
+
+        if self.return_value:
+            if value_dict:
+                # normalization
+                score_max = max(value_dict.values())
+                score_min = min(value_dict.values())
+                if score_max - score_min < 0.05:
+                    if score_max > baseline:
+                        return {k: 1 for k in value_dict.keys()}
+                    else:
+                        return {k: -1 for k in value_dict.keys()}
+                else:
+                    if score_max > baseline:
+                        scale_pos = score_max - baseline
+                    else:
+                        scale_pos = 1
+                    if score_min < baseline:
+                        scale_neg = baseline - score_min
+                    else:
+                        scale_neg = 1
+
+                    return {
+                        k: v / (scale_pos if v > baseline else scale_neg)
+                        for k, v in value_dict.items()
+                    }
+            else:
+                return {}
+
+        else:
+            return best_action
 
     def _update_index(self, idx, partner=False):
 
