@@ -620,3 +620,4 @@ class HardcodePlayer2(Player):
             self.knowledge = merged
         else:
             self.knowledge = deepcopy(new_model.get_knowledge())
+            
