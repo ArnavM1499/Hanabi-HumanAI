@@ -1,6 +1,4 @@
 from common_game_functions import *
-from hanabi import *
-
 
 class Action(object):
     def __init__(self, type, pnr=None, col=None, num=None, cnr=None):
@@ -40,6 +38,9 @@ class Action(object):
             other.num,
             other.cnr,
         )
+
+    def __hash__(self):
+        return hash(str(self))
 
 
 class Player(object):

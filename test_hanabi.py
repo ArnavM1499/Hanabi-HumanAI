@@ -31,7 +31,7 @@ results = []
 hints = []
 hits = []
 turns = []
-num_games = 75
+num_games = 100
 for i in range(num_games):
     P1 = ExperimentalPlayer("player 0", 0)
     P2 = ExperimentalPlayer("player 1", 1)
