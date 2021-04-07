@@ -1,0 +1,6 @@
+{
+    "player_class": "HardcodePlayer2",
+    "debug": true,
+    "return_value": true,
+    "value_wrap": true
+}
