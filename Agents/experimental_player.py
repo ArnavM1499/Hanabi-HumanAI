@@ -5,6 +5,11 @@ import time
 import copy
 
 
+def remove_card(card, knowledge):
+    for slot in knowledge:
+        slot[card[0]][card[1] - 1] = max(0, slot[card[0]][card[1] - 1] - 1)
+
+
 def weight_knowledge(knowledge, weights):
     new_knowledge = copy.deepcopy(weights)
     for slot in range(len(new_knowledge)):
@@ -46,8 +51,25 @@ class ExperimentalPlayer(Player):
         for k, v in kwargs.items():
             setattr(self, k, v)
 
-    def _sort_todo(self):
-        pass
+    def _take_out_trash(self):
+        #print(self.last_state.get_trash())
+        for card in self.last_state.get_trash():
+            remove_card(card, self.knowledge)
+
+    def _take_out_board(self):
+        board = self.last_state.get_board()
+        for i in range(len(board)):
+            for j in range(1, board[i][1]):
+                remove_card((i, j), self.knowledge)
+
+    def _take_out_other(self):
+        for card in self.last_state.get_hands()[self.partner_nr]:
+            remove_card(card, self.knowledge)
+
+    def _count_cards(self):
+        self._take_out_trash()
+        self._take_out_board()
+        self._take_out_other()
 
     def _decide(self):
         return "_execute"
@@ -131,19 +153,19 @@ class ExperimentalPlayer(Player):
             if card_discardable(partner_hand[i], self.last_state.get_board()):
                 discardable.append(i)
 
-        weighted_partner_knowledge = weight_knowledge(
-            partner_knowledge, self.partner_hint_weights
-        )
-
-        # if card is playable, hint it with the most info gain
+        # if card is discardable, hint it with the most info gain
+        # make sure it cannot be "confused" with playable
         while discardable:
             newest_discardable = discardable[-1]
             if newest_discardable in self.partner_todo:
                 del discardable[-1]
                 continue
             if newest_discardable >= 0:
-                hint_type = best_hint_type(
-                    partner_hand, newest_discardable, weighted_partner_knowledge
+                #hint_type = best_hint_type(
+                #    partner_hand, newest_discardable, weighted_partner_knowledge
+                #)
+                hint_type = best_discard_hint_type(
+                    partner_hand, newest_discardable, weighted_partner_knowledge, self.last_state.get_board()
                 )
                 if hint_type is None:
                     del discardable[-1]
@@ -163,7 +185,7 @@ class ExperimentalPlayer(Player):
 
         if force:
             nums = [card[1] for card in partner_hand]
-            return Action(HINT_NUMBER, self.partner_nr, num=min(nums))
+            return Action(HINT_NUMBER, self.partner_nr, num=max(nums))
         else:
             return self._discard(True)
 
@@ -197,13 +219,16 @@ class ExperimentalPlayer(Player):
         # first turn
         if self.last_model is None:
             self.last_model = player_model
-            self.knowledge = copy.deepcopy(self.last_model.get_knowledge())
         if self.last_state is None:
             self.last_state = game_state
-
+        self.knowledge = copy.deepcopy(self.last_model.get_knowledge())
+        #print("player " + str(self.pnr) + " knowledge: " + str(self.knowledge))
+        self._count_cards()
+        #print("player " + str(self.pnr) + " knowledge: " + str(self.knowledge))
+        #print("partner hand:" + str(self.last_state.get_hands()[self.partner_nr]))
         action_type = self._decide()
         action = getattr(self, action_type)()
-        # time.sleep(1)
+        #time.sleep(3)
         return action
 
     # for 2 player the only hints we need to consider are hints about our cards
