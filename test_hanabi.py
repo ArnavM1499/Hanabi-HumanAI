@@ -3,7 +3,7 @@ import csv
 from Agents.inner_state_player import InnerStatePlayer
 from Agents.cclr_player import CardCountingLeftRightPlayer
 from Agents.basic_protocol_player import BasicProtocolPlayer
-from Agents.hardcode_player import HardcodePlayer
+from Agents.hardcode_player import HardcodePlayer2
 from Agents.experimental_player import ExperimentalPlayer
 
 #P1 = ExperimentalPlayer("player 0", 0)
