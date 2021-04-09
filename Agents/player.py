@@ -1,5 +1,7 @@
+import json
+import random
 from common_game_functions import *
-from hanabi import *
+import Agents
 
 
 class Action(object):
@@ -51,11 +53,18 @@ class Player(object):
         self.pnr = pnr
         self.explanation = []
 
+    @staticmethod
+    def from_json(name, pnr, json_path):
+        json_dict = json.load(open(json_path))
+        json_dict["name"] = name
+        json_dict["pnr"] = pnr
+        return getattr(Agents, json_dict["player_class"])(**json_dict)
+
     def get_nr(self):
         return self.pnr
 
     def get_action(self, game_state, base_player_model):
-        return random.choice(valid_actions)
+        return random.choice(game_state.get_valid_actions())
 
     def inform(self, action, player, new_state, new_model):
         pass
