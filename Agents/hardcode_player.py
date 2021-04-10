@@ -6,7 +6,7 @@ from Agents.player import Player, Action
 
 
 class HardcodePlayer2(Player):
-    def __init__(self, name, pnr, **kwargs):
+    def __init__(self, name, pnr, play_thresh, **kwargs):
 
         # Basic Info
         self.name = name
@@ -38,6 +38,8 @@ class HardcodePlayer2(Player):
         self.partner_discard = []
         self.partner_protect = []
         self.partner_hinted = []
+
+        self.play_thresh = play_thresh
 
         # Decision pattern matches
         # [(func : Player -> bool, action : Action Type)]
@@ -150,7 +152,7 @@ class HardcodePlayer2(Player):
         flag = False
         for idx in hinted_indices:
             card = knowledge[idx]
-            if cpf.slot_playable_pct(card, board) > 0.8:
+            if cpf.slot_playable_pct(card, board) > self.play_thresh:
                 play.append(idx)
                 flag = True
             elif cpf.slot_discardable_pct(card, board, trash) > 0.98:

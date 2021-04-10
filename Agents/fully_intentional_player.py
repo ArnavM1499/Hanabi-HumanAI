@@ -22,7 +22,7 @@ class FullyIntentionalPlayer(Player):
         board = game_state.get_board()
         valid_actions = game_state.get_valid_actions()
         hints = game_state.get_num_hints()
-        knowledge = player_model.get_all_knowledge()
+        knowledge = game_state.get_all_knowledge()
 
         handsize = len(knowledge[0])
         possible = []
