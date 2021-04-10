@@ -19,6 +19,16 @@ def weight_knowledge(knowledge, weights):
     return new_knowledge
 
 
+def count_card_list(knowledge, ls):
+    for card in ls:
+        remove_card(card, knowledge)
+
+
+def count_board(knowledge, board):
+    for i in range(len(board)):
+        for j in range(1, board[i][1]):
+            remove_card((i, j), knowledge)
+
 # This is actually bugged at the moment -- it can't handle when one player has
 # less than 5 cards (close to the end of the game). it doesn't crash, but
 # things like self.todo won't behave properly
@@ -48,35 +58,18 @@ class ExperimentalPlayer(Player):
         self.nr_cards = 5
         # should be accepted as a parameter
         self.hint_weight = 1000.0
-        self.get_action_values = False
-        #self.action_values = {}
         for k, v in kwargs.items():
             setattr(self, k, v)
 
-    def _take_out_trash(self):
-        #print(self.last_state.get_trash())
-        for card in self.last_state.get_trash():
-            remove_card(card, self.knowledge)
-
-    def _take_out_board(self):
-        board = self.last_state.get_board()
-        for i in range(len(board)):
-            for j in range(1, board[i][1]):
-                remove_card((i, j), self.knowledge)
-
-    def _take_out_other(self):
-        for card in self.last_state.get_hands()[self.partner_nr]:
-            remove_card(card, self.knowledge)
-
     def _count_cards(self):
-        self._take_out_trash()
-        self._take_out_board()
-        self._take_out_other()
-
-    def _decide(self):
-        return "_execute"
+        count_card_list(self.knowledge, self.last_state.get_trash())
+        count_card_list(self.knowledge, self.last_state.get_hands()[self.partner_nr])
+        count_board(self.knowledge, self.last_state.get_board())
 
     def _execute(self, force=False):
+
+        # execute something in the todo list
+
         while self.todo:
             index = self.todo[-1]
             weighted_knowledge = weight_knowledge(self.knowledge, self.hint_weights)
@@ -130,19 +123,6 @@ class ExperimentalPlayer(Player):
                     partner_hand, newest_playable, weighted_partner_knowledge
                 )
                 if hint_type is None:
-                    # if self.get_action_values:
-                    #    self.action_values[
-                    #        Action(
-                    #            HINT_COLOR,
-                    #            self.partner_nr,
-                    #            col=partner_hand[newest_playable][0],
-                    #        )
-                    #   ] = -1
-                    #    self.action_values[Action(
-                    #        HINT_NUMBER,
-                    #        self.partner_nr,
-                    #        num=partner_hand[newest_playable][1],
-                    #    )] = -1
                     del playable[-1]
                     continue
                 elif hint_type == HINT_COLOR:
@@ -225,59 +205,6 @@ class ExperimentalPlayer(Player):
         # discard oldest
         return Action(DISCARD, cnr=0)
 
-    def _eval_play(self, action):
-        assert(action.type == PLAY)
-        weighted_knowledge = weight_knowledge(self.knowledge, self.hint_weights)
-        pct = slot_playable_pct(
-                    weighted_knowledge[action.cnr], self.last_state.get_board()
-                )
-        if pct > 0.95:
-            return 1
-        elif pct > 0.5:
-            return 0
-        else:
-            return -1
-
-    def _eval_discard(self, action):
-        assert(action.type == DISCARD)
-        weighted_knowledge = weight_knowledge(self.knowledge, self.hint_weights)
-        pct = slot_discardable_pct(
-                    weighted_knowledge[action.cnr], self.last_state.get_board()
-                )
-        if pct > 0.95:
-            return 1
-        elif pct > 0.5:
-            return 0
-        else:
-            return -1
-
-    def _eval_hint(self, action):
-        assert(action.type in [HINT_COLOR, HINT_NUMBER])
-        target = -1
-        partner_hand = self.last_state.get_hands()[self.partner_nr]
-        #partner_knowledge = copy.deepcopy(self.last_state.get_all_knowledge())[
-        #    self.partner_nr
-        #]
-        for i in range(len(partner_hand)):
-            if action.type == HINT_COLOR:
-                if partner_hand[i][0] == action.col:
-                   target = i
-            elif action.type == HINT_NUMBER:
-                if partner_hand[i][1] - 1 == action.num:
-                    target = i
-        if target == -1:
-            return 0
-        elif card_playable(partner_hand[target]):
-            return 1
-        return 0
-
-    def eval_action(self, action):
-        if action.type == PLAY:
-            return self._eval_play(action)
-        elif action.type == DISCARD:
-            return self._eval_discard(action)
-        return self._eval_hint(action)
-
     def get_action(self, game_state, player_model):
         self.turn += 1
 
@@ -291,15 +218,8 @@ class ExperimentalPlayer(Player):
         self._count_cards()
         #print("player " + str(self.pnr) + " knowledge: " + str(self.knowledge))
         #print("partner hand:" + str(self.last_state.get_hands()[self.partner_nr]))
-        action_type = self._decide()
-        action = getattr(self, action_type)()
         #time.sleep(3)
-        if self.get_action_values:
-            value_dict = {}
-            for action in self.last_model.get_actions:
-                value_dict[action] = self.eval_action(action)
-            return value_dict
-        return action
+        return self._execute()
 
     # for 2 player the only hints we need to consider are hints about our cards
     # this will need to be revisited if we generalize to more players
