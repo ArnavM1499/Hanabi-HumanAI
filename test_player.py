@@ -1,25 +1,28 @@
 import csv
 import fire
+import json
 from multiprocessing import Pool
 import os
 import random
 import time
 from hanabi import Game
-import Agents
+from Agents.player import Player
+
+player_pool = json.load(open("Agents/configs/players.json"))
 
 
 def run_single(
-    file_name, player="ExperimentalPlayer", clean=False, player2=None, **kwargs
+    file_name,
+    player="00001",
+    player2=None,
+    clean=False,
 ):
 
     print("running hanabi game on ", player, " and ", player2 if player2 else "itself")
-    player_class = getattr(Agents, player)
-    if player2 and hasattr(Agents, player2):
-        player2_class = getattr(Agents, player)
-    else:
-        player2_class = player_class
-    P1 = player_class("player A", 0, **kwargs)
-    P2 = player2_class("player B", 1, **kwargs)
+    if not player2:
+        player2 = player
+    P1 = Player.from_dict("Alice", 0, player_pool[player])
+    P2 = Player.from_dict("Bob", 1, player_pool[player2])
     G = Game([P1, P2], file_name)
     score = G.run(100)
     hints = G.hints
@@ -31,7 +34,7 @@ def run_single(
 
 
 def record_game(
-    player="ExperimentalPlayer",
+    player="00001",
     file_name="hanabi_data.csv",
     mode="w",
     iters=1,
@@ -59,11 +62,11 @@ def record_game(
         )
 
 
-def test_player(player="ExperimentalPlayer", player2=None, iters=5000):
+def test_player(player="00001", player2=None, iters=5000):
     p = Pool(16)
     res = p.starmap_async(
         run_single,
-        [("sink_{}.csv".format(i), player, True, player2) for i in range(iters)],
+        [("sink_{}.csv".format(i), player, player2, True) for i in range(iters)],
     )
     p.close()
     results = [list(x) for x in zip(*res.get())]  # [[scores], [hints], [hits], [turns]
@@ -89,7 +92,7 @@ def test_player(player="ExperimentalPlayer", player2=None, iters=5000):
 def sequential_test(player, player2=None, iters=5000):
     random.seed(0)
     for i in range(iters):
-        run_single("sink_{}.csv".format(i), player, True, player)
+        run_single("sink_{}.csv".format(i), player, player, True)
 
 
 if __name__ == "__main__":
