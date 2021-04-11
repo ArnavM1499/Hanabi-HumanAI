@@ -279,13 +279,13 @@ class Game(object):
         game_state = self._make_game_state(self.current_player)
         player_model = self._make_player_model(self.current_player)
         action = self.players[self.current_player].get_action(game_state, player_model)
-        
-        # Process action
-        self.external_turn(action)
 
         # Data collection
         if self.pickle_file != None:
             pickle.dump(["Action", game_state, player_model, action], self.pickle_file)
+
+        # Process action
+        self.external_turn(action)
 
     def external_turn(self, action):
         if not self.done():
@@ -318,7 +318,7 @@ class Game(object):
 
                 # Data collection
                 if self.pickle_file != None:
-                    pickle.dump(["Inform", action, self.current_player, game_state, player_model], self.pickle_file)   
+                    pickle.dump(["Inform", game_state, player_model, action, p.get_nr(), self.current_player], self.pickle_file)   
 
             self.current_player += 1
             self.current_player %= len(self.players)
