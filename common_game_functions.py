@@ -1,3 +1,4 @@
+from copy import deepcopy
 import random
 
 global HINT_COLOR, HINT_NUMBER, PLAY, DISCARD, CANDISCARD, GREEN, YELLOW, WHITE, BLUE, RED, ALL_COLORS, COLORNAMES, COUNTS
@@ -126,3 +127,10 @@ class GameState(object):
 
     def get_all_knowledge(self):
         return self.all_knowledge
+
+    def get_common_visible_cards(self):
+        cards = deepcopy(self.trash)
+        for col, num in self.board:
+            for i in range(num):
+                cards.append((col, i + 1))
+        return sorted(cards)

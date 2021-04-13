@@ -1,14 +1,18 @@
 {
-    "00001" : {
-        "player_class": "HardcodePlayer2",
-        "debug": true,
-        "return_value": true,
-        "value_wrap": true
-    },
-    "00002" : {
-        "player_class": "HardcodePlayer2",
-        "debug": false,
-        "return_value": true,
-        "value_wrap": true
-    }
+  "00001": {
+    "player_class": "HardcodePlayer2",
+    "debug": false,
+    "self_card_count": true,
+    "partner_card_count": true,
+    "return_value": true,
+    "value_wrap": true
+  },
+  "00002": {
+    "player_class": "HardcodePlayer2",
+    "debug": false,
+    "self_card_count": false,
+    "partner_card_count": false,
+    "return_value": true,
+    "value_wrap": true
+  }
 }

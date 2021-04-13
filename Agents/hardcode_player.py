@@ -16,6 +16,7 @@ class HardcodePlayer2(Player):
         self.return_value = True
         self.value_wrap = True
         self.action_classes = ["_execute", "_hint", "_discard"]
+        self.wait_for_result = False
 
         # TOFIX Hardcoded for 2 players
         self.partner_nr = 1 - self.pnr
@@ -51,19 +52,15 @@ class HardcodePlayer2(Player):
         ]
         self.risk_play = {0: 0.5, 5: 0, 12: 0.4, 30: 1}
         self.hint_to_protect = False
+        self.self_card_count = False
+        self.partner_card_count = False
 
         for k, v in kwargs.items():
             setattr(self, k, v)
 
     def inform(self, action, player, new_state, new_model):
 
-        if action.pnr != self.pnr:
-            return
         self._update_state(new_state, new_model)
-
-        board = new_state.get_board()
-        trash = new_state.get_trash()
-        knowledge = new_model.get_knowledge()
 
         if self.turn == 0:
             if action.type == cgf.HINT_COLOR:
@@ -82,6 +79,26 @@ class HardcodePlayer2(Player):
                 pprint(self.__dict__)
                 print("\n\n\n")
             return
+
+        if self.self_card_count:
+            if self.wait_for_result:
+                self.wait_for_result = False
+                col, num = new_state.get_card_changed()
+                for k in self.knowledge:
+                    k[col][num - 1] = max(0, k[col][num - 1] - 1)
+            elif action.type in [cgf.DISCARD, cgf.PLAY]:
+                partner_hand = new_state.get_hands()[self.partner_nr]
+                if len(partner_hand) == 5:
+                    col, num = new_state.get_hands()[self.partner_nr][-1]
+                    for k in self.knowledge:
+                        k[col][num - 1] = max(0, k[col][num - 1] - 1)
+
+        if action.pnr != self.pnr:
+            return
+
+        board = new_state.get_board()
+        trash = new_state.get_trash()
+        knowledge = self.knowledge
 
         if action.type in [cgf.HINT_COLOR, cgf.HINT_NUMBER]:
 
@@ -187,8 +204,11 @@ class HardcodePlayer2(Player):
             if i >= len(knowledge):
                 play = play[:i]
                 break
-            card = knowledge[play[i]]
-            if cpf.slot_playable_pct(card, board) < 0.02:
+            try:
+                card = knowledge[play[i]]
+            except IndexError:
+                card = None
+            if (not card) or cpf.slot_playable_pct(card, board) < 0.02:
                 del play[i]
             else:
                 i += 1
@@ -197,8 +217,11 @@ class HardcodePlayer2(Player):
             if i >= len(knowledge):
                 play_candidate = play_candidate[:i]
                 break
-            card = knowledge[play_candidate[i]]
-            if cpf.slot_playable_pct(card, board) < 0.02:
+            try:
+                card = knowledge[play_candidate[i]]
+            except IndexError:
+                card = None
+            if (not card) or cpf.slot_playable_pct(card, board) < 0.02:
                 del play_candidate[i]
             else:
                 i += 1
@@ -207,8 +230,11 @@ class HardcodePlayer2(Player):
             if i >= len(knowledge):
                 discard = discard[:i]
                 break
-            card = knowledge[discard[i]]
-            if cpf.slot_discardable_pct(card, board, trash) < 0.02:
+            try:
+                card = knowledge[discard[i]]
+            except IndexError:
+                card = None
+            if (not card) or cpf.slot_discardable_pct(card, board, trash) < 0.02:
                 del discard[i]
             else:
                 i += 1
@@ -217,8 +243,11 @@ class HardcodePlayer2(Player):
             if i >= len(knowledge):
                 protect = protect[:i]
                 break
-            card = knowledge[protect[i]]
-            if cpf.slot_discardable_pct(card, board, trash) > 0.5:
+            try:
+                card = knowledge[protect[i]]
+            except IndexError:
+                card = None
+            if (not card) or cpf.slot_discardable_pct(card, board, trash) > 0.5:
                 del protect[i]
             else:
                 i += 1
@@ -257,6 +286,7 @@ class HardcodePlayer2(Player):
                 print("first turn")
 
             action = Action(cgf.HINT_NUMBER, self.partner_nr, num=min_num)
+            self._update_state(state, model)
             if self.return_value:
                 value_dict = {}
                 for A in state.get_valid_actions():
@@ -295,6 +325,7 @@ class HardcodePlayer2(Player):
 
         # Post processes
         if final_action.type in [cgf.PLAY, cgf.DISCARD]:
+            self.wait_for_result = True
             self._update_index(final_action.cnr)
 
         if self.return_value:
@@ -310,7 +341,7 @@ class HardcodePlayer2(Player):
     def _execute(self, force=False):
 
         board = self.last_state.get_board()
-        knowledge = deepcopy(self.knowledge)
+        knowledge = self.knowledge
         if self.return_value:
             order = []
 
@@ -477,6 +508,17 @@ class HardcodePlayer2(Player):
         partner_knowledge = deepcopy(
             self.last_state.get_all_knowledge()[self.partner_nr]
         )
+        if self.partner_card_count:
+            if self.debug:
+                print("partner knowledge before card count")
+                pprint(partner_knowledge)
+            for col, num in self.last_state.get_common_visible_cards():
+                for k in partner_knowledge:
+                    k[col][num - 1] = max(0, k[col][num - 1] - 1)
+            if self.debug:
+                print("\n partner knowledge after card count")
+                pprint(partner_knowledge)
+                print("")
         board = self.last_state.get_board()
         trash = self.last_state.get_trash()
 
@@ -602,7 +644,16 @@ class HardcodePlayer2(Player):
         if self:
             prefix = "index_"
             del self.knowledge[idx]
-            self.knowledge.append([cgf.COUNTS.copy() for _ in range(5)])
+            new_knowledge = [cgf.COUNTS.copy() for _ in range(5)]
+            if self.self_card_count:
+                visible_cards = (
+                    self.last_state.get_common_visible_cards()
+                    + self.last_state.get_hands()[self.partner_nr]
+                )
+                for col, num in visible_cards:
+                    new_knowledge[col][num - 1] -= 1
+
+            self.knowledge.append(new_knowledge)
         else:
             prefix = "partner_"
 
@@ -629,4 +680,9 @@ class HardcodePlayer2(Player):
                 merged.append(temp)
             self.knowledge = merged
         else:
+            # start of the game
             self.knowledge = deepcopy(new_model.get_knowledge())
+            partner_hand = new_state.get_hands()[self.partner_nr]
+            for col, num in partner_hand:
+                for k in self.knowledge:
+                    k[col][num - 1] = max(0, k[col][num - 1] - 1)

@@ -26,7 +26,7 @@ class Game(object):
         self.hits = 3
         self.hints = 8
         self.current_player = 0
-        self.board = list(map(lambda c: (c, 0), ALL_COLORS))
+        self.board = [(c, 0) for c in ALL_COLORS]
         self.played = []
         self.deck = make_deck()
         self.extra_turns = 0
@@ -103,9 +103,8 @@ class Game(object):
         if not self.deck:
             return
 
-        self.hands[pnr].append(self.deck[0])
+        self.hands[pnr].append(self.deck.pop())
         self.knowledge[pnr].append(initial_knowledge())
-        del self.deck[0]
 
     def perform(self, action):
         hint_indices = []
