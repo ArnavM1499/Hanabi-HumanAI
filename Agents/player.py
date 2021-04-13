@@ -1,4 +1,3 @@
-import json
 import random
 from common_game_functions import *
 import Agents
@@ -54,8 +53,7 @@ class Player(object):
         self.explanation = []
 
     @staticmethod
-    def from_json(name, pnr, json_path):
-        json_dict = json.load(open(json_path))
+    def from_dict(name, pnr, json_dict):
         json_dict["name"] = name
         json_dict["pnr"] = pnr
         return getattr(Agents, json_dict["player_class"])(**json_dict)

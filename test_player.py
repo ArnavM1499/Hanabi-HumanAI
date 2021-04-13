@@ -1,5 +1,6 @@
 import csv
 import fire
+import json
 from multiprocessing import Pool
 import os
 import random
@@ -7,10 +8,12 @@ import time
 from hanabi import Game
 from Agents.player import Player
 
+player_pool = json.load(open("Agents/configs/players.json"))
+
 
 def run_single(
     file_name,
-    player="Agents/configs/hardcode_player_default.json",
+    player="00001",
     player2=None,
     clean=False,
 ):
@@ -18,8 +21,8 @@ def run_single(
     print("running hanabi game on ", player, " and ", player2 if player2 else "itself")
     if not player2:
         player2 = player
-    P1 = Player.from_json("Alice", 0, player)
-    P2 = Player.from_json("Bob", 1, player2)
+    P1 = Player.from_dict("Alice", 0, player_pool[player])
+    P2 = Player.from_dict("Bob", 1, player_pool[player2])
     G = Game([P1, P2], file_name)
     score = G.run(100)
     hints = G.hints
@@ -31,7 +34,7 @@ def run_single(
 
 
 def record_game(
-    player="Agents/configs/hardcode_player_default.json",
+    player="00001",
     file_name="hanabi_data.csv",
     mode="w",
     iters=1,
@@ -59,9 +62,7 @@ def record_game(
         )
 
 
-def test_player(
-    player="Agents/configs/hardcode_player_default.json", player2=None, iters=5000
-):
+def test_player(player="00001", player2=None, iters=5000):
     p = Pool(16)
     res = p.starmap_async(
         run_single,
