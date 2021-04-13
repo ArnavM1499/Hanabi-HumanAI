@@ -39,6 +39,8 @@ class HardcodePlayer2(Player):
         self.partner_protect = []
         self.partner_hinted = []
 
+        # Parameters
+
         # Decision pattern matches
         # [(func : Player -> bool, action : Action Type)]
         self.decision_protocol = [
@@ -47,9 +49,8 @@ class HardcodePlayer2(Player):
             (lambda p, s, m: p.partner_play == [] and s.get_num_hints() > 0, "_hint"),
             (lambda p, s, m: p.index_play == [], "_hint"),
         ]
-
-        # Parameters
         self.risk_play = {0: 0.5, 5: 0, 12: 0.4, 30: 1}
+        self.hint_to_protect = False
 
         for k, v in kwargs.items():
             setattr(self, k, v)
@@ -102,7 +103,6 @@ class HardcodePlayer2(Player):
                 self.index_play_candidate,
                 self.index_discard,
                 self.index_protect,
-                is_five=(action.type == cgf.HINT_NUMBER and action.num == 5),
             )
 
             if self.debug:
@@ -139,7 +139,6 @@ class HardcodePlayer2(Player):
         cur_play_candidate,
         cur_discard,
         cur_protect,
-        is_five=False,
     ):
 
         play = cur_play.copy()
@@ -155,8 +154,15 @@ class HardcodePlayer2(Player):
                 flag = True
             elif cpf.slot_discardable_pct(card, board, trash) > 0.98:
                 discard.append(idx)
-            elif is_five:
-                protect.append(idx)
+        for i, k in enumerate(knowledge):
+            need_protect = True
+            for col, num in cpf.get_possible(k):
+                if board[col][1] >= num:
+                    need_protect = False
+                    if self.hint_to_protect:
+                        flag = True
+            if need_protect:
+                self.index_protect.append(i)
 
         if not flag:
             newest = hinted_indices[-1]
@@ -217,7 +223,12 @@ class HardcodePlayer2(Player):
             else:
                 i += 1
 
-        return sorted(play), sorted(play_candidate), sorted(discard), sorted(protect)
+        return (
+            sorted(set(play)),
+            sorted(set(play_candidate)),
+            sorted(set(discard)),
+            sorted(set(protect)),
+        )
 
     def get_action(self, state, model):
         def _wrapper(value_dict, best=None):
@@ -514,7 +525,6 @@ class HardcodePlayer2(Player):
                 pred_play_candidate,
                 pred_discard,
                 pred_protect,
-                is_five=(action.type == cgf.HINT_NUMBER and action.num == 5),
             )
 
             score = self._evaluate_partner(

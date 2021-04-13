@@ -10,6 +10,7 @@ from Agents.player import Action
 # comment this line out when running multithreaded tests
 # random.seed(0)  # for reproducing results
 
+
 def format_card(colnum):
     col, num = colnum
     return COLORNAMES[col] + " " + str(num)
@@ -279,12 +280,12 @@ class Game(object):
         game_state = self._make_game_state(self.current_player)
         player_model = self._make_player_model(self.current_player)
         action = self.players[self.current_player].get_action(game_state, player_model)
-        
+
         # Process action
         self.external_turn(action)
 
         # Data collection
-        if self.pickle_file != None:
+        if self.pickle_file:
             pickle.dump(["Action", game_state, player_model, action], self.pickle_file)
 
     def external_turn(self, action):
@@ -306,8 +307,10 @@ class Game(object):
             hint_indices, card_changed = self.perform(action)
 
             for p in self.players:
-                game_state = self._make_game_state(p.get_nr(), hint_indices, card_changed)
-                player_model = self._make_player_model(p.get_nr())     
+                game_state = self._make_game_state(
+                    p.get_nr(), hint_indices, card_changed
+                )
+                player_model = self._make_player_model(p.get_nr())
 
                 p.inform(
                     action,
@@ -317,8 +320,17 @@ class Game(object):
                 )
 
                 # Data collection
-                if self.pickle_file != None:
-                    pickle.dump(["Inform", action, self.current_player, game_state, player_model], self.pickle_file)   
+                if self.pickle_file:
+                    pickle.dump(
+                        [
+                            "Inform",
+                            action,
+                            self.current_player,
+                            game_state,
+                            player_model,
+                        ],
+                        self.pickle_file,
+                    )
 
             self.current_player += 1
             self.current_player %= len(self.players)

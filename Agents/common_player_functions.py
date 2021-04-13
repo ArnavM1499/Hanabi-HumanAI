@@ -119,18 +119,18 @@ def hint_info_gain(hint, hand, target, knowledge):
 
 def hint_ambiguous(hint, target, knowledge, board):
     slot = copy.deepcopy(knowledge[target])
-    #print(slot)
+    # print(slot)
     if hint.type == HINT_COLOR:
         for i in range(len(slot)):
             if i != hint.col:
                 slot[i] = [0, 0, 0, 0, 0]
     elif hint.type == HINT_NUMBER:
-        #print(hint.num)
+        # print(hint.num)
         for col in slot:
             for i in range(5):
                 if i != hint.num - 1:
                     col[i] = 0
-    #print(slot)
+    # print(slot)
     if slot_playable_pct(slot, board) > 0.001:
         return True
     return False
@@ -153,15 +153,23 @@ def best_hint_type(hand, target, knowledge):
 
 
 def best_discard_hint_type(hand, target, knowledge, board):
-    #print(knowledge)
-    #print(target)
-    #print(hand)
-    #print(board)
+    # print(knowledge)
+    # print(target)
+    # print(hand)
+    # print(board)
     card = hand[target]
-    color_info_gain = hint_info_gain(Action(HINT_COLOR, 0, col=card[0]), hand, target, knowledge)
-    num_info_gain = hint_info_gain(Action(HINT_NUMBER, 0, num=card[1]), hand, target, knowledge)
-    color_ambiguous = hint_ambiguous(Action(HINT_COLOR, 0, col=card[0]), target, knowledge, board)
-    num_ambiguous = hint_ambiguous(Action(HINT_NUMBER, 0, num=card[1]), target, knowledge, board)
+    color_info_gain = hint_info_gain(
+        Action(HINT_COLOR, 0, col=card[0]), hand, target, knowledge
+    )
+    num_info_gain = hint_info_gain(
+        Action(HINT_NUMBER, 0, num=card[1]), hand, target, knowledge
+    )
+    color_ambiguous = hint_ambiguous(
+        Action(HINT_COLOR, 0, col=card[0]), target, knowledge, board
+    )
+    num_ambiguous = hint_ambiguous(
+        Action(HINT_NUMBER, 0, num=card[1]), target, knowledge, board
+    )
     if color_ambiguous:
         color_info_gain -= 100
     if num_ambiguous:
