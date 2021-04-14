@@ -4,6 +4,7 @@
     "debug": false,
     "self_card_count": true,
     "partner_card_count": true,
+    "self_play_order": "newest",
     "return_value": true,
     "value_wrap": true
   },

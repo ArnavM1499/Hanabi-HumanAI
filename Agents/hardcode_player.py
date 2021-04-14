@@ -1,5 +1,6 @@
 from copy import deepcopy
 from pprint import pprint
+from random import random
 import common_game_functions as cgf
 import Agents.common_player_functions as cpf
 from Agents.player import Player, Action
@@ -51,12 +52,24 @@ class HardcodePlayer2(Player):
             (lambda p, s, m: p.index_play == [], "_hint"),
         ]
         self.risk_play = {0: 0.5, 5: 0, 12: 0.4, 30: 1}
-        self.hint_to_protect = False
+        self.hint_to_protect = False  # not used
         self.self_card_count = False
+        self.self_play_order = "newest"
         self.partner_card_count = False
+        self.partner_play_order = "newest"
 
         for k, v in kwargs.items():
             setattr(self, k, v)
+
+        # convert parameters
+        orders = {
+            "newest": lambda x: x,
+            "oldest": lambda x: -x,
+            "random": lambda x: random(),
+        }
+        for attr in dir(self):
+            if attr.endswith("order"):
+                setattr(self, attr, orders[getattr(self, attr)])
 
     def inform(self, action, player, new_state, new_model):
 
@@ -345,7 +358,7 @@ class HardcodePlayer2(Player):
         if self.return_value:
             order = []
 
-        self.index_play.sort()
+        self.index_play.sort(key=self.self_play_order)
         while self.index_play != []:
             idx = self.index_play.pop()
             card = knowledge[idx]
@@ -366,7 +379,8 @@ class HardcodePlayer2(Player):
                 break
         idx = None
         max_pct = 0
-        for i in self.index_play_candidate:
+        self.index_play_candidate.sort(key=self.self_play_order)
+        for i in self.index_play_candidate[::-1]:
             card = knowledge[i]
             if cpf.slot_playable_pct(card, board) > max_pct:
                 idx = i
@@ -403,7 +417,9 @@ class HardcodePlayer2(Player):
                         return action
                 else:
                     self.index_discard.append(idx)
-            action = Action(cgf.PLAY, cnr=self.card_nr - 1)
+            action = Action(
+                cgf.PLAY, cnr=max(range(self.card_nr), key=self.self_play_order)
+            )
             if self.return_value:
                 order.append(action)
             else:
@@ -486,7 +502,9 @@ class HardcodePlayer2(Player):
             else:
                 score -= 2
         if predicted_play != [] and (
-            not cpf.card_playable(hands[max(predicted_play)], board)
+            not cpf.card_playable(
+                hands[max(predicted_play, key=self.partner_play_order)], board
+            )
         ):
             score -= 5
 
