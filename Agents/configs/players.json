@@ -1,14 +1,22 @@
 {
     "00001" : {
-        "player_class": "HardcodePlayer2",
-        "debug": true,
-        "return_value": true,
-        "value_wrap": true
+        "player_class": "ExperimentalPlayer",
+        "get_action_values": false,
+        "hint_weight": 1000.0,
+        "card_count": true,
+        "card_count_partner": true,
+        "discard_type": "first",
+        "default_hint": "low",
+        "play_threshold": 0.5
     },
     "00002" : {
-        "player_class": "HardcodePlayer2",
-        "debug": false,
-        "return_value": true,
-        "value_wrap": true
+        "player_class": "ExperimentalPlayer",
+        "get_action_values": false,
+        "hint_weight": 1000.0,
+        "card_count": true,
+        "card_count_partner": true,
+        "discard_type": "first",
+        "default_hint": "low",
+        "play_threshold": 0.5
     }
 }

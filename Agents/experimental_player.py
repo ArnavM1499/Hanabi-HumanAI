@@ -3,6 +3,7 @@ from Agents.common_player_functions import *
 from Agents.player import *
 import time
 import copy
+import random
 
 
 def count_card_list(knowledge, ls):
@@ -57,16 +58,28 @@ class ExperimentalPlayer(Player):
         self.hinted = []
         self.log = []
         self.nr_cards = 5
-        # should be accepted as a parameter
+        # below are default values for parameters
         self.hint_weight = 1000.0
+        self.discard_type = "first"
+        self.card_count = True
+        self.card_count_partner = True
         self.get_action_values = False
+        self.default_hint = "high"
+        self.play_threshold = 0.95
+        self.discard_threshold = 0.95
         for k, v in kwargs.items():
             setattr(self, k, v)
 
     def _count_cards(self):
-        count_card_list(self.knowledge, self.last_state.get_trash())
-        count_card_list(self.knowledge, self.last_state.get_hands()[self.partner_nr])
-        count_board(self.knowledge, self.last_state.get_board())
+        if self.card_count:
+            count_card_list(self.knowledge, self.last_state.get_trash())
+            count_card_list(self.knowledge, self.last_state.get_hands()[self.partner_nr])
+            count_board(self.knowledge, self.last_state.get_board())
+
+    def _count_partner_cards(self, partner_knowledge):
+        if self.card_count_partner:
+            count_card_list(partner_knowledge, self.last_state.get_trash())
+            count_board(partner_knowledge, self.last_state.get_board())
 
     def _execute(self, force=False):
         while self.todo:
@@ -76,14 +89,14 @@ class ExperimentalPlayer(Player):
                 slot_playable_pct(
                     weighted_knowledge[index], self.last_state.get_board()
                 )
-                > 0.95
+                > self.play_threshold
             ):
                 return Action(PLAY, cnr=index)
             elif (
                 slot_discardable_pct(
                     weighted_knowledge[index], self.last_state.get_board()
                 )
-                > 0.95
+                > self.discard_threshold
             ):
                 return Action(DISCARD, cnr=index)
             else:
@@ -100,6 +113,8 @@ class ExperimentalPlayer(Player):
         partner_knowledge = copy.deepcopy(self.last_state.get_all_knowledge())[
             self.partner_nr
         ]
+
+        self._count_partner_cards(partner_knowledge)
 
         # check for playable card
         playable = []
@@ -165,9 +180,6 @@ class ExperimentalPlayer(Player):
                 del discardable[-1]
                 continue
             if newest_discardable >= 0:
-                #hint_type = best_hint_type(
-                #    partner_hand, newest_discardable, weighted_partner_knowledge
-                #)
                 hint_type = best_discard_hint_type(
                     partner_hand, newest_discardable, weighted_partner_knowledge, self.last_state.get_board()
                 )
@@ -189,33 +201,42 @@ class ExperimentalPlayer(Player):
 
         if force:
             nums = [card[1] for card in partner_hand]
-            return Action(HINT_NUMBER, self.partner_nr, num=max(nums))
+            if self.default_hint == "high":
+                return Action(HINT_NUMBER, self.partner_nr, num=max(nums))
+            elif self.default_hint == "low":
+                return Action(HINT_NUMBER, self.partner_nr, num=min(nums))
+            elif self.default_hint == "mix":
+                return Action(HINT_NUMBER, self.partner_nr, num=random.randrange(0, len(nums)))
         else:
             return self._discard(True)
 
     def _discard(self, force=False):
+        if self.discard_type == "likely":
+            # discard something
+            if self.last_state.get_num_hints() == 8:
+                return self._hint(True)
 
-        # discard something
-        if self.last_state.get_num_hints() == 8:
-            return self._hint(True)
+            discard_index = -1
+            highest_discard_probability = 0.0
+            # discard highest probability discardable
+            weighted_knowledge = weight_knowledge(self.knowledge, self.hint_weights)
 
-        discard_index = -1
-        highest_discard_probability = 0.0
-        # discard highest probability discardable
-        weighted_knowledge = weight_knowledge(self.knowledge, self.hint_weights)
+            for i in range(len(weighted_knowledge)):
+                discard_probability = slot_discardable_pct(
+                    weighted_knowledge[i], self.last_state.get_board()
+                )
+                if discard_probability > highest_discard_probability:
+                    highest_discard_probability = discard_probability
+                    discard_index = i
 
-        for i in range(len(weighted_knowledge)):
-            discard_probability = slot_discardable_pct(
-                weighted_knowledge[i], self.last_state.get_board()
-            )
-            if discard_probability > highest_discard_probability:
-                highest_discard_probability = discard_probability
-                discard_index = i
-
-        if discard_index != -1:
-            return Action(DISCARD, cnr=discard_index)
-        # discard oldest
-        return Action(DISCARD, cnr=0)
+            if discard_index != -1:
+                return Action(DISCARD, cnr=discard_index)
+            # discard oldest
+            return Action(DISCARD, cnr=0)
+        elif self.discard_type == "last":
+            return Action(DISCARD, cnr=0)
+        elif self.discard_type == "first":
+            return Action(DISCARD, cnr=len(self.knowledge) - 1)
 
     def _eval_play(self, action):
         assert(action.type == PLAY)
@@ -223,7 +244,7 @@ class ExperimentalPlayer(Player):
         pct = slot_playable_pct(
                     weighted_knowledge[action.cnr], self.last_state.get_board()
                 )
-        if pct > 0.95:
+        if pct > self.play_threshold:
             return 1
         elif pct > 0.5:
             return 0
@@ -236,7 +257,7 @@ class ExperimentalPlayer(Player):
         pct = slot_discardable_pct(
                     weighted_knowledge[action.cnr], self.last_state.get_board()
                 )
-        if pct > 0.95:
+        if pct > self.discard_threshold:
             return 1
         elif pct > 0.5:
             return 0
@@ -280,7 +301,8 @@ class ExperimentalPlayer(Player):
             self.last_state = game_state
         self.knowledge = copy.deepcopy(self.last_model.get_knowledge())
         #print("player " + str(self.pnr) + " knowledge: " + str(self.knowledge))
-        self._count_cards()
+        if self.card_count:
+            self._count_cards()
         #print("player " + str(self.pnr) + " knowledge: " + str(self.knowledge))
         #print("partner hand:" + str(self.last_state.get_hands()[self.partner_nr]))
         #time.sleep(3)
@@ -322,10 +344,10 @@ class ExperimentalPlayer(Player):
         for i in range(len(weighted_knowledge)):
             updated_pct = slot_playable_pct(weighted_knowledge[i], new_board)
             # hint to play
-            if updated_pct > 0.95:
+            if updated_pct > self.play_threshold:
                 self.todo.append(i)
             discardable_pct = slot_discardable_pct(weighted_knowledge[i], new_board)
-            if discardable_pct > 0.95:
+            if discardable_pct > self.discard_threshold:
                 self.todo.append(i)
 
     # don't need the hint indices, of course
@@ -381,6 +403,7 @@ class ExperimentalPlayer(Player):
                 if not hint_indices:
                     return
 
+                self._count_partner_cards(partner_knowledge)
                 priority_index = hint_indices[-1]
 
                 # is there a more efficient way of doing this?
@@ -401,12 +424,12 @@ class ExperimentalPlayer(Player):
                 for i in range(len(weighted_knowledge)):
                     updated_pct = slot_playable_pct(weighted_knowledge[i], new_board)
                     # hint to play
-                    if updated_pct > 0.95:
+                    if updated_pct > self.play_threshold:
                         self.partner_todo.append(i)
                     discardable_pct = slot_discardable_pct(
                         weighted_knowledge[i], new_board
                     )
-                    if discardable_pct > 0.95:
+                    if discardable_pct > self.discard_threshold:
                         self.partner_todo.append(i)
             return
 
