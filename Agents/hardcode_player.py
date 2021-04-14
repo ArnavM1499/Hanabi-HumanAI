@@ -55,6 +55,7 @@ class HardcodePlayer2(Player):
         self.hint_to_protect = False  # not used
         self.self_card_count = False
         self.self_play_order = "newest"
+        self.self_discard_order = "oldest"
         self.partner_card_count = False
         self.partner_play_order = "newest"
 
@@ -440,20 +441,25 @@ class HardcodePlayer2(Player):
             order = []
 
         if self.index_discard != []:
-            action = Action(cgf.DISCARD, cnr=min(self.index_discard))
+            action = Action(
+                cgf.DISCARD, cnr=max(self.index_discard, key=self.self_discard_order)
+            )
             if self.return_value:
                 order.append(action)
             else:
                 return action
 
         if self.index_discard_candidate != []:
-            action = Action(cgf.DISCARD, cnr=min(self.index_discard_candidate))
+            action = Action(
+                cgf.DISCARD,
+                cnr=max(self.index_discard_candidate, key=self.self_discard_order),
+            )
             if self.return_value:
                 order.append(action)
             else:
                 return action
 
-        for i in range(self.card_nr):
+        for i in sorted(range(self.card_nr), key=self.self_discard_order, reverse=True):
             if i not in self.index_protect:
                 action = Action(cgf.DISCARD, cnr=i)
                 if self.return_value:
@@ -475,7 +481,12 @@ class HardcodePlayer2(Player):
                     for action in self.last_state.get_valid_actions()
                     if action.type == cgf.DISCARD
                 }
-                value_dict[Action(cgf.DISCARD, cnr=0)] = 1
+                value_dict[
+                    Action(
+                        cgf.DISCARD,
+                        cnr=max(range(self.card_nr), key=self.self_discard_order),
+                    )
+                ] = 1
             return value_dict
 
         else:
