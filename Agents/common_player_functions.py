@@ -95,7 +95,7 @@ def slot_discardable_pct(slot, board, trash=None):
     return discardable_combos / total_combos
 
 
-def target_ambiguous(hint, target, knowledge, board):
+def target_possible(hint, target, knowledge, board):
     slot = copy.deepcopy(knowledge[target])
     #print(slot)
     if hint.type == HINT_COLOR:
@@ -114,13 +114,23 @@ def target_ambiguous(hint, target, knowledge, board):
     return False
 
 
-def get_target(hint, hand):
+def get_target(hint, hand, exl=[]):
     target = -1
     for i in range(len(hand)):
-        if hint.type == HINT_COLOR and hand[i][0] == hint.col:
+        if hint.type == HINT_COLOR and hand[i][0] == hint.col and i not in exl:
             target = i
-        elif hint.type == HINT_NUMBER and hand[i][1] == hint.nr:
+        elif hint.type == HINT_NUMBER and hand[i][1] == hint.nr and i not in exl:
             target = i
+    return target
+
+
+def get_multi_target(hint, hand, knowledge, board, play_threshold, disc_threshold):
+    exl = []
+    target = get_target(hint, hand)
+    while slot_playable_pct(knowledge[target], board) >= play_threshold \
+            or slot_discardable_pct(knowledge[target], board) >= disc_threshold:
+        exl.append(target)
+        target = get_target(hint, hand, exl)
     return target
 
 
@@ -128,12 +138,12 @@ def hint_ambiguous(hint, hand, knowledge, board):
     target = get_target(hint, hand)
     if target == -1:
         return False
-    return target_ambiguous(hint, target, knowledge, board)
+    return target_possible(hint, target, knowledge, board)
 
 
 # returns the # of combos of cards removed from a hint
 # if a hint
-def hint_info_gain(hint, hand, target, knowledge, board):
+def targeted_info_gain(hint, hand, target, knowledge, board):
     combos_removed = 0
     if hint.type == HINT_COLOR:
         for slot in knowledge:
@@ -157,10 +167,10 @@ def hint_info_gain(hint, hand, target, knowledge, board):
 
 def best_hint_type(hand, target, knowledge, board):
     card = hand[target]
-    color_info_gain = hint_info_gain(
+    color_info_gain = targeted_info_gain(
         Action(HINT_COLOR, 0, col=card[0]), hand, target, knowledge, board
     )
-    num_info_gain = hint_info_gain(
+    num_info_gain = targeted_info_gain(
         Action(HINT_NUMBER, 0, num=card[1]), hand, target, knowledge, board
     )
     if color_info_gain <= 0 and num_info_gain <= 0:
@@ -177,10 +187,10 @@ def best_discard_hint_type(hand, target, knowledge, board):
     #print(hand)
     #print(board)
     card = hand[target]
-    color_info_gain = hint_info_gain(Action(HINT_COLOR, 0, col=card[0]), hand, target, knowledge, board)
-    num_info_gain = hint_info_gain(Action(HINT_NUMBER, 0, num=card[1]), hand, target, knowledge, board)
-    color_ambiguous = target_ambiguous(Action(HINT_COLOR, 0, col=card[0]), target, knowledge, board)
-    num_ambiguous = target_ambiguous(Action(HINT_NUMBER, 0, num=card[1]), target, knowledge, board)
+    color_info_gain = targeted_info_gain(Action(HINT_COLOR, 0, col=card[0]), hand, target, knowledge, board)
+    num_info_gain = targeted_info_gain(Action(HINT_NUMBER, 0, num=card[1]), hand, target, knowledge, board)
+    color_ambiguous = target_possible(Action(HINT_COLOR, 0, col=card[0]), target, knowledge, board)
+    num_ambiguous = target_possible(Action(HINT_NUMBER, 0, num=card[1]), target, knowledge, board)
     if color_ambiguous:
         color_info_gain -= 100
     if num_ambiguous:

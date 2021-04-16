@@ -47,9 +47,13 @@ class ValuePlayer(Player):
         self.hint_weights = [
             [[1 for _ in range(5)] for _ in range(5)] for _ in range(5)
         ]
+        self.weighted_knowledge = None
+        self.partner_hand = None
+        self.partner_knowledge = []
         self.partner_hint_weights = [
             [[1 for _ in range(5)] for _ in range(5)] for _ in range(5)
         ]
+        self.partner_weighted_knowledge = None
         self.last_state = None
         self.last_model = None
         self.protect = []
@@ -79,161 +83,13 @@ class ValuePlayer(Player):
             count_card_list(partner_knowledge, self.last_state.get_trash())
             count_board(partner_knowledge, self.last_state.get_board())
 
-    def _execute(self, force=False):
-        for index in range(len(self.knowledge)):
-            weighted_knowledge = weight_knowledge(self.knowledge, self.hint_weights)
-            if (
-                slot_playable_pct(
-                    weighted_knowledge[index], self.last_state.get_board()
-                )
-                > self.play_threshold
-            ):
-                return Action(PLAY, cnr=index)
-            elif (
-                slot_discardable_pct(
-                    weighted_knowledge[index], self.last_state.get_board()
-                )
-                > self.discard_threshold
-            ):
-                return Action(DISCARD, cnr=index)
-        return self._hint(False)
-
-    def _hint(self, force=False):
-
-        if self.last_state.get_num_hints() == 0:
-            return self._discard(True)
-
-        partner_hand = self.last_state.get_hands()[self.partner_nr]
-        partner_knowledge = copy.deepcopy(self.last_state.get_all_knowledge())[
-            self.partner_nr
-        ]
-
-        self._count_partner_cards(partner_knowledge)
-
-        # check for playable card
-        playable = []
-        for i in range(len(partner_hand)):
-            if card_playable(partner_hand[i], self.last_state.get_board()):
-                playable.append(i)
-
-        weighted_partner_knowledge = weight_knowledge(
-            partner_knowledge, self.partner_hint_weights
-        )
-
-        # if card is playable, hint it with the most info gain
-        while playable:
-            newest_playable = playable[-1]
-            if newest_playable >= 0:
-                hint_type = best_hint_type(
-                    partner_hand, newest_playable, weighted_partner_knowledge
-                )
-                if hint_type is None:
-                    # if self.get_action_values:
-                    #    self.action_values[
-                    #        Action(
-                    #            HINT_COLOR,
-                    #            self.partner_nr,
-                    #            col=partner_hand[newest_playable][0],
-                    #        )
-                    #   ] = -1
-                    #    self.action_values[Action(
-                    #        HINT_NUMBER,
-                    #        self.partner_nr,
-                    #        num=partner_hand[newest_playable][1],
-                    #    )] = -1
-                    del playable[-1]
-                    continue
-                elif hint_type == HINT_COLOR:
-                    return Action(
-                        HINT_COLOR,
-                        self.partner_nr,
-                        col=partner_hand[newest_playable][0],
-                    )
-                else:
-                    return Action(
-                        HINT_NUMBER,
-                        self.partner_nr,
-                        num=partner_hand[newest_playable][1],
-                    )
-
-        # check for discardable card
-
-        discardable = []
-        for i in range(len(partner_hand)):
-            if card_discardable(partner_hand[i], self.last_state.get_board()):
-                discardable.append(i)
-
-        # if card is discardable, hint it with the most info gain
-        # make sure it cannot be "confused" with playable
-        while discardable:
-            newest_discardable = discardable[-1]
-            if newest_discardable >= 0:
-                hint_type = best_discard_hint_type(
-                    partner_hand, newest_discardable, weighted_partner_knowledge, self.last_state.get_board()
-                )
-                if hint_type is None:
-                    del discardable[-1]
-                    continue
-                elif hint_type == HINT_COLOR:
-                    return Action(
-                        HINT_COLOR,
-                        self.partner_nr,
-                        col=partner_hand[newest_discardable][0],
-                    )
-                else:
-                    return Action(
-                        HINT_NUMBER,
-                        self.partner_nr,
-                        num=partner_hand[newest_discardable][1],
-                    )
-
-        if force:
-            nums = [card[1] for card in partner_hand]
-            if self.default_hint == "high":
-                return Action(HINT_NUMBER, self.partner_nr, num=max(nums))
-            elif self.default_hint == "low":
-                return Action(HINT_NUMBER, self.partner_nr, num=min(nums))
-            elif self.default_hint == "mix":
-                return Action(HINT_NUMBER, self.partner_nr, num=random.randrange(0, len(nums)))
-        else:
-            return self._discard(True)
-
-    def _discard(self, force=False):
-        if self.discard_type == "likely":
-            # discard something
-            if self.last_state.get_num_hints() == 8:
-                return self._hint(True)
-
-            discard_index = -1
-            highest_discard_probability = 0.0
-            # discard highest probability discardable
-            weighted_knowledge = weight_knowledge(self.knowledge, self.hint_weights)
-
-            for i in range(len(weighted_knowledge)):
-                discard_probability = slot_discardable_pct(
-                    weighted_knowledge[i], self.last_state.get_board()
-                )
-                if discard_probability > highest_discard_probability:
-                    highest_discard_probability = discard_probability
-                    discard_index = i
-
-            if discard_index != -1:
-                return Action(DISCARD, cnr=discard_index)
-            # discard oldest
-            return Action(DISCARD, cnr=0)
-        elif self.discard_type == "last":
-            return Action(DISCARD, cnr=0)
-        elif self.discard_type == "first":
-            return Action(DISCARD, cnr=len(self.knowledge) - 1)
-
     def _eval_play(self, action):
         assert(action.type == PLAY)
-        weighted_knowledge = weight_knowledge(self.knowledge, self.hint_weights)
         pct = slot_playable_pct(
-                    weighted_knowledge[action.cnr], self.last_state.get_board()
+                    self.weighted_knowledge[action.cnr], self.last_state.get_board()
                 )
         if pct > self.play_threshold:
-            return 1
+            return pct
         elif pct > 0.5:
             return 0
         else:
@@ -241,12 +97,11 @@ class ValuePlayer(Player):
 
     def _eval_discard(self, action):
         assert(action.type == DISCARD)
-        weighted_knowledge = weight_knowledge(self.knowledge, self.hint_weights)
         pct = slot_discardable_pct(
-                    weighted_knowledge[action.cnr], self.last_state.get_board()
+                    self.weighted_knowledge[action.cnr], self.last_state.get_board()
                 )
         if pct > self.discard_threshold:
-            return 1
+            return pct
         elif pct > 0.5:
             return 0
         else:
@@ -254,22 +109,15 @@ class ValuePlayer(Player):
 
     def _eval_hint(self, action):
         assert(action.type in [HINT_COLOR, HINT_NUMBER])
-        target = -1
-        partner_hand = self.last_state.get_hands()[self.partner_nr]
-        #partner_knowledge = copy.deepcopy(self.last_state.get_all_knowledge())[
-        #    self.partner_nr
-        #]
-        for i in range(len(partner_hand)):
-            if action.type == HINT_COLOR:
-                if partner_hand[i][0] == action.col:
-                   target = i
-            elif action.type == HINT_NUMBER:
-                if partner_hand[i][1] - 1 == action.num:
-                    target = i
+        target = get_multi_target(action, self.partner_hand, self.partner_weighted_knowledge,
+                                  self.last_state.get_board(), self.play_threshold, self.discard_threshold)
         if target == -1:
             return 0
-        elif card_playable(partner_hand[target]):
-            return 1
+        if target_possible(action, target, self.partner_weighted_knowledge, self.last_state.get_board()):
+            if card_playable(self.partner_hand[target], self.last_state.get_board()):
+                return 1
+            else:
+                return -1
         return 0
 
     def eval_action(self, action):
@@ -294,12 +142,15 @@ class ValuePlayer(Player):
         #print("player " + str(self.pnr) + " knowledge: " + str(self.knowledge))
         #print("partner hand:" + str(self.last_state.get_hands()[self.partner_nr]))
         #time.sleep(3)
-        if self.get_action_values:
-            value_dict = {}
-            for action in self.last_model.get_actions:
-                value_dict[action] = self.eval_action(action)
-            return value_dict
-        return self._execute()
+        self.weighted_knowledge = weight_knowledge(self.knowledge, self.hint_weights)
+        best_action = None
+        max_value = -1
+        for action in self.last_state.get_valid_actions():
+            value = self.eval_action(action)
+            if value > max_value:
+                best_action = action
+                max_value = value
+        return best_action
 
     # for 2 player the only hints we need to consider are hints about our cards
     # this will need to be revisited if we generalize to more players
