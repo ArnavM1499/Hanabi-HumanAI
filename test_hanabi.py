@@ -5,6 +5,7 @@ from Agents.cclr_player import CardCountingLeftRightPlayer
 from Agents.basic_protocol_player import BasicProtocolPlayer
 from Agents.hardcode_player import HardcodePlayer2
 from Agents.experimental_player import ExperimentalPlayer
+from Agents.value_player import ValuePlayer
 
 #P1 = ExperimentalPlayer("player 0", 0)
 #P2 = ExperimentalPlayer("player 1", 1)
@@ -33,7 +34,7 @@ hits = []
 turns = []
 num_games = 100
 for i in range(num_games):
-    P1 = ExperimentalPlayer("player 0", 0)
+    P1 = ValuePlayer("player 0", 0)
     P2 = ExperimentalPlayer("player 1", 1)
     G = Game([P1, P2], file_name)
     Result = G.run(500)

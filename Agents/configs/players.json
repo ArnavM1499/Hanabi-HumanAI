@@ -5,9 +5,11 @@
         "hint_weight": 1000.0,
         "card_count": true,
         "card_count_partner": true,
-        "discard_type": "first",
-        "default_hint": "low",
-        "play_threshold": 0.5
+        "discard_type": "likely",
+        "discard_on_8": true,
+        "default_hint": "high",
+        "play_threshold": 0.9,
+        "consider": "all"
     },
     "00002" : {
         "player_class": "ExperimentalPlayer",
@@ -15,8 +17,10 @@
         "hint_weight": 1000.0,
         "card_count": true,
         "card_count_partner": true,
-        "discard_type": "first",
-        "default_hint": "low",
-        "play_threshold": 0.5
+        "discard_type": "likely",
+        "discard_on_8": true,
+        "default_hint": "high",
+        "play_threshold": 0.9,
+        "consider": "all"
     }
 }

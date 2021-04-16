@@ -1,6 +1,6 @@
 from common_game_functions import *
 from Agents.common_player_functions import *
-from Agents.player import Player, Action
+from Agents.player import *
 import time
 import copy
 import random
@@ -36,19 +36,17 @@ def weight_knowledge(knowledge, weights):
 # things like self.todo won't behave properly
 
 
-class ExperimentalPlayer(Player):
+class ValuePlayer(Player):
     def __init__(self, name, pnr, **kwargs):
         super().__init__(name, pnr)
         self.partner_nr = 1 - self.pnr  # hard code for two players
         self.turn = 0
-        self.todo = []
         # same as last_state.get_knowledge(), but done for coding ease for now
         # if we need to optimize speed/memory we can remove it
         self.knowledge = []
         self.hint_weights = [
             [[1 for _ in range(5)] for _ in range(5)] for _ in range(5)
         ]
-        self.partner_todo = []  # same format
         self.partner_hint_weights = [
             [[1 for _ in range(5)] for _ in range(5)] for _ in range(5)
         ]
@@ -61,14 +59,12 @@ class ExperimentalPlayer(Player):
         # below are default values for parameters
         self.hint_weight = 1000.0
         self.discard_type = "first"
-        self.discard_on_8 = False
         self.card_count = True
         self.card_count_partner = True
         self.get_action_values = False
         self.default_hint = "high"
         self.play_threshold = 0.95
         self.discard_threshold = 0.95
-        self.consider = "todo"
         for k, v in kwargs.items():
             setattr(self, k, v)
 
@@ -84,13 +80,7 @@ class ExperimentalPlayer(Player):
             count_board(partner_knowledge, self.last_state.get_board())
 
     def _execute(self, force=False):
-        candidates = []
-        if self.consider == "todo":
-            candidates = self.todo
-        elif self.consider == "all":
-            candidates = [i for i in range(len(self.knowledge))]
-        while candidates:
-            index = candidates[-1]
+        for index in range(len(self.knowledge)):
             weighted_knowledge = weight_knowledge(self.knowledge, self.hint_weights)
             if (
                 slot_playable_pct(
@@ -106,9 +96,6 @@ class ExperimentalPlayer(Player):
                 > self.discard_threshold
             ):
                 return Action(DISCARD, cnr=index)
-            else:
-                del candidates[-1]
-
         return self._hint(False)
 
     def _hint(self, force=False):
@@ -136,14 +123,24 @@ class ExperimentalPlayer(Player):
         # if card is playable, hint it with the most info gain
         while playable:
             newest_playable = playable[-1]
-            if newest_playable in self.partner_todo:
-                del playable[-1]
-                continue
             if newest_playable >= 0:
                 hint_type = best_hint_type(
-                    partner_hand, newest_playable, weighted_partner_knowledge, self.last_state.get_board()
+                    partner_hand, newest_playable, weighted_partner_knowledge
                 )
                 if hint_type is None:
+                    # if self.get_action_values:
+                    #    self.action_values[
+                    #        Action(
+                    #            HINT_COLOR,
+                    #            self.partner_nr,
+                    #            col=partner_hand[newest_playable][0],
+                    #        )
+                    #   ] = -1
+                    #    self.action_values[Action(
+                    #        HINT_NUMBER,
+                    #        self.partner_nr,
+                    #        num=partner_hand[newest_playable][1],
+                    #    )] = -1
                     del playable[-1]
                     continue
                 elif hint_type == HINT_COLOR:
@@ -170,9 +167,6 @@ class ExperimentalPlayer(Player):
         # make sure it cannot be "confused" with playable
         while discardable:
             newest_discardable = discardable[-1]
-            if newest_discardable in self.partner_todo:
-                del discardable[-1]
-                continue
             if newest_discardable >= 0:
                 hint_type = best_discard_hint_type(
                     partner_hand, newest_discardable, weighted_partner_knowledge, self.last_state.get_board()
@@ -196,19 +190,8 @@ class ExperimentalPlayer(Player):
         if force:
             nums = [card[1] for card in partner_hand]
             if self.default_hint == "high":
-                while nums:
-                    action = Action(HINT_NUMBER, self.partner_nr, num=max(nums))
-                    if not hint_ambiguous(action, partner_hand, weighted_partner_knowledge, self.last_state.get_board()):
-                        return Action(HINT_NUMBER, self.partner_nr, num=max(nums))
-                    nums.remove(max(nums))
                 return Action(HINT_NUMBER, self.partner_nr, num=max(nums))
             elif self.default_hint == "low":
-                while nums:
-                    action = Action(HINT_NUMBER, self.partner_nr, num=min(nums))
-                    if not hint_ambiguous(action, partner_hand, weighted_partner_knowledge,
-                                          self.last_state.get_board()):
-                        return Action(HINT_NUMBER, self.partner_nr, num=min(nums))
-                    nums.remove(min(nums))
                 return Action(HINT_NUMBER, self.partner_nr, num=min(nums))
             elif self.default_hint == "mix":
                 return Action(HINT_NUMBER, self.partner_nr, num=random.randrange(0, len(nums)))
@@ -216,9 +199,11 @@ class ExperimentalPlayer(Player):
             return self._discard(True)
 
     def _discard(self, force=False):
-        if (not self.discard_on_8) and self.last_state.get_num_hints() == 8:
-            return self._hint(True)
         if self.discard_type == "likely":
+            # discard something
+            if self.last_state.get_num_hints() == 8:
+                return self._hint(True)
+
             discard_index = -1
             highest_discard_probability = 0.0
             # discard highest probability discardable
@@ -269,17 +254,22 @@ class ExperimentalPlayer(Player):
 
     def _eval_hint(self, action):
         assert(action.type in [HINT_COLOR, HINT_NUMBER])
+        target = -1
         partner_hand = self.last_state.get_hands()[self.partner_nr]
-        partner_knowledge = copy.deepcopy(self.last_state.get_all_knowledge())[
-            self.partner_nr
-        ]
-        target = get_target(action, partner_hand)
+        #partner_knowledge = copy.deepcopy(self.last_state.get_all_knowledge())[
+        #    self.partner_nr
+        #]
+        for i in range(len(partner_hand)):
+            if action.type == HINT_COLOR:
+                if partner_hand[i][0] == action.col:
+                   target = i
+            elif action.type == HINT_NUMBER:
+                if partner_hand[i][1] - 1 == action.num:
+                    target = i
         if target == -1:
             return 0
-        elif card_playable(partner_hand[target], self.last_state.get_board()):
+        elif card_playable(partner_hand[target]):
             return 1
-        elif hint_ambiguous(action, partner_hand, partner_knowledge, self.last_state.get_board()):
-            return -1
         return 0
 
     def eval_action(self, action):
@@ -337,22 +327,10 @@ class ExperimentalPlayer(Player):
                     ):
                         self.hint_weights[slot][col][num] *= self.hint_weight
 
-        weighted_knowledge = weight_knowledge(self.knowledge, self.hint_weights)
-
-        for i in range(len(weighted_knowledge)):
-            updated_pct = slot_playable_pct(weighted_knowledge[i], new_board)
-            # hint to play
-            if updated_pct > self.play_threshold:
-                self.todo.append(i)
-            discardable_pct = slot_discardable_pct(weighted_knowledge[i], new_board)
-            if discardable_pct > self.discard_threshold:
-                self.todo.append(i)
-
     # don't need the hint indices, of course
     def _receive_play(self, action, player, new_state, new_model):
         self.last_model = new_model
         self.last_state = new_state
-        self.partner_todo = [i for i in self.partner_todo if i != action.cnr]
         if len(self.partner_hint_weights) == len(
             new_state.get_all_knowledge()[self.partner_nr]
         ):
@@ -365,7 +343,6 @@ class ExperimentalPlayer(Player):
     def _receive_discard(self, action, player, new_state, new_model):
         self.last_model = new_model
         self.last_state = new_state
-        self.partner_todo = [i for i in self.partner_todo if i != action.cnr]
         if len(self.partner_hint_weights) == len(
             new_state.get_all_knowledge()[self.partner_nr]
         ):
@@ -389,8 +366,6 @@ class ExperimentalPlayer(Player):
                     ]
                 else:
                     del self.hint_weights[action.cnr]
-                # delete index from todo list
-                self.todo = [i for i in self.todo if i != action.cnr]
             elif action.type in [HINT_COLOR, HINT_NUMBER]:
                 new_board = new_state.get_board()
                 partner_knowledge = copy.deepcopy(
@@ -414,21 +389,6 @@ class ExperimentalPlayer(Player):
                                 self.partner_hint_weights[slot][col][
                                     num
                                 ] *= self.hint_weight
-
-                weighted_knowledge = weight_knowledge(
-                    partner_knowledge, self.partner_hint_weights
-                )
-
-                for i in range(len(weighted_knowledge)):
-                    updated_pct = slot_playable_pct(weighted_knowledge[i], new_board)
-                    # hint to play
-                    if updated_pct > self.play_threshold:
-                        self.partner_todo.append(i)
-                    discardable_pct = slot_discardable_pct(
-                        weighted_knowledge[i], new_board
-                    )
-                    if discardable_pct > self.discard_threshold:
-                        self.partner_todo.append(i)
             return
 
         # for 2 player games there's only 1 other player
