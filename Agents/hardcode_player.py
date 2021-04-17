@@ -56,6 +56,7 @@ class HardcodePlayer2(Player):
         self.self_card_count = False
         self.self_play_order = "newest"
         self.self_discard_order = "oldest"
+        self.self_hint_order = "newest"
         self.partner_card_count = False
         self.partner_play_order = "newest"
 
@@ -196,7 +197,7 @@ class HardcodePlayer2(Player):
                 self.index_protect.append(i)
 
         if not flag:
-            newest = hinted_indices[-1]
+            newest = max(hinted_indices, key=self.self_hint_order)
             card = knowledge[newest]
             if cpf.slot_playable_pct(card, board) > 0:
                 play.append(newest)

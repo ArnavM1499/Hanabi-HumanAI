@@ -280,12 +280,12 @@ class Game(object):
         player_model = self._make_player_model(self.current_player)
         action = self.players[self.current_player].get_action(game_state, player_model)
 
-        # Process action
-        self.external_turn(action)
-
         # Data collection
         if self.pickle_file:
             pickle.dump(["Action", game_state, player_model, action], self.pickle_file)
+
+        # Process action
+        self.external_turn(action)
 
     def external_turn(self, action):
         if not self.done():
@@ -323,10 +323,11 @@ class Game(object):
                     pickle.dump(
                         [
                             "Inform",
-                            action,
-                            self.current_player,
                             game_state,
                             player_model,
+                            action,
+                            p.get_nr(),
+                            self.current_player,
                         ],
                         self.pickle_file,
                     )

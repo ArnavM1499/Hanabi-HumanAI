@@ -6,7 +6,7 @@ import os
 import random
 import time
 from hanabi import Game
-from Agents.player import Player
+from Agents.ChiefAgent.player_pool import PlayerPool
 
 player_pool = json.load(open("Agents/configs/players.json"))
 
@@ -21,8 +21,8 @@ def run_single(
     print("running hanabi game on ", player, " and ", player2 if player2 else "itself")
     if not player2:
         player2 = player
-    P1 = Player.from_dict("Alice", 0, player_pool[player])
-    P2 = Player.from_dict("Bob", 1, player_pool[player2])
+    P1 = PlayerPool.from_dict("Alice", 0, player_pool[player])
+    P2 = PlayerPool.from_dict("Bob", 1, player_pool[player2])
     G = Game([P1, P2], file_name)
     score = G.run(100)
     hints = G.hints
