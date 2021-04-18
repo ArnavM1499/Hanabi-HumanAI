@@ -1,4 +1,5 @@
 from copy import deepcopy
+import itertools
 from pprint import pprint
 from random import random
 import common_game_functions as cgf
@@ -50,7 +51,14 @@ class HardcodePlayer2(Player):
             (lambda p, s, m: p.index_play != [] and s.get_num_hints() > 1, "_execute"),
             (lambda p, s, m: p.partner_play == [] and s.get_num_hints() > 0, "_hint"),
             (lambda p, s, m: p.index_play == [], "_hint"),
+            (lambda p, s, m: p.index_discard != [], "_discard"),
+            (
+                lambda p, s, m: p.index_play or p.index_play_candidate,
+                "_execute_force",
+            ),
+            (lambda p, s, m: True, "_execute"),
         ]
+        self.decision_permutation = 0
         self.risk_play = {0: 0.5, 5: 0, 12: 0.4, 30: 1}
         self.hint_to_protect = False  # not used
         self.self_card_count = False
@@ -63,7 +71,21 @@ class HardcodePlayer2(Player):
         for k, v in kwargs.items():
             setattr(self, k, v)
 
+        if self.debug:
+            pprint(self.__dict__)
+
         # convert parameters
+        order = range(len(self.decision_protocol))
+        D = itertools.permutations(order)
+        for i in range(self.decision_permutation):
+            try:
+                order = next(D)
+            except StopIteration:
+                pass
+        self.decision_protocol = [self.decision_protocol[i] for i in order]
+        self.risk_play = {int(k): v for k, v in self.risk_play.items()}
+        if self.debug:
+            print("pattern match order: ", order)
         orders = {
             "newest": lambda x: x,
             "oldest": lambda x: -x,
@@ -330,7 +352,7 @@ class HardcodePlayer2(Player):
         if chosen_action is None:
             if self.debug:
                 print("Using Default action!")
-            chosen_action = self._execute()
+            chosen_action = getattr(self, self.action_classes[0])
         # TODO change to other class for less agressive play
 
         if self.return_value:

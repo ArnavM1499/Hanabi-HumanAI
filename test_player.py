@@ -6,6 +6,7 @@ import os
 import random
 import time
 from hanabi import Game
+from Agents.player import Player
 from Agents.ChiefAgent.player_pool import PlayerPool
 
 player_pool = json.load(open("Agents/configs/players.json"))
@@ -21,8 +22,18 @@ def run_single(
     print("running hanabi game on ", player, " and ", player2 if player2 else "itself")
     if not player2:
         player2 = player
-    P1 = PlayerPool.from_dict("Alice", 0, player_pool[player])
-    P2 = PlayerPool.from_dict("Bob", 1, player_pool[player2])
+    if isinstance(player, str):
+        P1 = PlayerPool.from_dict("Alice", 0, player_pool[player])
+    elif isinstance(player, Player):
+        P1 = player
+    else:
+        assert False
+    if isinstance(player2, str):
+        P2 = PlayerPool.from_dict("Bob", 1, player_pool[player2])
+    elif isinstance(player2, Player):
+        P2 = player2
+    else:
+        assert False
     G = Game([P1, P2], file_name)
     score = G.run(100)
     hints = G.hints
@@ -72,21 +83,29 @@ def test_player(player="00001", player2=None, iters=5000):
     results = [list(x) for x in zip(*res.get())]  # [[scores], [hints], [hits], [turns]
     results[0].sort()
     time.sleep(5)  # wait for async file writes
+    avg = sum(results[0]) / iters
+    smin = results[0][0]
+    smax = results[0][-1]
+    smid = results[0][iters // 2]
+    smod = max(set(results[0]), key=results[0].count)
+    hints = sum(results[1]) / iters
+    hits = sum(results[2]) / iters
+    turns = sum(results[3]) / iters
     print(
         "{} games: avg: {}, min: {}, max: {}, median: {}, mode: {}".format(
             iters,
-            sum(results[0]) / iters,
-            results[0][0],
-            results[0][-1],
-            results[0][iters // 2],
-            max(set(results[0]), key=results[0].count),
+            avg,
+            smin,
+            smax,
+            smid,
+            smod,
         )
     )
     print(
-        "average: hints left: {}, hits left: {}, turns: {}".format(
-            sum(results[1]) / iters, sum(results[2]) / iters, sum(results[3]) / iters
-        )
+        "average: hints left: {}, hits left: {}, turns: {}".format(hints, hits, turns)
     )
+
+    return iters, avg, smin, smax, smid, smod, hints, hits, turns
 
 
 def sequential_test(player, player2=None, iters=5000):
