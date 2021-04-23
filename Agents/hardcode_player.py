@@ -1,10 +1,21 @@
+from contextlib import contextmanager
 from copy import deepcopy
 from itertools import permutations, product
 from pprint import pprint
 from random import random, sample
+from time import time
 import common_game_functions as cgf
 import Agents.common_player_functions as cpf
 from Agents.player import Player, Action
+
+
+@contextmanager
+def timer(name, debug=True):
+    start = time()
+    yield
+    diff = time() - start
+    if debug:
+        print("{} costs {:.4f} ms".format(name, diff * 1000))
 
 
 class HardcodePlayer2(Player):
@@ -15,6 +26,7 @@ class HardcodePlayer2(Player):
         self.pnr = pnr
         self.turn = 0
         self.debug = False
+        self.timer = False
         self.return_value = True
         self.value_wrap = True
         self.action_classes = ["_execute", "_hint", "_discard"]
@@ -26,7 +38,6 @@ class HardcodePlayer2(Player):
 
         # Records
         self.last_state = None
-        self.last_model = None
         self.knowledge = None
 
         self.index_play = []
@@ -76,25 +87,26 @@ class HardcodePlayer2(Player):
             pprint(self.__dict__)
 
         # convert parameters
-        order = range(len(self.decision_protocol))
-        D = permutations(order)
-        for i in range(self.decision_permutation):
-            try:
-                order = next(D)
-            except StopIteration:
-                pass
-        self.decision_protocol = [self.decision_protocol[i] for i in order]
-        self.risk_play = {int(k): v for k, v in self.risk_play.items()}
-        if self.debug:
-            print("pattern match order: ", order)
-        orders = {
-            "newest": lambda x: x,
-            "oldest": lambda x: -x,
-            "random": lambda x: random(),
-        }
-        for attr in dir(self):
-            if attr.endswith("order"):
-                setattr(self, attr, orders[getattr(self, attr)])
+        with timer("coverting parameters", self.timer):
+            order = range(len(self.decision_protocol))
+            D = permutations(order)
+            for i in range(self.decision_permutation):
+                try:
+                    order = next(D)
+                except StopIteration:
+                    pass
+            self.decision_protocol = [self.decision_protocol[i] for i in order]
+            self.risk_play = {int(k): v for k, v in self.risk_play.items()}
+            if self.debug:
+                print("pattern match order: ", order)
+            orders = {
+                "newest": lambda x: x,
+                "oldest": lambda x: -x,
+                "random": lambda x: random(),
+            }
+            for attr in dir(self):
+                if attr.endswith("order"):
+                    setattr(self, attr, orders[getattr(self, attr)])
 
     def inform(self, action, player, new_state, new_model):
 
@@ -140,46 +152,50 @@ class HardcodePlayer2(Player):
 
         if action.type in [cgf.HINT_COLOR, cgf.HINT_NUMBER]:
 
-            hinted_indices = new_state.get_hinted_indices()
-            assert hinted_indices != []
-            hinted_indices.sort()
+            with timer("interpret hints", self.timer):
 
-            (
-                self.index_play,
-                self.index_play_candidate,
-                self.index_discard,
-                self.index_protect,
-            ) = self._interpret(
-                hinted_indices,
-                knowledge,
-                board,
-                trash,
-                self.index_play,
-                self.index_play_candidate,
-                self.index_discard,
-                self.index_protect,
-            )
+                hinted_indices = new_state.get_hinted_indices()
+                assert hinted_indices != []
+                hinted_indices.sort()
 
-            if self.debug:
-                pprint(self.__dict__)
-                print("\n\n\n")
+                (
+                    self.index_play,
+                    self.index_play_candidate,
+                    self.index_discard,
+                    self.index_protect,
+                ) = self._interpret(
+                    hinted_indices,
+                    knowledge,
+                    board,
+                    trash,
+                    self.index_play,
+                    self.index_play_candidate,
+                    self.index_discard,
+                    self.index_protect,
+                )
 
-            for idx in hinted_indices:
-                if idx not in self.index_hinted:
-                    self.index_hinted.append(idx)
+                if self.debug:
+                    pprint(self.__dict__)
+                    print("\n\n\n")
+
+                for idx in hinted_indices:
+                    if idx not in self.index_hinted:
+                        self.index_hinted.append(idx)
 
         elif action.type in [cgf.PLAY, cgf.DISCARD]:
 
-            self._update_index(action.cnr, partner=True)
+            with timer("interpret play/discard", self.timer):
 
-            if action.type == cgf.DISCARD and new_state.get_num_hints() > 1:
-                for i in range(self.card_nr):
-                    if not (
-                        (i in self.index_play)
-                        or (i in self.index_play_candidate)
-                        or (i in self.index_protect)
-                    ):
-                        self.index_discard_candidate.append(i)
+                self._update_index(action.cnr, partner=True)
+
+                if action.type == cgf.DISCARD and new_state.get_num_hints() > 1:
+                    for i in range(self.card_nr):
+                        if not (
+                            (i in self.index_play)
+                            or (i in self.index_play_candidate)
+                            or (i in self.index_protect)
+                        ):
+                            self.index_discard_candidate.append(i)
 
         else:
             assert False
@@ -200,101 +216,75 @@ class HardcodePlayer2(Player):
         play_candidate = cur_play_candidate.copy()
         discard = cur_discard.copy()
         protect = cur_protect.copy()
+        playable_pct = {
+            idx: cpf.slot_playable_pct(card, board)
+            for idx, card in enumerate(knowledge)
+        }
+        discardable_pct = {
+            idx: cpf.slot_discardable_pct(card, board, trash)
+            for idx, card in enumerate(knowledge)
+        }
 
-        flag = False
-        for idx in hinted_indices:
-            card = knowledge[idx]
-            if cpf.slot_playable_pct(card, board) > 0.8:
-                play.append(idx)
-                flag = True
-            elif cpf.slot_discardable_pct(card, board, trash) > 0.98:
-                discard.append(idx)
-        for i, k in enumerate(knowledge):
-            need_protect = True
-            for col, num in cpf.get_possible(k):
-                if board[col][1] >= num:
-                    need_protect = False
-                    if self.hint_to_protect:
-                        flag = True
-            if need_protect:
-                self.index_protect.append(i)
+        with timer("interpret main", self.timer):
 
-        if not flag:
-            newest = max(hinted_indices, key=self.self_hint_order)
-            card = knowledge[newest]
-            if cpf.slot_playable_pct(card, board) > 0:
-                play.append(newest)
-            else:
-                protect.append(newest)
-            for idx in hinted_indices[:-1]:
+            flag = False
+
+            for idx in hinted_indices:
                 card = knowledge[idx]
-                if cpf.slot_playable_pct(card, board) > 0:
-                    play_candidate.append(idx)
+                if playable_pct[idx] > 0.8:
+                    play.append(idx)
+                    flag = True
+                elif discardable_pct[idx] > 0.98:
+                    discard.append(idx)
+            for i, k in enumerate(knowledge):
+                need_protect = True
+                for col, num in cpf.get_possible(k):
+                    if board[col][1] >= num:
+                        need_protect = False
+                        if self.hint_to_protect:
+                            flag = True
+                if need_protect:
+                    self.index_protect.append(i)
 
-        for i, card in enumerate(knowledge):
-            if cpf.slot_playable_pct(card, board) > 0.98:
-                self.index_play.append(i)
-            elif cpf.slot_discardable_pct(card, board, trash) > 0.98:
-                self.index_discard.append(i)
+            if not flag:
+                newest = max(hinted_indices, key=self.self_hint_order)
+                card = knowledge[newest]
+                if playable_pct[idx] > 0:
+                    play.append(newest)
+                else:
+                    protect.append(newest)
+                for idx in hinted_indices:
+                    if idx == newest:
+                        continue
+                    card = knowledge[idx]
+                    if playable_pct[idx] > 0:
+                        play_candidate.append(idx)
 
-        i = 0
-        while i < len(play):
-            if i >= len(knowledge):
-                play = play[:i]
-                break
-            try:
-                card = knowledge[play[i]]
-            except IndexError:
-                card = None
-            if (not card) or cpf.slot_playable_pct(card, board) < 0.02:
-                del play[i]
-            else:
-                i += 1
-        i = 0
-        while i < len(play_candidate):
-            if i >= len(knowledge):
-                play_candidate = play_candidate[:i]
-                break
-            try:
-                card = knowledge[play_candidate[i]]
-            except IndexError:
-                card = None
-            if (not card) or cpf.slot_playable_pct(card, board) < 0.02:
-                del play_candidate[i]
-            else:
-                i += 1
-        i = 0
-        while i < len(discard):
-            if i >= len(knowledge):
-                discard = discard[:i]
-                break
-            try:
-                card = knowledge[discard[i]]
-            except IndexError:
-                card = None
-            if (not card) or cpf.slot_discardable_pct(card, board, trash) < 0.02:
-                del discard[i]
-            else:
-                i += 1
-        i = 0
-        while i < len(protect):
-            if i >= len(knowledge):
-                protect = protect[:i]
-                break
-            try:
-                card = knowledge[protect[i]]
-            except IndexError:
-                card = None
-            if (not card) or cpf.slot_discardable_pct(card, board, trash) > 0.5:
-                del protect[i]
-            else:
-                i += 1
+            for i, card in enumerate(knowledge):
+                if playable_pct[i] > 0.98:
+                    self.index_play.append(i)
+                elif discardable_pct[i] > 0.98:
+                    self.index_discard.append(i)
+
+        with timer("interpret postprocess", self.timer):
+            play = {i for i in play if i < len(knowledge) and playable_pct[i] > 0.02}
+            play_candidate = {
+                i
+                for i in play_candidate
+                if i < len(knowledge) and playable_pct[i] > 0.02
+            }
+            discard = {
+                i for i in discard if i < len(knowledge) and discardable_pct[i] > 0.02
+            }
+            protect = {
+                i for i in protect if i < len(knowledge) and discardable_pct[i] > 0.5
+            }
 
         return (
-            sorted(set(play)),
-            sorted(set(play_candidate)),
-            sorted(set(discard)),
-            sorted(set(protect)),
+            sorted(play),
+            sorted(play_candidate),
+            sorted(discard),
+            sorted(protect),
         )
 
     def get_action(self, state, model):
@@ -378,63 +368,17 @@ class HardcodePlayer2(Player):
 
     def _execute(self, force=False):
 
-        board = self.last_state.get_board()
-        knowledge = self.knowledge
-        if self.return_value:
-            order = []
-
-        self.index_play.sort(key=self.self_play_order)
-        while self.index_play != []:
-            idx = self.index_play.pop()
-            card = knowledge[idx]
-            if cpf.slot_playable_pct(card, board) > 0:
-                action = Action(cgf.PLAY, cnr=idx)
-                if self.return_value:
-                    order.append(action)
-                else:
-                    return action
-            else:
-                self.index_discard.append(idx)
-
-        # play at risk
-        risk_threshold = 0
-        for turn, thresh in self.risk_play.items():
-            if turn >= self.turn:
-                risk_threshold = 1 - thresh
-                break
-        idx = None
-        max_pct = 0
-        self.index_play_candidate.sort(key=self.self_play_order)
-        for i in self.index_play_candidate[::-1]:
-            card = knowledge[i]
-            if cpf.slot_playable_pct(card, board) > max_pct:
-                idx = i
-                max_pct = cpf.slot_playable_pct(card, board)
-        if idx and max_pct > risk_threshold:
-            action = Action(cgf.PLAY, cnr=idx)
+        with timer("execute main", self.timer):
+            board = self.last_state.get_board()
+            knowledge = self.knowledge
             if self.return_value:
-                order.append(action)
-            else:
-                return action
+                order = []
 
-        # TODO add more conditions for more aggressive play
-
-        if ((self.return_value and not order) or not self.return_value) and not force:
-            if self.last_state.get_num_hints() > 1:
-                if self.debug:
-                    print("redirected from execute to hint")
-                return self._hint()
-            else:
-                if self.debug:
-                    print("redirected from execute to discard")
-                return self._discard(force=True)
-
-        if force:
-            self.index_play_candidate.sort()
-            while self.index_play_candidate != []:
-                idx = self.index_play_candidate.pop()
+            self.index_play.sort(key=self.self_play_order)
+            while self.index_play != []:
+                idx = self.index_play.pop()
                 card = knowledge[idx]
-                if cpf.slot_playable_pct(card, board) > 0.02:
+                if cpf.slot_playable_pct(card, board) > 0:
                     action = Action(cgf.PLAY, cnr=idx)
                     if self.return_value:
                         order.append(action)
@@ -442,22 +386,73 @@ class HardcodePlayer2(Player):
                         return action
                 else:
                     self.index_discard.append(idx)
-            action = Action(
-                cgf.PLAY, cnr=max(range(self.card_nr), key=self.self_play_order)
-            )
-            if self.return_value:
-                order.append(action)
-            else:
-                return action
 
-        # only reachable for self.return_value
-        value_dict = {}
-        for i, action in enumerate(order):
-            value_dict[action] = 1 - 0.1 * i
-        for action in self.last_state.get_valid_actions():
-            if action.type == cgf.PLAY and action not in value_dict.keys():
-                value_dict[action] = -1
-        return value_dict
+        # play at risk
+        with timer("execute at risk"):
+            risk_threshold = 0
+            for turn, thresh in self.risk_play.items():
+                if turn >= self.turn:
+                    risk_threshold = 1 - thresh
+                    break
+            idx = None
+            max_pct = 0
+            self.index_play_candidate.sort(key=self.self_play_order)
+            for i in self.index_play_candidate[::-1]:
+                card = knowledge[i]
+                if cpf.slot_playable_pct(card, board) > max_pct:
+                    idx = i
+                    max_pct = cpf.slot_playable_pct(card, board)
+            if idx and max_pct > risk_threshold:
+                action = Action(cgf.PLAY, cnr=idx)
+                if self.return_value:
+                    order.append(action)
+                else:
+                    return action
+
+        # TODO add more conditions for more aggressive play
+
+        with timer("execute postprocess"):
+            if (
+                (self.return_value and not order) or not self.return_value
+            ) and not force:
+                if self.last_state.get_num_hints() > 1:
+                    if self.debug:
+                        print("redirected from execute to hint")
+                    return self._hint()
+                else:
+                    if self.debug:
+                        print("redirected from execute to discard")
+                    return self._discard(force=True)
+
+            if force:
+                self.index_play_candidate.sort()
+                while self.index_play_candidate != []:
+                    idx = self.index_play_candidate.pop()
+                    card = knowledge[idx]
+                    if cpf.slot_playable_pct(card, board) > 0.02:
+                        action = Action(cgf.PLAY, cnr=idx)
+                        if self.return_value:
+                            order.append(action)
+                        else:
+                            return action
+                    else:
+                        self.index_discard.append(idx)
+                action = Action(
+                    cgf.PLAY, cnr=max(range(self.card_nr), key=self.self_play_order)
+                )
+                if self.return_value:
+                    order.append(action)
+                else:
+                    return action
+
+            # only reachable for self.return_value
+            value_dict = {}
+            for i, action in enumerate(order):
+                value_dict[action] = 1 - 0.1 * i
+            for action in self.last_state.get_valid_actions():
+                if action.type == cgf.PLAY and action not in value_dict.keys():
+                    value_dict[action] = -1
+            return value_dict
 
     def _discard(self, force=False):
 
@@ -527,31 +522,32 @@ class HardcodePlayer2(Player):
         # having playable cards in play candidates is GOOD +1pt
         # having unplayable cards in play candidates is BAD -0.8pt
 
-        board = self.last_state.get_board()
-        trash = self.last_state.get_trash()
+        with timer("evaluate partner"):
+            board = self.last_state.get_board()
+            trash = self.last_state.get_trash()
 
-        score = 0
-        for i in predicted_play:
-            if cpf.card_playable(hands[i], board):
-                score += 3
-            else:
-                score -= 2
-        if predicted_play != [] and (
-            not cpf.card_playable(
-                hands[max(predicted_play, key=self.partner_play_order)], board
-            )
-        ):
-            score -= 5
+            score = 0
+            for i in predicted_play:
+                if cpf.card_playable(hands[i], board):
+                    score += 3
+                else:
+                    score -= 2
+            if predicted_play != [] and (
+                not cpf.card_playable(
+                    hands[max(predicted_play, key=self.partner_play_order)], board
+                )
+            ):
+                score -= 5
 
-        for i in predicted_play_candidate:
-            if cpf.card_playable(hands[i], board):
-                score += 1
-            else:
-                score -= 0.8
+            for i in predicted_play_candidate:
+                if cpf.card_playable(hands[i], board):
+                    score += 1
+                else:
+                    score -= 0.8
 
-        for i in predicted_discard:
-            if cpf.card_discardable(hands[i], board, trash):
-                score += 1
+            for i in predicted_discard:
+                if cpf.card_discardable(hands[i], board, trash):
+                    score += 1
 
         return score
 
@@ -563,35 +559,40 @@ class HardcodePlayer2(Player):
         )
 
         if self.partner_card_count:
-            possible_self_hands = list(
-                product(*[cpf.get_possible(k) for k in self.knowledge])
-            )
+            with timer("processs partner card count"):
+                possible_self_hands = list(
+                    product(*[cpf.get_possible(k) for k in self.knowledge])
+                )
 
-            possible_knowledges = [
-                deepcopy(partner_knowledge)
-                for _ in range(min(len(possible_self_hands), self.partner_samples))
-            ]
-            possible_self_hands = sample(
-                possible_self_hands, min(len(possible_self_hands), self.partner_samples)
-            )
-
-            if self.debug:
-                print("partner knowledge before card count")
-                pprint(partner_knowledge)
-                print("sampling {} possible cases".format(len(possible_knowledges)))
-
-            # update knowledge w.r.t possible hands
-            for knowledge, self_hands in zip(possible_knowledges, possible_self_hands):
-                for col, num in self.last_state.get_common_visible_cards() + list(
-                    self_hands
-                ):
-                    for k in knowledge:
+                for (col, num) in self.last_state.get_common_visible_cards():
+                    for k in partner_knowledge:
                         k[col][num - 1] = max(0, k[col][num - 1] - 1)
+                possible_knowledges = [
+                    deepcopy(partner_knowledge)
+                    for _ in range(min(len(possible_self_hands), self.partner_samples))
+                ]
+                possible_self_hands = sample(
+                    possible_self_hands,
+                    min(len(possible_self_hands), self.partner_samples),
+                )
 
-            if self.debug:
-                print("\n partner knowledge after card count")
-                pprint(possible_knowledges)
-                print("")
+                if self.debug:
+                    print("partner knowledge before card count")
+                    pprint(partner_knowledge)
+                    print("sampling {} possible cases".format(len(possible_knowledges)))
+
+                # update knowledge w.r.t possible hands
+                for knowledge, self_hands in zip(
+                    possible_knowledges, possible_self_hands
+                ):
+                    for (col, num) in list(self_hands):
+                        for k in knowledge:
+                            k[col][num - 1] = max(0, k[col][num - 1] - 1)
+
+                if self.debug:
+                    print("\n partner knowledge after card count")
+                    pprint(possible_knowledges)
+                    print("")
         else:
             possible_knowledges = [partner_knowledge]
 
@@ -725,48 +726,52 @@ class HardcodePlayer2(Player):
 
     def _update_index(self, idx, partner=False):
 
-        if self:
-            prefix = "index_"
-            del self.knowledge[idx]
-            new_knowledge = [cgf.COUNTS.copy() for _ in range(5)]
-            if self.self_card_count:
-                visible_cards = (
-                    self.last_state.get_common_visible_cards()
-                    + self.last_state.get_hands()[self.partner_nr]
-                )
-                for col, num in visible_cards:
-                    new_knowledge[col][num - 1] -= 1
+        with timer("update index", self.timer):
+            if not partner:
+                prefix = "index_"
+                del self.knowledge[idx]
+                new_knowledge = [cgf.COUNTS.copy() for _ in range(5)]
+                if self.self_card_count:
+                    visible_cards = (
+                        self.last_state.get_common_visible_cards()
+                        + self.last_state.get_hands()[self.partner_nr]
+                    )
+                    for col, num in visible_cards:
+                        new_knowledge[col][num - 1] -= 1
 
-            self.knowledge.append(new_knowledge)
-        else:
-            prefix = "partner_"
+                self.knowledge.append(new_knowledge)
+            else:
+                prefix = "partner_"
 
-        for attr in dir(self):
-            if attr.startswith(prefix):
-                L = getattr(self, attr)
-                if not isinstance(L, list):
-                    continue
-                setattr(self, attr, [x if x < idx else x - 1 for x in L if x != idx])
+            for attr in dir(self):
+                if attr.startswith(prefix):
+                    L = getattr(self, attr)
+                    if not isinstance(L, list):
+                        continue
+                    setattr(
+                        self, attr, [x if x < idx else x - 1 for x in L if x != idx]
+                    )
 
     def _update_state(self, new_state, new_model):
 
-        self.last_model = deepcopy(new_model)
-        self.last_state = deepcopy(new_state)
-        new_knowledge = new_model.get_knowledge()
-        if self.knowledge:
-            merged = []
-            for old, new in zip(self.knowledge, new_knowledge):
-                temp = []
-                for i in range(5):
-                    temp.append([])
-                    for j in range(5):
-                        temp[-1].append(min(old[i][j], new[i][j]))
-                merged.append(temp)
-            self.knowledge = merged
-        else:
-            # start of the game
-            self.knowledge = deepcopy(new_model.get_knowledge())
-            partner_hand = new_state.get_hands()[self.partner_nr]
-            for col, num in partner_hand:
-                for k in self.knowledge:
-                    k[col][num - 1] = max(0, k[col][num - 1] - 1)
+        with timer("update state", self.timer):
+            # self.last_state = deepcopy(new_state)
+            self.last_state = new_state
+            new_knowledge = new_model.get_knowledge()
+            if self.knowledge:
+                merged = []
+                for old, new in zip(self.knowledge, new_knowledge):
+                    temp = []
+                    for i in range(5):
+                        temp.append([])
+                        for j in range(5):
+                            temp[-1].append(min(old[i][j], new[i][j]))
+                    merged.append(temp)
+                self.knowledge = merged
+            else:
+                # start of the game
+                self.knowledge = deepcopy(new_model.get_knowledge())
+                partner_hand = new_state.get_hands()[self.partner_nr]
+                for col, num in partner_hand:
+                    for k in self.knowledge:
+                        k[col][num - 1] = max(0, k[col][num - 1] - 1)
