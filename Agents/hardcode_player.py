@@ -1,7 +1,7 @@
 from copy import deepcopy
-import itertools
+from itertools import permutations, product
 from pprint import pprint
-from random import random
+from random import random, sample
 import common_game_functions as cgf
 import Agents.common_player_functions as cpf
 from Agents.player import Player, Action
@@ -67,6 +67,7 @@ class HardcodePlayer2(Player):
         self.self_hint_order = "newest"
         self.partner_card_count = False
         self.partner_play_order = "newest"
+        self.partner_samples = 10
 
         for k, v in kwargs.items():
             setattr(self, k, v)
@@ -76,7 +77,7 @@ class HardcodePlayer2(Player):
 
         # convert parameters
         order = range(len(self.decision_protocol))
-        D = itertools.permutations(order)
+        D = permutations(order)
         for i in range(self.decision_permutation):
             try:
                 order = next(D)
@@ -233,7 +234,7 @@ class HardcodePlayer2(Player):
         for i, card in enumerate(knowledge):
             if cpf.slot_playable_pct(card, board) > 0.98:
                 self.index_play.append(i)
-            elif cpf.slot_discardable_pct(card, board, trash) > 0.9:
+            elif cpf.slot_discardable_pct(card, board, trash) > 0.98:
                 self.index_discard.append(i)
 
         i = 0
@@ -560,17 +561,40 @@ class HardcodePlayer2(Player):
         partner_knowledge = deepcopy(
             self.last_state.get_all_knowledge()[self.partner_nr]
         )
+
         if self.partner_card_count:
+            possible_self_hands = list(
+                product(*[cpf.get_possible(k) for k in self.knowledge])
+            )
+
+            possible_knowledges = [
+                deepcopy(partner_knowledge)
+                for _ in range(min(len(possible_self_hands), self.partner_samples))
+            ]
+            possible_self_hands = sample(
+                possible_self_hands, min(len(possible_self_hands), self.partner_samples)
+            )
+
             if self.debug:
                 print("partner knowledge before card count")
                 pprint(partner_knowledge)
-            for col, num in self.last_state.get_common_visible_cards():
-                for k in partner_knowledge:
-                    k[col][num - 1] = max(0, k[col][num - 1] - 1)
+                print("sampling {} possible cases".format(len(possible_knowledges)))
+
+            # update knowledge w.r.t possible hands
+            for knowledge, self_hands in zip(possible_knowledges, possible_self_hands):
+                for col, num in self.last_state.get_common_visible_cards() + list(
+                    self_hands
+                ):
+                    for k in knowledge:
+                        k[col][num - 1] = max(0, k[col][num - 1] - 1)
+
             if self.debug:
                 print("\n partner knowledge after card count")
-                pprint(partner_knowledge)
+                pprint(possible_knowledges)
                 print("")
+        else:
+            possible_knowledges = [partner_knowledge]
+
         board = self.last_state.get_board()
         trash = self.last_state.get_trash()
 
@@ -605,28 +629,36 @@ class HardcodePlayer2(Player):
                 ):
                     hinted.append(i)
 
-            (
-                pred_play,
-                pred_play_candidate,
-                pred_discard,
-                pred_protect,
-            ) = self._interpret(
-                hinted,
-                partner_knowledge,
-                board,
-                trash,
-                pred_play,
-                pred_play_candidate,
-                pred_discard,
-                pred_protect,
-            )
+            scores = []
+            for knowledge in possible_knowledges:
+                try:
+                    (
+                        pred_play,
+                        pred_play_candidate,
+                        pred_discard,
+                        pred_protect,
+                    ) = self._interpret(
+                        hinted,
+                        knowledge,
+                        board,
+                        trash,
+                        pred_play,
+                        pred_play_candidate,
+                        pred_discard,
+                        pred_protect,
+                    )
+                    scores.append(
+                        self._evaluate_partner(
+                            partner_hand,
+                            pred_play,
+                            pred_play_candidate,
+                            pred_discard,
+                        )
+                    )
+                except ZeroDivisionError:
+                    pass
 
-            score = self._evaluate_partner(
-                partner_hand,
-                pred_play,
-                pred_play_candidate,
-                pred_discard,
-            )
+            score = sum(scores) / len(scores)
 
             if self.debug:
                 print("Action: ", str(action), " evaluates to: ")

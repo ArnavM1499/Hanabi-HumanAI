@@ -3,6 +3,7 @@ import fire
 import json
 from multiprocessing import Pool
 import os
+from pprint import pprint
 import random
 import time
 from hanabi import Game
@@ -73,7 +74,7 @@ def record_game(
         )
 
 
-def test_player(player="00001", player2=None, iters=5000):
+def test_player(player="00001", player2=None, iters=5000, print_details=False):
     p = Pool(16)
     res = p.starmap_async(
         run_single,
@@ -104,6 +105,9 @@ def test_player(player="00001", player2=None, iters=5000):
     print(
         "average: hints left: {}, hits left: {}, turns: {}".format(hints, hits, turns)
     )
+
+    if print_details:
+        pprint(list(zip(*results)))
 
     return iters, avg, smin, smax, smid, smod, hints, hits, turns
 

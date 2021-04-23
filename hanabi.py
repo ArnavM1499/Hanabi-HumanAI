@@ -263,12 +263,14 @@ class Game(object):
 
     def run(self, turns=-1):
         self.turn = 1
-        while not self.done() and (turns < 0 or self.turn < turns):
+        while (not self.done()) and (turns < 0 or self.turn < turns):
             self.turn += 1
             self.single_turn()
         print("Game done, hits left:", self.hits)
         points = self.score()
         print("Points:", points)
+        print("Board:", self.board)
+        print("Hands:", self.hands)
         self.data_file.close()
         return points
 
