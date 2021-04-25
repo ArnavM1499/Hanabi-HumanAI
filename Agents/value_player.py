@@ -31,36 +31,51 @@ def weight_knowledge(knowledge, weights):
     return new_knowledge
 
 
+def update_weights(weights, weight, board, hint_indices):
+    if not hint_indices:
+        return
+    priority = hint_indices[-1]
+    for col in range(5):
+        for nr in range(5):
+            if card_playable((col, nr + 1), board):
+                weights[priority][col][nr] *= weight
+    return weights
+
+
 # This is actually bugged at the moment -- it can't handle when one player has
 # less than 5 cards (close to the end of the game). it doesn't crash, but
 # things like self.todo won't behave properly
 
+# all info (knowledge, weights, partner info, etc.) is updated every time we are informed of an action
+# weights/partner weights are maintained; everything else is just replaced
+# this keeps get_action light/fast, but informing takes more time
 
 class ValuePlayer(Player):
     def __init__(self, name, pnr, **kwargs):
         super().__init__(name, pnr)
         self.partner_nr = 1 - self.pnr  # hard code for two players
         self.turn = 0
-        # same as last_state.get_knowledge(), but done for coding ease for now
-        # if we need to optimize speed/memory we can remove it
+
+        # self knowledge
         self.knowledge = []
-        self.hint_weights = [
+        self.weights = [
             [[1 for _ in range(5)] for _ in range(5)] for _ in range(5)
         ]
         self.weighted_knowledge = None
+
+        # partner knowledge
         self.partner_hand = None
         self.partner_knowledge = []
-        self.partner_hint_weights = [
+        self.partner_weights = [
             [[1 for _ in range(5)] for _ in range(5)] for _ in range(5)
         ]
         self.partner_weighted_knowledge = None
-        self.last_state = None
-        self.last_model = None
-        self.protect = []
-        self.hinted = []
-        self.log = []
-        self.nr_cards = 5
-        # below are default values for parameters
+
+        # state/model information state; maintained by simply copying whenever we receive new ones via inform
+        self.state = None
+        self.model = None
+
+        # parameters and default values
         self.hint_weight = 1000.0
         self.discard_type = "first"
         self.card_count = True
@@ -72,21 +87,28 @@ class ValuePlayer(Player):
         for k, v in kwargs.items():
             setattr(self, k, v)
 
+    def _update_info(self, state, model):
+        self.state = state
+        self.model = model
+        self.knowledge = model.get_knowledge()
+        self.partner_hand = state.get_hands()[self.partner_nr]
+        self.partner_knowledge = state.get_all_knowledge()[self.partner_nr]
+
     def _count_cards(self):
         if self.card_count:
-            count_card_list(self.knowledge, self.last_state.get_trash())
-            count_card_list(self.knowledge, self.last_state.get_hands()[self.partner_nr])
-            count_board(self.knowledge, self.last_state.get_board())
+            count_card_list(self.knowledge, self.state.get_trash())
+            # count_card_list(self.knowledge, self.state.get_hands()[self.partner_nr])
+            count_board(self.knowledge, self.state.get_board())
 
     def _count_partner_cards(self, partner_knowledge):
         if self.card_count_partner:
-            count_card_list(partner_knowledge, self.last_state.get_trash())
-            count_board(partner_knowledge, self.last_state.get_board())
+            count_card_list(partner_knowledge, self.state.get_trash())
+            count_board(partner_knowledge, self.state.get_board())
 
     def _eval_play(self, action):
         assert(action.type == PLAY)
         pct = slot_playable_pct(
-                    self.weighted_knowledge[action.cnr], self.last_state.get_board()
+                    self.weighted_knowledge[action.cnr], self.state.get_board()
                 )
         if pct > self.play_threshold:
             return pct
@@ -98,7 +120,7 @@ class ValuePlayer(Player):
     def _eval_discard(self, action):
         assert(action.type == DISCARD)
         pct = slot_discardable_pct(
-                    self.weighted_knowledge[action.cnr], self.last_state.get_board()
+                    self.weighted_knowledge[action.cnr], self.state.get_board()
                 )
         if pct > self.discard_threshold:
             return pct
@@ -110,12 +132,12 @@ class ValuePlayer(Player):
     def _eval_hint(self, action):
         assert(action.type in [HINT_COLOR, HINT_NUMBER])
         target = get_multi_target(action, self.partner_hand, self.partner_weighted_knowledge,
-                                  self.last_state.get_board(), self.play_threshold, self.discard_threshold)
+                                  self.state.get_board(), self.play_threshold, self.discard_threshold)
         if target == -1:
             return 0
-        if target_possible(action, target, self.partner_weighted_knowledge, self.last_state.get_board()):
-            if card_playable(self.partner_hand[target], self.last_state.get_board()):
-                return 1
+        if target_possible(action, target, self.partner_weighted_knowledge, self.state.get_board()):
+            if card_playable(self.partner_hand[target], self.state.get_board()):
+                return 0.8
             else:
                 return -1
         return 0
@@ -130,126 +152,58 @@ class ValuePlayer(Player):
     def get_action(self, game_state, player_model):
         self.turn += 1
 
-        # first turn
-        if self.last_model is None:
-            self.last_model = player_model
-        if self.last_state is None:
-            self.last_state = game_state
-        self.knowledge = copy.deepcopy(self.last_model.get_knowledge())
-        #print("player " + str(self.pnr) + " knowledge: " + str(self.knowledge))
+        # if first turn, no models/states have been made, so we need to initialize to something
+        if self.model is None:
+            self._update_info(game_state, player_model)
+
+        # count cards
         if self.card_count:
             self._count_cards()
-        #print("player " + str(self.pnr) + " knowledge: " + str(self.knowledge))
-        #print("partner hand:" + str(self.last_state.get_hands()[self.partner_nr]))
-        #time.sleep(3)
-        self.weighted_knowledge = weight_knowledge(self.knowledge, self.hint_weights)
+
+        # compute weighted knowledge, weighted partner knowledge
+        self.weighted_knowledge = weight_knowledge(self.knowledge, self.weights)
+        self.partner_weighted_knowledge = weight_knowledge(self.partner_knowledge, self.partner_weights)
+
+        # evaluate all moves and return maximum
         best_action = None
         max_value = -1
-        for action in self.last_state.get_valid_actions():
+        for action in self.state.get_valid_actions():
             value = self.eval_action(action)
             if value > max_value:
                 best_action = action
                 max_value = value
         return best_action
 
-    # for 2 player the only hints we need to consider are hints about our cards
-    # this will need to be revisited if we generalize to more players
-    def _receive_hint(self, action, player, new_state, new_model, hint_indices):
-        self.last_model = new_model
-        self.last_state = new_state
-        # assert action.type in [HINT_COLOR, HINT_NUMBER] and player == self.partner_nr
-        # assert(not self.partner_todo)
-
-        new_board = new_state.get_board()
-        self.knowledge = copy.deepcopy(new_model.get_knowledge())
-
-        # empty list: no new info gained; bad hint
-        if not hint_indices:
-            return
-
-        priority_index = hint_indices[-1]
-
-        # is there a more efficient way of doing this?
-        for slot in range(len(self.knowledge)):
-            for col in range(5):
-                for num in range(5):
-                    if slot == priority_index and card_playable(
-                        (col, num + 1), new_board
-                    ):
-                        self.hint_weights[slot][col][num] *= self.hint_weight
-
-    # don't need the hint indices, of course
-    def _receive_play(self, action, player, new_state, new_model):
-        self.last_model = new_model
-        self.last_state = new_state
-        if len(self.partner_hint_weights) == len(
-            new_state.get_all_knowledge()[self.partner_nr]
-        ):
-            self.partner_hint_weights[action.cnr] = [
-                [1 for _ in range(5)] for _ in range(5)
-            ]
-        else:
-            del self.partner_hint_weights[action.cnr]
-
-    def _receive_discard(self, action, player, new_state, new_model):
-        self.last_model = new_model
-        self.last_state = new_state
-        if len(self.partner_hint_weights) == len(
-            new_state.get_all_knowledge()[self.partner_nr]
-        ):
-            self.partner_hint_weights[action.cnr] = [
-                [1 for _ in range(5)] for _ in range(5)
-            ]
-        else:
-            del self.partner_hint_weights[action.cnr]
-
     # hint_indices is [] if the action is not a hint
     def inform(self, action, player, new_state, new_model):
-        hint_indices = new_state.get_hinted_indices()
+        self._update_info(new_state, new_model)
         if player == self.pnr:
-            # maybe this part should be moved up to before playing?
-            # reset knowledge if we played or discarded
-            if action.type == PLAY or action.type == DISCARD:
-                self.knowledge = copy.deepcopy(new_model.get_knowledge())
-                if len(self.knowledge) == len(self.hint_weights):
-                    self.hint_weights[action.cnr] = [
+            if action.type in [PLAY, DISCARD]:
+                # reset weights for specific slot
+                if len(self.knowledge) == len(self.weights):
+                    self.weights[action.cnr] = [
                         [1 for _ in range(5)] for _ in range(5)
                     ]
                 else:
-                    del self.hint_weights[action.cnr]
-            elif action.type in [HINT_COLOR, HINT_NUMBER]:
-                new_board = new_state.get_board()
-                partner_knowledge = copy.deepcopy(
-                    new_state.get_all_knowledge()[self.partner_nr]
-                )
-
-                # empty list: no new info gained; bad hint
-                if not hint_indices:
-                    return
-
-                self._count_partner_cards(partner_knowledge)
-                priority_index = hint_indices[-1]
-
-                # is there a more efficient way of doing this?
-                for slot in range(len(partner_knowledge)):
-                    for col in range(5):
-                        for num in range(5):
-                            if slot == priority_index and card_playable(
-                                (col, num + 1), new_board
-                            ):
-                                self.partner_hint_weights[slot][col][
-                                    num
-                                ] *= self.hint_weight
+                    del self.weights[action.cnr]
+            else:
+                # on hint, update partner weights accordingly
+                update_weights(
+                    self.partner_weights, self.hint_weight, new_state.get_board(), new_state.get_hinted_indices())
             return
 
         # for 2 player games there's only 1 other player
-        # assert player == self.partner_nr
+        assert player == self.partner_nr
         if action.type in [HINT_COLOR, HINT_NUMBER]:
-            self._receive_hint(action, player, new_state, new_model, hint_indices)
+            update_weights(self.weights, self.hint_weight, new_state.get_board(), new_state.get_hinted_indices())
 
-        elif action.type == PLAY:
-            self._receive_play(action, player, new_state, new_model)
-
-        # discard
-        else:
-            self._receive_discard(action, player, new_state, new_model)
+        elif action.type in [PLAY, DISCARD]:
+            # reset weights for specific slot
+            if len(self.partner_weights) == len(
+                    new_state.get_all_knowledge()[self.partner_nr]
+            ):
+                self.partner_weights[action.cnr] = [
+                    [1 for _ in range(5)] for _ in range(5)
+                ]
+            else:
+                del self.partner_weights[action.cnr]

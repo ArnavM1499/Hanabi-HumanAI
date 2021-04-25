@@ -75,7 +75,7 @@ class ExperimentalPlayer(Player):
     def _count_cards(self):
         if self.card_count:
             count_card_list(self.knowledge, self.last_state.get_trash())
-            count_card_list(self.knowledge, self.last_state.get_hands()[self.partner_nr])
+            #count_card_list(self.knowledge, self.last_state.get_hands()[self.partner_nr])
             count_board(self.knowledge, self.last_state.get_board())
 
     def _count_partner_cards(self, partner_knowledge):
@@ -303,10 +303,14 @@ class ExperimentalPlayer(Player):
             self._count_cards()
         #print("player " + str(self.pnr) + " knowledge: " + str(self.knowledge))
         #print("partner hand:" + str(self.last_state.get_hands()[self.partner_nr]))
-        #time.sleep(3)
+        #value_dict = {}
+        #for action in self.last_state.get_valid_actions():
+        #    value_dict[action] = self.eval_action(action)
+        #print(value_dict)
+        #time.sleep(5)
         if self.get_action_values:
             value_dict = {}
-            for action in self.last_model.get_actions:
+            for action in self.last_state.get_valid_actions():
                 value_dict[action] = self.eval_action(action)
             return value_dict
         return self._execute()

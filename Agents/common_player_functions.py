@@ -119,7 +119,7 @@ def get_target(hint, hand, exl=[]):
     for i in range(len(hand)):
         if hint.type == HINT_COLOR and hand[i][0] == hint.col and i not in exl:
             target = i
-        elif hint.type == HINT_NUMBER and hand[i][1] == hint.nr and i not in exl:
+        elif hint.type == HINT_NUMBER and hand[i][1] == hint.cnr and i not in exl:
             target = i
     return target
 
