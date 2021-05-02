@@ -357,27 +357,31 @@ class ExperimentalPlayer(Player):
         self.last_model = new_model
         self.last_state = new_state
         self.partner_todo = [i for i in self.partner_todo if i != action.cnr]
-        if len(self.partner_hint_weights) == len(
+        for i in range(len(self.partner_todo)):
+            if self.partner_todo[i] > action.cnr:
+                self.partner_todo[i] -= 1
+        del self.partner_hint_weights[action.cnr]
+        if len(self.partner_hint_weights) != len(
             new_state.get_all_knowledge()[self.partner_nr]
         ):
-            self.partner_hint_weights[action.cnr] = [
+            self.partner_hint_weights.append([
                 [1 for _ in range(5)] for _ in range(5)
-            ]
-        else:
-            del self.partner_hint_weights[action.cnr]
+            ])
 
     def _receive_discard(self, action, player, new_state, new_model):
         self.last_model = new_model
         self.last_state = new_state
         self.partner_todo = [i for i in self.partner_todo if i != action.cnr]
-        if len(self.partner_hint_weights) == len(
-            new_state.get_all_knowledge()[self.partner_nr]
+        for i in range(len(self.partner_todo)):
+            if self.partner_todo[i] > action.cnr:
+                self.partner_todo[i] -= 1
+        del self.partner_hint_weights[action.cnr]
+        if len(self.partner_hint_weights) != len(
+                new_state.get_all_knowledge()[self.partner_nr]
         ):
-            self.partner_hint_weights[action.cnr] = [
+            self.partner_hint_weights.append([
                 [1 for _ in range(5)] for _ in range(5)
-            ]
-        else:
-            del self.partner_hint_weights[action.cnr]
+            ])
 
     # hint_indices is [] if the action is not a hint
     def inform(self, action, player, new_state, new_model):
@@ -387,14 +391,17 @@ class ExperimentalPlayer(Player):
             # reset knowledge if we played or discarded
             if action.type == PLAY or action.type == DISCARD:
                 self.knowledge = copy.deepcopy(new_model.get_knowledge())
-                if len(self.knowledge) == len(self.hint_weights):
-                    self.hint_weights[action.cnr] = [
+                del self.hint_weights[action.cnr]
+                if len(self.knowledge) != len(self.hint_weights):
+                    self.hint_weights.append([
                         [1 for _ in range(5)] for _ in range(5)
-                    ]
-                else:
-                    del self.hint_weights[action.cnr]
+                    ])
                 # delete index from todo list
                 self.todo = [i for i in self.todo if i != action.cnr]
+                for i in range(len(self.todo)):
+                    if self.todo[i] > action.cnr:
+                        self.todo[i] -= 1
+
             elif action.type in [HINT_COLOR, HINT_NUMBER]:
                 new_board = new_state.get_board()
                 partner_knowledge = copy.deepcopy(

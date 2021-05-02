@@ -12,7 +12,7 @@
         "consider": "all"
     },
     "00002" : {
-        "player_class": "ValuePlayer",
+        "player_class": "ExperimentalPlayer",
         "get_action_values": false,
         "hint_weight": 1000.0,
         "card_count": true,

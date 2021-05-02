@@ -42,10 +42,6 @@ def update_weights(weights, weight, board, hint_indices):
     return weights
 
 
-# This is actually bugged at the moment -- it can't handle when one player has
-# less than 5 cards (close to the end of the game). it doesn't crash, but
-# things like self.todo won't behave properly
-
 # all info (knowledge, weights, partner info, etc.) is updated every time we are informed of an action
 # weights/partner weights are maintained; everything else is just replaced
 # this keeps get_action light/fast, but informing takes more time
@@ -84,13 +80,16 @@ class ValuePlayer(Player):
         self.default_hint = "high"
         self.play_threshold = 0.95
         self.discard_threshold = 0.95
+        self.play_bias = 1.0
+        self.disc_bias = 0.9
+        self.hint_bias = 0.8
         for k, v in kwargs.items():
             setattr(self, k, v)
 
     def _update_info(self, state, model):
         self.state = state
         self.model = model
-        self.knowledge = model.get_knowledge()
+        self.knowledge = copy.deepcopy(model.get_knowledge())
         self.partner_hand = state.get_hands()[self.partner_nr]
         self.partner_knowledge = state.get_all_knowledge()[self.partner_nr]
 
@@ -110,6 +109,8 @@ class ValuePlayer(Player):
         pct = slot_playable_pct(
                     self.weighted_knowledge[action.cnr], self.state.get_board()
                 )
+        print(action)
+        print(pct)
         if pct > self.play_threshold:
             return pct
         elif pct > 0.5:
@@ -144,21 +145,19 @@ class ValuePlayer(Player):
 
     def eval_action(self, action):
         if action.type == PLAY:
-            return self._eval_play(action)
+            return self.play_bias * self._eval_play(action)
         elif action.type == DISCARD:
-            return self._eval_discard(action)
-        return self._eval_hint(action)
+            return self.disc_bias * self._eval_discard(action)
+        return self.hint_bias * self._eval_hint(action)
 
     def get_action(self, game_state, player_model):
         self.turn += 1
-
-        # if first turn, no models/states have been made, so we need to initialize to something
-        if self.model is None:
-            self._update_info(game_state, player_model)
+        # because of valid_action's implementation in hanabi.py we need to update this here as well
+        # to get the correct legal moves
+        self._update_info(game_state, player_model)
 
         # count cards
-        if self.card_count:
-            self._count_cards()
+        self._count_cards()
 
         # compute weighted knowledge, weighted partner knowledge
         self.weighted_knowledge = weight_knowledge(self.knowledge, self.weights)
@@ -180,12 +179,11 @@ class ValuePlayer(Player):
         if player == self.pnr:
             if action.type in [PLAY, DISCARD]:
                 # reset weights for specific slot
-                if len(self.knowledge) == len(self.weights):
-                    self.weights[action.cnr] = [
+                del self.weights[action.cnr]
+                if len(self.knowledge) != len(self.weights):
+                    self.weights.append([
                         [1 for _ in range(5)] for _ in range(5)
-                    ]
-                else:
-                    del self.weights[action.cnr]
+                    ])
             else:
                 # on hint, update partner weights accordingly
                 update_weights(
@@ -199,11 +197,10 @@ class ValuePlayer(Player):
 
         elif action.type in [PLAY, DISCARD]:
             # reset weights for specific slot
-            if len(self.partner_weights) == len(
+            del self.partner_weights[action.cnr]
+            if len(self.partner_weights) != len(
                     new_state.get_all_knowledge()[self.partner_nr]
             ):
-                self.partner_weights[action.cnr] = [
+                self.partner_weights.append([
                     [1 for _ in range(5)] for _ in range(5)
-                ]
-            else:
-                del self.partner_weights[action.cnr]
+                ])

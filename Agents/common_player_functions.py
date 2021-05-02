@@ -114,7 +114,9 @@ def target_possible(hint, target, knowledge, board):
     return False
 
 
-def get_target(hint, hand, exl=[]):
+def get_target(hint, hand, exl=None):
+    if exl is None:
+        exl = []
     target = -1
     for i in range(len(hand)):
         if hint.type == HINT_COLOR and hand[i][0] == hint.col and i not in exl:
@@ -126,12 +128,10 @@ def get_target(hint, hand, exl=[]):
 
 def get_multi_target(hint, hand, knowledge, board, play_threshold, disc_threshold):
     exl = []
-    target = get_target(hint, hand)
-    while slot_playable_pct(knowledge[target], board) >= play_threshold \
-            or slot_discardable_pct(knowledge[target], board) >= disc_threshold:
-        exl.append(target)
-        target = get_target(hint, hand, exl)
-    return target
+    for i in range(len(hand)):
+        if slot_playable_pct(knowledge[i], board) >= play_threshold:
+            exl.append(i)
+    return get_target(hint, hand)
 
 
 def hint_ambiguous(hint, hand, knowledge, board):
