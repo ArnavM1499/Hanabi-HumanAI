@@ -60,15 +60,18 @@ class ExperimentalPlayer(Player):
         self.nr_cards = 5
         # below are default values for parameters
         self.hint_weight = 1000.0
+        # options: first, last, likely
         self.discard_type = "first"
         self.discard_on_8 = False
         self.card_count = True
         self.card_count_partner = True
         self.get_action_values = False
+        # options: high, low, mix
         self.default_hint = "high"
         self.play_threshold = 0.95
         self.discard_threshold = 0.95
-        self.consider = "todo"
+        # options: all, todo
+        self.consider = "all"
         for k, v in kwargs.items():
             setattr(self, k, v)
 
@@ -201,6 +204,7 @@ class ExperimentalPlayer(Player):
                     if not hint_ambiguous(action, partner_hand, weighted_partner_knowledge, self.last_state.get_board()):
                         return Action(HINT_NUMBER, self.partner_nr, num=max(nums))
                     nums.remove(max(nums))
+                nums = [card[1] for card in partner_hand]
                 return Action(HINT_NUMBER, self.partner_nr, num=max(nums))
             elif self.default_hint == "low":
                 while nums:
@@ -208,7 +212,7 @@ class ExperimentalPlayer(Player):
                     if not hint_ambiguous(action, partner_hand, weighted_partner_knowledge,
                                           self.last_state.get_board()):
                         return Action(HINT_NUMBER, self.partner_nr, num=min(nums))
-                    nums.remove(min(nums))
+                nums = [card[1] for card in partner_hand]
                 return Action(HINT_NUMBER, self.partner_nr, num=min(nums))
             elif self.default_hint == "mix":
                 return Action(HINT_NUMBER, self.partner_nr, num=random.randrange(0, len(nums)))

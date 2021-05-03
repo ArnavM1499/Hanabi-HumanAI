@@ -3,24 +3,19 @@
         "player_class": "ExperimentalPlayer",
         "get_action_values": false,
         "hint_weight": 1000.0,
-        "card_count": true,
-        "card_count_partner": true,
-        "discard_type": "likely",
-        "discard_on_8": true,
-        "default_hint": "high",
-        "play_threshold": 0.9,
         "consider": "all"
     },
     "00002" : {
-        "player_class": "ExperimentalPlayer",
+        "player_class": "ValuePlayer",
         "get_action_values": false,
         "hint_weight": 1000.0,
         "card_count": true,
         "card_count_partner": true,
-        "discard_type": "likely",
+        "discard_type": "first",
         "discard_on_8": true,
         "default_hint": "high",
-        "play_threshold": 0.9,
+        "play_threshold": 0.3,
+        "discard_threshold": 0.3,
         "consider": "all"
     }
 }

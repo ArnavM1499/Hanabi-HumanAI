@@ -121,7 +121,7 @@ def get_target(hint, hand, exl=None):
     for i in range(len(hand)):
         if hint.type == HINT_COLOR and hand[i][0] == hint.col and i not in exl:
             target = i
-        elif hint.type == HINT_NUMBER and hand[i][1] == hint.cnr and i not in exl:
+        elif hint.type == HINT_NUMBER and hand[i][1] == hint.num and i not in exl:
             target = i
     return target
 
@@ -131,7 +131,7 @@ def get_multi_target(hint, hand, knowledge, board, play_threshold, disc_threshol
     for i in range(len(hand)):
         if slot_playable_pct(knowledge[i], board) >= play_threshold:
             exl.append(i)
-    return get_target(hint, hand)
+    return get_target(hint, hand, exl)
 
 
 def hint_ambiguous(hint, hand, knowledge, board):
