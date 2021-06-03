@@ -32,6 +32,7 @@ class HardcodePlayer2(Player):
         self.action_classes = ["_execute", "_hint", "_discard"]
         self.wait_for_result = False
         self.discard_internal = False
+        self.partner_cache = True
 
         # TOFIX Hardcoded for 2 players
         self.partner_nr = 1 - self.pnr
@@ -39,7 +40,9 @@ class HardcodePlayer2(Player):
 
         # Records
         self.last_state = None
-        self.knowledge = None
+        self.knowledge = [
+            [cgf.COUNTS.copy() for _ in range(5)] for _ in range(self.card_nr)
+        ]
 
         self.index_play = []
         self.index_play_candidate = []
@@ -759,23 +762,18 @@ class HardcodePlayer2(Player):
     def _update_state(self, new_state, new_model):
 
         with timer("update state", self.timer):
-            # self.last_state = deepcopy(new_state)
             self.last_state = new_state
             new_knowledge = new_model.get_knowledge()
-            if self.knowledge:
-                merged = []
-                for old, new in zip(self.knowledge, new_knowledge):
-                    temp = []
-                    for i in range(5):
-                        temp.append([])
-                        for j in range(5):
-                            temp[-1].append(min(old[i][j], new[i][j]))
-                    merged.append(temp)
-                self.knowledge = merged
-            else:
-                # start of the game
-                self.knowledge = deepcopy(new_model.get_knowledge())
-                partner_hand = new_state.get_hands()[self.partner_nr]
-                for col, num in partner_hand:
-                    for k in self.knowledge:
-                        k[col][num - 1] = max(0, k[col][num - 1] - 1)
+            visible_cards = (
+                self.last_state.get_common_visible_cards()
+                + self.last_state.get_hands()[self.partner_nr]
+            )
+            knowledge_mask = [cgf.COUNTS.copy() for _ in range(5)]
+            for col, num in visible_cards:
+                knowledge_mask[col][num - 1] -= 1
+            for i, k in enumerate(new_knowledge):
+                for col in range(5):
+                    for num in range(5):
+                        self.knowledge[i][col][num] = min(
+                            k[col][num], knowledge_mask[col][num]
+                        )
