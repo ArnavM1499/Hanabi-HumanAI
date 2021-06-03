@@ -31,6 +31,7 @@ class HardcodePlayer2(Player):
         self.value_wrap = True
         self.action_classes = ["_execute", "_hint", "_discard"]
         self.wait_for_result = False
+        self.discard_internal = False
 
         # TOFIX Hardcoded for 2 players
         self.partner_nr = 1 - self.pnr
@@ -154,9 +155,12 @@ class HardcodePlayer2(Player):
 
             with timer("interpret hints", self.timer):
 
-                hinted_indices = new_state.get_hinted_indices()
-                assert hinted_indices != []
-                hinted_indices.sort()
+                if self.discard_internal:
+                    hinted_indices = list(range(self.card_nr))
+                else:
+                    hinted_indices = new_state.get_hinted_indices()
+                    assert hinted_indices != []
+                    hinted_indices.sort()
 
                 (
                     self.index_play,
@@ -168,10 +172,10 @@ class HardcodePlayer2(Player):
                     knowledge,
                     board,
                     trash,
-                    self.index_play,
-                    self.index_play_candidate,
-                    self.index_discard,
-                    self.index_protect,
+                    [] if self.discard_internal else self.index_play,
+                    [] if self.discard_internal else self.index_play_candidate,
+                    [] if self.discard_internal else self.index_discard,
+                    [] if self.discard_internal else self.index_protect,
                 )
 
                 if self.debug:
