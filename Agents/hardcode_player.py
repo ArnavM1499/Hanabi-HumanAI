@@ -13,8 +13,8 @@ from Agents.player import Player, Action
 def timer(name, debug=True):
     start = time()
     yield
-    diff = time() - start
     if debug:
+        diff = time() - start
         print("{} costs {:.4f} ms".format(name, diff * 1000))
 
 
@@ -84,6 +84,12 @@ class HardcodePlayer2(Player):
         self.partner_play_order = "newest"
         self.partner_samples = 10
 
+        self.settings_score_badplay = -1
+        self.settings_score_verybadplay = -2
+        self.settings_score_discardable = 0.5
+        self.settings_score_playable = 0.1
+        self.settings_score_badplaycandidate = -0.1
+
         for k, v in kwargs.items():
             setattr(self, k, v)
 
@@ -136,6 +142,7 @@ class HardcodePlayer2(Player):
 
         if self.self_card_count:
             if self.wait_for_result:
+                # The card just played/discarded by itself in the previous turn
                 self.wait_for_result = False
                 col, num = new_state.get_card_changed()
                 for k in self.knowledge:
@@ -143,7 +150,7 @@ class HardcodePlayer2(Player):
             elif action.type in [cgf.DISCARD, cgf.PLAY]:
                 partner_hand = new_state.get_hands()[self.partner_nr]
                 if len(partner_hand) == 5:
-                    col, num = new_state.get_hands()[self.partner_nr][-1]
+                    col, num = partner_hand[-1]
                     for k in self.knowledge:
                         k[col][num - 1] = max(0, k[col][num - 1] - 1)
 
@@ -160,10 +167,13 @@ class HardcodePlayer2(Player):
 
                 if self.discard_internal:
                     hinted_indices = list(range(self.card_nr))
+                    self.index_play = []
+                    self.index_play_candidate = []
+                    self.index_discard = []
+                    self.index_protect = []
                 else:
-                    hinted_indices = new_state.get_hinted_indices()
+                    hinted_indices = sorted(new_state.get_hinted_indices())
                     assert hinted_indices != []
-                    hinted_indices.sort()
 
                 (
                     self.index_play,
@@ -175,10 +185,10 @@ class HardcodePlayer2(Player):
                     knowledge,
                     board,
                     trash,
-                    [] if self.discard_internal else self.index_play,
-                    [] if self.discard_internal else self.index_play_candidate,
-                    [] if self.discard_internal else self.index_discard,
-                    [] if self.discard_internal else self.index_protect,
+                    self.index_play,
+                    self.index_play_candidate,
+                    self.index_discard,
+                    self.index_protect,
                 )
 
                 if self.debug:
@@ -241,31 +251,35 @@ class HardcodePlayer2(Player):
                 if playable_pct[idx] > 0.8:
                     play.append(idx)
                     flag = True
-                elif discardable_pct[idx] > 0.98:
-                    discard.append(idx)
             for i, k in enumerate(knowledge):
                 need_protect = True
                 for col, num in cpf.get_possible(k):
                     if board[col][1] >= num:
                         need_protect = False
-                        if self.hint_to_protect:
-                            flag = True
+                        break
+                    else:
+                        for n in range(board[col][1] + 1, num):
+                            if trash.count((col, n)) == cgf.COUNTS[n - 1]:
+                                need_protect = False
+                                break
                 if need_protect:
                     self.index_protect.append(i)
 
             if not flag:
                 newest = max(hinted_indices, key=self.self_hint_order)
                 card = knowledge[newest]
-                if playable_pct[idx] > 0:
+                if playable_pct[idx] > 0.1:
                     play.append(newest)
+                    for idx in hinted_indices:
+                        if idx == newest:
+                            continue
+                        card = knowledge[idx]
+                        if playable_pct[idx] > 0.1:
+                            play_candidate.append(idx)
+                elif discardable_pct[idx] > 0.9:
+                    discard.append(idx)
                 else:
                     protect.append(newest)
-                for idx in hinted_indices:
-                    if idx == newest:
-                        continue
-                    card = knowledge[idx]
-                    if playable_pct[idx] > 0:
-                        play_candidate.append(idx)
 
             for i, card in enumerate(knowledge):
                 if playable_pct[i] > 0.98:
@@ -274,25 +288,26 @@ class HardcodePlayer2(Player):
                     self.index_discard.append(i)
 
         with timer("interpret postprocess", self.timer):
-            play = {i for i in play if i < len(knowledge) and playable_pct[i] > 0.02}
-            play_candidate = {
+            play = [
+                i for i in range(len(knowledge)) if i in play and playable_pct[i] > 0.02
+            ]
+            play_candidate = [
                 i
-                for i in play_candidate
-                if i < len(knowledge) and playable_pct[i] > 0.02
-            }
-            discard = {
-                i for i in discard if i < len(knowledge) and discardable_pct[i] > 0.02
-            }
-            protect = {
-                i for i in protect if i < len(knowledge) and discardable_pct[i] > 0.5
-            }
+                for i in range(len(knowledge))
+                if i in play_candidate and playable_pct[i] > 0.02
+            ]
+            discard = [
+                i
+                for i in range(len(knowledge))
+                if i in discard and discardable_pct[i] > 0.02
+            ]
+            protect = [
+                i
+                for i in range(len(knowledge))
+                if i in protect and discardable_pct[i] < 0.5
+            ]
 
-        return (
-            sorted(play),
-            sorted(play_candidate),
-            sorted(discard),
-            sorted(protect),
-        )
+        return play, play_candidate, discard, protect
 
     def get_action(self, state, model):
         def _wrapper(value_dict, best=None):
@@ -335,22 +350,26 @@ class HardcodePlayer2(Player):
 
         # Pattern matcing [self._decide() in version 1]
         chosen_action = None
+        chosen_action_name = None
         for i, (func, action) in enumerate(self.decision_protocol):
             if func(self, state, model):
                 force = False
                 if action.endswith("_force"):
+                    force = True
                     action = action[:-6]
                 chosen_action = getattr(self, action)(force=force)
                 if self.debug:
                     print("executing pattern ", i)
-                print(chosen_action)
+                    print(chosen_action)
+                chosen_action_name = action
                 break
 
         # Default action
         if chosen_action is None:
             if self.debug:
                 print("Using Default action!")
-            chosen_action = getattr(self, self.action_classes[0])
+            chosen_action_name = self.action_classes[0]
+            chosen_action = getattr(self, chosen_action_name)
         # TODO change to other class for less agressive play
 
         if self.return_value:
@@ -366,8 +385,8 @@ class HardcodePlayer2(Player):
         if self.return_value:
             value_dict = chosen_action
             for cls in self.action_classes:
-                for k, v in getattr(self, cls)(force=True).items():
-                    if k not in value_dict.keys():
+                if cls != chosen_action_name:
+                    for k, v in getattr(self, cls)(force=True).items():
                         value_dict[k] = max(-1, v - 0.1)
             return _wrapper(value_dict, final_action)
         else:
@@ -395,7 +414,7 @@ class HardcodePlayer2(Player):
                     self.index_discard.append(idx)
 
         # play at risk
-        with timer("execute at risk"):
+        with timer("execute at risk", self.timer):
             risk_threshold = 0
             for turn, thresh in self.risk_play.items():
                 if turn >= self.turn:
@@ -418,7 +437,7 @@ class HardcodePlayer2(Player):
 
         # TODO add more conditions for more aggressive play
 
-        with timer("execute postprocess"):
+        with timer("execute postprocess", self.timer):
             if (
                 (self.return_value and not order) or not self.return_value
             ) and not force:
@@ -522,39 +541,32 @@ class HardcodePlayer2(Player):
         self, hands, predicted_play, predicted_play_candidate, predicted_discard
     ):
 
-        # having playable cards in play list is GOOD +3pt
-        # having unplayable cards in play list is BAD -2pt
-        # having unplayable card at the front of play list is VERY BAD -5pt
-        # having discardable cards in discard list is GOOD +1pt
-        # having playable cards in play candidates is GOOD +1pt
-        # having unplayable cards in play candidates is BAD -0.8pt
-
-        with timer("evaluate partner"):
+        with timer("evaluate partner", self.timer):
             board = self.last_state.get_board()
             trash = self.last_state.get_trash()
 
             score = 0
             for i in predicted_play:
                 if cpf.card_playable(hands[i], board):
-                    score += 3
+                    score += 1
                 else:
-                    score -= 2
+                    score += self.settings_score_badplay
             if predicted_play != [] and (
                 not cpf.card_playable(
                     hands[max(predicted_play, key=self.partner_play_order)], board
                 )
             ):
-                score -= 5
+                score += self.settings_score_verybadplay
 
             for i in predicted_play_candidate:
                 if cpf.card_playable(hands[i], board):
-                    score += 1
+                    score += self.settings_score_playable
                 else:
-                    score -= 0.8
+                    score += self.settings_score_badplaycandidate
 
             for i in predicted_discard:
                 if cpf.card_discardable(hands[i], board, trash):
-                    score += 1
+                    score += self.settings_score_discardable
 
         return score
 
@@ -566,7 +578,7 @@ class HardcodePlayer2(Player):
         )
 
         if self.partner_card_count:
-            with timer("processs partner card count"):
+            with timer("processs partner card count", self.timer):
                 possible_self_hands = list(
                     product(*[cpf.get_possible(k) for k in self.knowledge])
                 )
@@ -777,3 +789,22 @@ class HardcodePlayer2(Player):
                         self.knowledge[i][col][num] = min(
                             k[col][num], knowledge_mask[col][num]
                         )
+
+    def set_from_key(self, key=0):
+        print("using key:", key)
+        pos_badplay = [-2, -1.5, -1, -0.5]
+        pos_verybadplay = [-3, -2, -1]
+        pos_discardable = [1, 0.8, 0.5, 0.2, 0]
+        pos_playable = [0.8, 0.5, 0.2, 0]
+        pos_badplaycandidate = [0, -0.1, -0.3]
+        tot = 4 * 3 * 5 * 4 * 3
+        key = key % tot
+        self.settings_score_badplay = pos_badplay[key % 4]
+        key = key // 4
+        self.settings_score_verybadplay = pos_verybadplay[key % 3]
+        key = key // 3
+        self.settings_score_discardable = pos_discardable[key % 5]
+        key = key // 5
+        self.settings_score_playable = pos_playable[key % 4]
+        key = key // 4
+        self.settings_score_badplaycandidate = pos_badplaycandidate[key % 3]

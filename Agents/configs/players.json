@@ -1,15 +1,12 @@
 {
   "00001": {
     "player_class": "HardcodePlayer2",
-    "debug": true,
+    "debug": false,
     "self_card_count": true,
     "partner_card_count": true,
     "self_play_order": "newest",
     "self_discard_order": "oldest",
     "decision_permutation": 1,
-    "risk_play": {
-      "30": 1
-    },
     "return_value": true,
     "value_wrap": true
   },
