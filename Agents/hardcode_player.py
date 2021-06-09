@@ -64,6 +64,10 @@ class HardcodePlayer2(Player):
         self.decision_protocol = [
             (lambda p, s, m: p.index_play != [] and p.partner_play != [], "_execute"),
             (lambda p, s, m: p.index_play != [] and s.get_num_hints() > 1, "_execute"),
+            # (
+            #     lambda p, s, m: p.partner_play == [] and s.get_num_hints() > 4,
+            #     "_hint_force",
+            # ),
             (lambda p, s, m: p.partner_play == [] and s.get_num_hints() > 0, "_hint"),
             (lambda p, s, m: p.index_play == [], "_hint"),
             (lambda p, s, m: p.index_discard != [], "_discard"),
@@ -84,10 +88,9 @@ class HardcodePlayer2(Player):
         self.partner_play_order = "newest"
         self.partner_samples = 10
 
-        self.settings_score_badplay = -1
+        self.settings_score_badplay = -2
         self.settings_score_verybadplay = -2
-        self.settings_score_discardable = 0.5
-        self.settings_score_playable = 0.1
+        self.settings_score_playable = 0.8
         self.settings_score_badplaycandidate = -0.1
 
         for k, v in kwargs.items():
@@ -475,9 +478,8 @@ class HardcodePlayer2(Player):
             value_dict = {}
             for i, action in enumerate(order):
                 value_dict[action] = 1 - 0.1 * i
-            for action in self.last_state.get_valid_actions():
-                if action.type == cgf.PLAY and action not in value_dict.keys():
-                    value_dict[action] = -1
+            for i in range(len(self.knowledge)):
+                value_dict.setdefault(Action(cgf.PLAY, cnr=i), -1)
             return value_dict
 
     def _discard(self, force=False):
@@ -543,7 +545,6 @@ class HardcodePlayer2(Player):
 
         with timer("evaluate partner", self.timer):
             board = self.last_state.get_board()
-            trash = self.last_state.get_trash()
 
             score = 0
             for i in predicted_play:
@@ -563,10 +564,6 @@ class HardcodePlayer2(Player):
                     score += self.settings_score_playable
                 else:
                     score += self.settings_score_badplaycandidate
-
-            for i in predicted_discard:
-                if cpf.card_discardable(hands[i], board, trash):
-                    score += self.settings_score_discardable
 
         return score
 
@@ -792,6 +789,8 @@ class HardcodePlayer2(Player):
 
     def set_from_key(self, key=0):
         print("using key:", key)
+
+        """search for evaluation parameter
         pos_badplay = [-2, -1.5, -1, -0.5]
         pos_verybadplay = [-3, -2, -1]
         pos_discardable = [1, 0.8, 0.5, 0.2, 0]
@@ -808,3 +807,4 @@ class HardcodePlayer2(Player):
         self.settings_score_playable = pos_playable[key % 4]
         key = key // 4
         self.settings_score_badplaycandidate = pos_badplaycandidate[key % 3]
+        """

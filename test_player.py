@@ -17,8 +17,8 @@ def run_single(
     file_name,
     player="00001",
     player2=None,
-    key=0,
-    key2=0,
+    key=None,
+    key2=None,
     clean=False,
 ):
 
@@ -38,14 +38,14 @@ def run_single(
         P2 = player2
     else:
         assert False
-    if hasattr(P1, "set_from_key"):
+    if (key is not None) and hasattr(P1, "set_from_key"):
         P1.set_from_key(key)
     else:
-        print("player does support set from key")
-    if hasattr(P2, "set_from_key"):
+        print("player1 key not set")
+    if (key2 is not None) and hasattr(P2, "set_from_key"):
         P2.set_from_key(key2)
     else:
-        print("player2 does support set from key")
+        print("player2 key not set")
     G = Game([P1, P2], file_name)
     score = G.run(100)
     hints = G.hints
@@ -86,7 +86,7 @@ def record_game(
 
 
 def test_player(
-    player="00001", player2=None, iters=5000, print_details=False, key=0, key2=0
+    player="00001", player2=None, iters=5000, print_details=False, key=None, key2=None
 ):
     p = Pool(min(16, iters))
     res = p.starmap_async(
@@ -128,10 +128,10 @@ def test_player(
     return iters, avg, smin, smax, smid, smod, hints, hits, turns
 
 
-def sequential_test(player, player2=None, iters=5000):
-    random.seed(0)
+def sequential_test(player, player2=None, iters=5000, seed=0):
+    random.seed(seed)
     for i in range(iters):
-        run_single("sink_{}.csv".format(i), player, player, True)
+        run_single("sink_{}.csv".format(i), player, player, clean=True)
 
 
 def parameter_search(
