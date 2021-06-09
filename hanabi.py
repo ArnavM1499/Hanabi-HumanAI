@@ -68,6 +68,7 @@ class Game(object):
             self.trash,
             self.played,
             self.board,
+            self.hits,
             self.valid_actions(),
             self.hints,
             self.knowledge,

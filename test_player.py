@@ -19,6 +19,7 @@ def run_single(
 ):
 
     print("running hanabi game on ", player, " and ", player2 if player2 else "itself")
+    # print(player_pool)
     if not player2:
         player2 = player
     P1 = Player.from_dict("Alice", 0, player_pool[player])
@@ -62,7 +63,7 @@ def record_game(
         )
 
 
-def test_player(player="00001", player2=None, iters=5000):
+def test_player(player="00001", player2=None, iters=1000):
     p = Pool(16)
     res = p.starmap_async(
         run_single,
@@ -89,7 +90,7 @@ def test_player(player="00001", player2=None, iters=5000):
     )
 
 
-def sequential_test(player, player2=None, iters=5000):
+def sequential_test(player, player2=None, iters=1):
     random.seed(0)
     for i in range(iters):
         run_single("sink_{}.csv".format(i), player, player, True)
