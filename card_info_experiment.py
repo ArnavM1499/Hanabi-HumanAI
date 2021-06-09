@@ -2,6 +2,7 @@ from Agents.cclr_player import CardCountingLeftRightPlayer
 from Agents.fully_intentional_player import FullyIntentionalPlayer
 from Agents.hardcode_player import HardcodePlayer2
 from Agents.experimental_player import ExperimentalPlayer
+from Agents.value_player import ValuePlayer
 import pickle
 import hanabi
 import numpy as np
@@ -11,11 +12,11 @@ file_name = "blank.csv"
 pickle_file_name = "card_info"
 pickle_file = open(pickle_file_name, "wb")
 
-for i in range(1):
-	P1 = HardcodePlayer2("P1", 0)
-	P2 = HardcodePlayer2("P2", 1)
+for i in range(100):
+	P1 = ExperimentalPlayer("P1", 0)
+	P2 = ExperimentalPlayer("P2", 1)
 	G = hanabi.Game([P1, P2], file_name, pickle_file)
-	Result = G.run(20)
+	Result = G.run(100)
 
 pickle_file.close()
 
@@ -94,6 +95,8 @@ def summarize_list(L, name):
 	print("        # of times recorded:", len(L))
 	print("        mean:", np.mean(L))
 	print("        variance:", np.var(L))
+	print("        max:", np.max(L))
+	print("        min:", np.min(L))
 
 summarize_list(PlayDiscardDistances, "Moves before play/discard")
 summarize_list(HintDistances, "Moves from draw till hint")
