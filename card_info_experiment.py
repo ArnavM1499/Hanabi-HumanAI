@@ -1,6 +1,6 @@
 from Agents.cclr_player import CardCountingLeftRightPlayer
 from Agents.fully_intentional_player import FullyIntentionalPlayer
-from Agents.hardcode_player import HardcodePlayer
+from Agents.hardcode_player import HardcodePlayer2
 from Agents.experimental_player import ExperimentalPlayer
 import pickle
 import hanabi
@@ -11,11 +11,11 @@ file_name = "blank.csv"
 pickle_file_name = "card_info"
 pickle_file = open(pickle_file_name, "wb")
 
-for i in range(100):
-	P1 = HardcodePlayer("P1", 0)
-	P2 = HardcodePlayer("P2", 1)
+for i in range(1):
+	P1 = HardcodePlayer2("P1", 0)
+	P2 = HardcodePlayer2("P2", 1)
 	G = hanabi.Game([P1, P2], file_name, pickle_file)
-	Result = G.run(100)
+	Result = G.run(20)
 
 pickle_file.close()
 
@@ -28,6 +28,12 @@ new_id = 0
 PlayDiscardDistances = []
 HintDistances = []
 
+def try_pickle(file):
+	try:
+		return pickle.load(file)
+	except:
+		return None
+
 def unequal(X, Y):
 	return X != Y
 
@@ -37,8 +43,6 @@ with open(pickle_file_name, 'rb') as f:
 	move_num = 0
 
 	while(row != None):
-		print(move_num, len(PlayDiscardDistances), len(HintDistances))
-
 		if row[0] == "Action" and row[1].get_current_player() == 0:
 			move_num += 1
 
@@ -51,7 +55,7 @@ with open(pickle_file_name, 'rb') as f:
 				newPosToCard = dict()
 				PlayDiscardDistances.append(move_num - CardDrawnMove[PosToCard[action.cnr]])
 
-				for idx in PosToCard:
+				for idx in PosToCard.copy():
 					if idx == action.cnr:
 						del CardToPos[PosToCard[idx]]
 						del PosToCard[idx]
