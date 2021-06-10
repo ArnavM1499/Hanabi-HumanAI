@@ -13,21 +13,13 @@ pickle_file_name = "card_info"
 pickle_file = open(pickle_file_name, "wb")
 
 for i in range(100):
-	P1 = ExperimentalPlayer("P1", 0)
-	P2 = ExperimentalPlayer("P2", 1)
+	P1 = ValuePlayer("P1", 0)
+	P2 = ValuePlayer("P2", 1)
+	pickle.dump(["NEW"], pickle_file)
 	G = hanabi.Game([P1, P2], file_name, pickle_file)
 	Result = G.run(100)
 
 pickle_file.close()
-
-CardDrawnMove = dict()
-CardPrevKnowledge = dict()
-PosToCard = dict()
-CardToPos = dict()
-new_id = 0
-
-PlayDiscardDistances = []
-HintDistances = []
 
 def try_pickle(file):
 	try:
@@ -41,9 +33,19 @@ def unequal(X, Y):
 with open(pickle_file_name, 'rb') as f:
 	row = try_pickle(f)
 
-	move_num = 0
+	PlayDiscardDistances = []
+	HintDistances = []
 
 	while(row != None):
+		if row[0] == "NEW":
+			move_num = 0
+
+			CardDrawnMove = dict()
+			CardPrevKnowledge = dict()
+			PosToCard = dict()
+			CardToPos = dict()
+			new_id = 0
+
 		if row[0] == "Action" and row[1].get_current_player() == 0:
 			move_num += 1
 
