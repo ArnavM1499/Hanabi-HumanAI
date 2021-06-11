@@ -81,6 +81,7 @@ class GameState(object):
         trash,
         played,
         board,
+        hits,
         valid_actions,
         num_hints,
         all_knowledge,
@@ -92,6 +93,7 @@ class GameState(object):
         self.trash = trash
         self.played = played
         self.board = board
+        self.hits = hits
         self.valid_actions = valid_actions
         self.num_hints = num_hints
         self.all_knowledge = all_knowledge
@@ -112,6 +114,9 @@ class GameState(object):
 
     def get_board(self):
         return self.board
+
+    def get_hits(self):
+        return self.hits
 
     def get_valid_actions(self):
         return self.valid_actions

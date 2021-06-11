@@ -23,6 +23,7 @@ def run_single(
 ):
 
     print("running hanabi game on ", player, " and ", player2 if player2 else "itself")
+    # print(player_pool)
     if not player2:
         player2 = player
         key2 = key
