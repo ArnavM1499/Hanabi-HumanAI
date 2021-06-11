@@ -10,6 +10,7 @@ from Agents.player import Action
 # comment this line out when running multithreaded tests
 # random.seed(0)  # for reproducing results
 
+
 def format_card(colnum):
     col, num = colnum
     return COLORNAMES[col] + " " + str(num)
@@ -25,7 +26,7 @@ class Game(object):
         self.hits = 3
         self.hints = 8
         self.current_player = 0
-        self.board = list(map(lambda c: (c, 0), ALL_COLORS))
+        self.board = [(c, 0) for c in ALL_COLORS]
         self.played = []
         self.deck = make_deck()
         self.extra_turns = 0
@@ -103,9 +104,8 @@ class Game(object):
         if not self.deck:
             return
 
-        self.hands[pnr].append(self.deck[0])
+        self.hands[pnr].append(self.deck.pop())
         self.knowledge[pnr].append(initial_knowledge())
-        del self.deck[0]
 
     def perform(self, action):
         hint_indices = []
@@ -264,12 +264,14 @@ class Game(object):
 
     def run(self, turns=-1):
         self.turn = 1
-        while not self.done() and (turns < 0 or self.turn < turns):
+        while (not self.done()) and (turns < 0 or self.turn < turns):
             self.turn += 1
             self.single_turn()
         print("Game done, hits left:", self.hits)
         points = self.score()
         print("Points:", points)
+        print("Board:", self.board)
+        print("Hands:", self.hands)
         self.data_file.close()
         return points
 
@@ -282,7 +284,7 @@ class Game(object):
         action = self.players[self.current_player].get_action(game_state, player_model)
 
         # Data collection
-        if self.pickle_file != None:
+        if self.pickle_file:
             pickle.dump(["Action", game_state, player_model, action], self.pickle_file)
 
         # Process action
@@ -307,8 +309,10 @@ class Game(object):
             hint_indices, card_changed = self.perform(action)
 
             for p in self.players:
-                game_state = self._make_game_state(p.get_nr(), hint_indices, card_changed)
-                player_model = self._make_player_model(p.get_nr())     
+                game_state = self._make_game_state(
+                    p.get_nr(), hint_indices, card_changed
+                )
+                player_model = self._make_player_model(p.get_nr())
 
                 p.inform(
                     action,
@@ -318,8 +322,18 @@ class Game(object):
                 )
 
                 # Data collection
-                if self.pickle_file != None:
-                    pickle.dump(["Inform", game_state, player_model, action, p.get_nr(), self.current_player], self.pickle_file)   
+                if self.pickle_file:
+                    pickle.dump(
+                        [
+                            "Inform",
+                            game_state,
+                            player_model,
+                            action,
+                            p.get_nr(),
+                            self.current_player,
+                        ],
+                        self.pickle_file,
+                    )
 
             self.current_player += 1
             self.current_player %= len(self.players)
