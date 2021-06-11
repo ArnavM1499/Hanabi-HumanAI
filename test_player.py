@@ -137,10 +137,14 @@ def sequential_test(player, player2=None, iters=5000, seed=0):
 def parameter_search(
     player, max_key, iters=1000, result_file="search_result.json", pop_size=12
 ):
+    if os.path.isfile(result_file):
+        table = json.load(open(result_file, "r"))
+        print("loaded {} entries from cached table".format(len(table)))
+    else:
+        table = {}
     mask_size = 1
     while 2 ** mask_size < max_key:
         mask_size += 1
-    table = {}
     keys = random.sample(list(range(max_key)), pop_size)
     for i in range(iters):
         scores = []

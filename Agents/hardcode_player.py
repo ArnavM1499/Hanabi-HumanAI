@@ -64,10 +64,6 @@ class HardcodePlayer2(Player):
         self.decision_protocol = [
             (lambda p, s, m: p.index_play != [] and p.partner_play != [], "_execute"),
             (lambda p, s, m: p.index_play != [] and s.get_num_hints() > 1, "_execute"),
-            # (
-            #     lambda p, s, m: p.partner_play == [] and s.get_num_hints() > 4,
-            #     "_hint_force",
-            # ),
             (lambda p, s, m: p.partner_play == [] and s.get_num_hints() > 0, "_hint"),
             (lambda p, s, m: p.index_play == [], "_hint"),
             (lambda p, s, m: p.index_discard != [], "_discard"),
@@ -76,6 +72,10 @@ class HardcodePlayer2(Player):
                 "_execute_force",
             ),
             (lambda p, s, m: True, "_execute"),
+            # (
+            #     lambda p, s, m: p.partner_play == [] and s.get_num_hints() > 4,
+            #     "_hint_force",
+            # ),
         ]
         self.decision_permutation = 0
         self.risk_play = {0: 0.5, 5: 0, 12: 0.4, 30: 1}
@@ -99,7 +99,10 @@ class HardcodePlayer2(Player):
         if self.debug:
             pprint(self.__dict__)
 
-        # convert parameters
+        self._convert_parameter()
+
+    def _convert_parameter(self):
+
         with timer("coverting parameters", self.timer):
             order = range(len(self.decision_protocol))
             D = permutations(order)
@@ -119,7 +122,9 @@ class HardcodePlayer2(Player):
             }
             for attr in dir(self):
                 if attr.endswith("order"):
-                    setattr(self, attr, orders[getattr(self, attr)])
+                    value = getattr(self, attr)
+                    if isinstance(value, str):
+                        setattr(self, attr, orders[getattr(self, attr)])
 
     def inform(self, action, player, new_state, new_model):
 
@@ -419,7 +424,7 @@ class HardcodePlayer2(Player):
         # play at risk
         with timer("execute at risk", self.timer):
             risk_threshold = 0
-            for turn, thresh in self.risk_play.items():
+            for turn, thresh in sorted(self.risk_play.items()):
                 if turn >= self.turn:
                     risk_threshold = 1 - thresh
                     break
@@ -675,7 +680,11 @@ class HardcodePlayer2(Player):
                 except ZeroDivisionError:
                     pass
 
-            score = sum(scores) / len(scores)
+            # TOFIX
+            if scores != []:
+                score = sum(scores) / len(scores)
+            else:
+                score = baseline
 
             if self.debug:
                 print("Action: ", str(action), " evaluates to: ")
@@ -808,3 +817,26 @@ class HardcodePlayer2(Player):
         key = key // 4
         self.settings_score_badplaycandidate = pos_badplaycandidate[key % 3]
         """
+
+        pos_risk = [
+            {5: 0, 12: 0.4, 30: 1},
+            {5: 0.5, 12: 0, 30: 1},
+            {10: 0.6, 30: 0},
+            {30: 1},
+            {30: 0},
+        ]
+        pos_order = ["newest", "oldest", "random"]
+        tot = 5040 * (3 ** 3) * 2 * 5
+        key = key % tot
+        self.risk_play = pos_risk[key % 5]
+        key = key // 5
+        self.self_card_count = self.partner_card_count = bool(key % 2)
+        key = key // 2
+        self.self_play_order = self.partner_play_order = pos_order[key % 3]
+        key = key // 3
+        self.self_discard_order = pos_order[key % 3]
+        key = key // 3
+        self.self_hint_order = pos_order[key % 3]
+        key = key // 3
+        self.decision_permutation = key
+        self._convert_parameter()
