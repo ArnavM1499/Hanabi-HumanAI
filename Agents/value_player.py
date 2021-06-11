@@ -69,27 +69,48 @@ class ValuePlayer(Player):
         self.state = None
         self.model = None
 
+        # whether we return a dictionary of all actions/values, or just the best action
+        self.get_action_values = False
+
         # parameters and default values
         self.hint_weight = 1000.0
-        # discard_type and default_hint don't do anything at the moment; not sure how to implement them
-        # with this approach except for multiplying by a bonus weight (which feels like cheating)
-        self.discard_type = "first"
+
+        # left, right, best
+        self.play_preference = "best"
+        self.discard_preference = "best"
+
+        # doesn't actually do anything at the moment; still trying to parameterize
         self.default_hint = "high"
 
+        # card counting
         self.card_count = True
         self.card_count_partner = True
-        self.get_action_values = False
+
+        # multiplier for low confidence (i.e. below threshold) plays/discards
+        self.play_low_multiplier = 0.1
+        self.discard_low_multiplier = 0.5
         self.play_threshold = 0.95
         self.discard_threshold = 0.5
+
+        # how much we like playing, discarding, hinting in general
         self.play_bias = 1.0
         self.disc_bias = 0.7
         self.hint_bias = 0.9
+
+        # if dynamic bias is true, then hint and play biases are further multiplied
+        # by the following values as the game goes on
+        self.dynamic_bias = True
+
+        # [0 hints left, 1 hint, 2 hint, etc.]
         self.hint_biases = [0, 0.6, 0.7, 0.8, 0.9, 0.95, 1.0, 1.0, 1.0]
+
+        # [0 lives left, 1 life, etc.]
         self.play_biases = [0, 0.7, 0.9, 1.0]
         # TODO: make a function for discard risk
+
+        # default when dynamic bias is off
         self.hint_risk_weight = 1.0
         self.play_risk_weight = 1.0
-        self.dynamic_bias = True
         for k, v in kwargs.items():
             setattr(self, k, v)
 
@@ -121,23 +142,31 @@ class ValuePlayer(Player):
         pct = slot_playable_pct(
                     self.weighted_knowledge[action.cnr], self.state.get_board()
                 )
+        if self.play_preference == "left":
+            pct *= ([1.2, 1.1, 1.0, 0.9, 0.8][action.cnr])
+        elif self.play_preference == "right":
+            pct *= ([0.8, 0.9, 1.0, 1.1, 1.2][action.cnr])
         if pct > self.play_threshold:
             return pct
         else:
             # playing low-confidence is *really bad*, so we need to multiply by something small
-            return pct * 0.1
+            return pct * self.play_low_multiplier
 
     def _eval_discard(self, action):
         assert(action.type == DISCARD)
         pct = slot_discardable_pct(
                     self.weighted_knowledge[action.cnr], self.state.get_board(), self.state.get_trash()
                 )
+        if self.discard_preference == "left":
+            pct *= ([1.2, 1.1, 1.0, 0.9, 0.8][action.cnr])
+        elif self.discard_preference == "right":
+            pct *= ([0.8, 0.9, 1.0, 1.1, 1.2][action.cnr])
         if pct > self.discard_threshold:
             return pct
         else:
             # discarding low-confidence isn't as bad as low-confidence play, so this should be higher than
             # whatever value we use in low confidence play
-            return pct * 0.5
+            return pct * self.discard_low_multiplier
 
     def _eval_hint(self, action):
         assert(action.type in [HINT_COLOR, HINT_NUMBER])

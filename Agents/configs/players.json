@@ -14,8 +14,8 @@
         "discard_type": "first",
         "discard_on_8": true,
         "default_hint": "high",
-        "play_threshold": 0.3,
-        "discard_threshold": 0.3,
+        "play_threshold": 0.9,
+        "discard_threshold": 0.5,
         "consider": "all"
     }
 }

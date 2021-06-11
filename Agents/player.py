@@ -52,6 +52,12 @@ class Player(object):
         self.pnr = pnr
         self.explanation = []
 
+    @staticmethod
+    def from_dict(name, pnr, json_dict):
+        json_dict["name"] = name
+        json_dict["pnr"] = pnr
+        return getattr(Agents, json_dict["player_class"])(**json_dict)
+
     def get_nr(self):
         return self.pnr
 

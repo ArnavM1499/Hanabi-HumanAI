@@ -7,6 +7,7 @@ import random
 import time
 from hanabi import Game
 from Agents.player import Player
+from Agents.value_player import ValuePlayer
 
 player_pool = json.load(open("Agents/configs/players.json"))
 
@@ -18,7 +19,7 @@ def run_single(
     clean=False,
 ):
 
-    print("running hanabi game on ", player, " and ", player2 if player2 else "itself")
+    # print("running hanabi game on ", player, " and ", player2 if player2 else "itself")
     # print(player_pool)
     if not player2:
         player2 = player
@@ -32,6 +33,60 @@ def run_single(
     if clean:
         os.remove(file_name)
     return (score, hints, hits, turns)
+
+
+def from_param_dict(file_name, dict):
+    dict["pnr"] = 0
+    dict["name"] = "Alice"
+    p1 = ValuePlayer(**dict)
+    dict["pnr"] = 1
+    dict["name"] = "Bob"
+    p2 = ValuePlayer(**dict)
+    G = Game([p1, p2], file_name)
+    score = G.run(100)
+    os.remove(file_name)
+    return score
+
+
+params = {
+    "name": "Alice",
+    "hint_weight": 1000.0,
+    "discard_type": "first",
+    "default_hint": "high",
+    "card_count": True,
+    "card_count_partner": True,
+    "get_action_values": False,
+    "play_threshold": 0.95,
+    "discard_threshold": 0.5,
+    "play_bias": 1.0,
+    "disc_bias": 0.7,
+    "hint_bias": 0.9,
+    "hint_biases": [0, 0.6, 0.7, 0.8, 0.9, 0.95, 1.0, 1.0, 1.0],
+    "play_biases": [0, 0.7, 0.9, 1.0]
+}
+
+
+def test_param_config(config, iters=100):
+    p = Pool(16)
+    res = p.starmap_async(
+        from_param_dict,
+        [("sink_{}.csv".format(i), config) for i in range(iters)],
+    )
+    p.close()
+    ls = res.get()
+    print(sum(ls) / iters)
+    print(ls)
+
+
+def hc2():
+    test_param_config(params)
+
+
+def hc():
+    for i in range(100):
+        res = from_param_dict("xd", params)
+        if res < 3:
+            return
 
 
 def record_game(
@@ -63,7 +118,7 @@ def record_game(
         )
 
 
-def test_player(player="00001", player2=None, iters=1000):
+def test_player(player="00002", player2=None, iters=500):
     p = Pool(16)
     res = p.starmap_async(
         run_single,
@@ -88,6 +143,9 @@ def test_player(player="00001", player2=None, iters=1000):
             sum(results[1]) / iters, sum(results[2]) / iters, sum(results[3]) / iters
         )
     )
+    return sum(results[0]) / iters
+
+
 
 
 def sequential_test(player, player2=None, iters=1):
