@@ -13,8 +13,8 @@ pickle_file_name = "card_info"
 pickle_file = open(pickle_file_name, "wb")
 
 for i in range(100):
-	P1 = ValuePlayer("P1", 0)
-	P2 = ValuePlayer("P2", 1)
+	P1 = HardcodePlayer2("P1", 0)
+	P2 = HardcodePlayer2("P2", 1)
 	pickle.dump(["NEW"], pickle_file)
 	G = hanabi.Game([P1, P2], file_name, pickle_file)
 	Result = G.run(100)
