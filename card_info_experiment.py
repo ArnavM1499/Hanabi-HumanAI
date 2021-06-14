@@ -12,7 +12,7 @@ file_name = "blank.csv"
 pickle_file_name = "card_info"
 pickle_file = open(pickle_file_name, "wb")
 
-for i in range(100):
+for i in range(1):
 	P1 = HardcodePlayer2("P1", 0)
 	P2 = HardcodePlayer2("P2", 1)
 	pickle.dump(["NEW"], pickle_file)
@@ -52,6 +52,8 @@ with open(pickle_file_name, 'rb') as f:
 			game_state = row[1]
 			player_model = row[2]
 			action = row[3]
+
+			print(np.array(player_model.get_knowledge()))
 
 			# Shift positions accordingly if a card was played or discarded
 			if action.type in [hanabi.PLAY, hanabi.DISCARD]:
