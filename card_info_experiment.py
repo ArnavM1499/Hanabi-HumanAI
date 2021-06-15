@@ -53,7 +53,7 @@ with open(pickle_file_name, 'rb') as f:
 			player_model = row[2]
 			action = row[3]
 
-			print(np.array(player_model.get_knowledge()))
+			print(np.array(game_state.get_hands()))
 
 			# Shift positions accordingly if a card was played or discarded
 			if action.type in [hanabi.PLAY, hanabi.DISCARD]:
