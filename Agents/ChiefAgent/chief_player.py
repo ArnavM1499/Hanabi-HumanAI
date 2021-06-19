@@ -18,10 +18,9 @@ for i in range(5):
 # Note: hand is formmated as [(color, number)] - can use indices for color and indices + 1 for number
 
 class Sample(object):
-	def __init__(self, hand, conditional_distrib, first_usage):
+	def __init__(self, hand, conditional_distrib):
 		self.hand = hand
 		self.conditional_distrib = conditional_distrib
-		self.first_usage = first_usage
 
 	def consistent(self, knowledge):
 		for i, card in enumerate(self.hand):
@@ -35,15 +34,18 @@ class ChiefPlayer(Player):
 		self.name = name
 		self.pnr = pnr
 		self.move_tracking_table = pd.DataFrame(data=STARTING_COLUMNS_MOVETRACKING)
-		self.move_tracking_table.set_index("move_idx")
+		self.move_tracking_table = self.move_tracking_table.set_index("move_idx")
 		self.player_pool = PlayerPool("agent_pool.json")
 		self.card_ids = []
 		self.new_card_id = 0
 		self.move_idx = 0
 		self.store_agent_copies_flag = False
 
-	def get_action(self, game_state, player_model, for_testing_only=False):
-		action = self.get_action_helper(game_state, player_model)
+	def get_action(self, game_state, player_model, for_testing_only=False, action_default=None):
+		if action_default is None:
+			action = self.get_action_helper(game_state, player_model)
+		else:
+			action = action_default
 
 		# code for shifting card ids for keeping track of positions in case we play/discard
 		# this is used for our agents which are meant to model the teammate's point of view
@@ -68,8 +70,6 @@ class ChiefPlayer(Player):
 	def inform(self, action, player, game_state, player_model):
 		new_row = dict()
 
-		new_row["move_idx"] = self.move_idx
-
 		new_row["move"] = action_to_key(action)
 
 		modified_game_state = 
@@ -79,15 +79,6 @@ class ChiefPlayer(Player):
 		new_row["card ids"] = self.card_ids
 		new_row["hand knowledge"] = player_model.get_knowledge()
 
-		# Generate samples with corresponding conditionals
-
-
-		# generate average conditional
-		
-
-		# get prior using the average conditoinal and previous prior if available
-
-
 		# store agent copies if flagged
 		if self.store_agent_copies_flag:
 			self.store_agent_copies_flag = False
@@ -95,9 +86,30 @@ class ChiefPlayer(Player):
 		else:
 			new_row["agent_copies"] = None
 
+		# add incomplete row to make use of functions below
+		self.move_tracking_table.append(pd.Series(data=new_row, name=self.move_idx)) # https://stackoverflow.com/questions/39998262/append-an-empty-row-in-dataframe-using-pandas
 
+		# Generate samples with corresponding conditionals
+		current_row = self.move_tracking_table.loc[self.move_idx]
+		copies = new_row["agent_copies"]
+		hand_sampler(current_row, NUM_SAMPLES, copies)
 
+		# generate average conditional
+		sample_conditionals = [sample.conditional_distrib for sample in current_row["generated samples"]]
+		new_conditional = np.mean(np.array(sample_conditionals), axis=0)
+		new_conditional = makeprob(new_conditional)
+		current_row["conditional distribution"] = new_conditional
+		
+		# get prior using the average conditoinal and previous prior if available
+		if self.move_idx == 0:
+			current_row["prior distribution"] = new_conditional
+		else:
+			prev_row = self.move_tracking_table.loc[self.move_idx - 1]
+			prior = prev_row["prior distribution"]
+			updated_prior = new_conditional*prior
+			current_row["prior distribution"] = make_prob(updated_prior)
 
+		self.move_idx += 1
 
 
 	def action_to_key(action):
@@ -198,8 +210,8 @@ class ChiefPlayer(Player):
 
 
 			# use hand_sampler to get new samples where needed
-			num_possibilities = np.prod(np.sum(current_row["hand knowledge"], axis=(1,2)))
-			agent_copies = hand_sampler(current_row, min(NUM_SAMPLES, num_possibilities)) # If NUM_SAMPLES > number possible, just cap it
+			### num_possibilities = np.prod(np.sum(current_row["hand knowledge"], axis=(1,2)))
+			agent_copies = hand_sampler(current_row, NUM_SAMPLES)
 
 
 			# compute new average conditional distribution
