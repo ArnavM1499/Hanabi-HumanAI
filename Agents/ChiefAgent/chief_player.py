@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 import random
 
-STARTING_COLUMNS_MOVETRACKING = {"move": [], "observable game state":[], "card ids":[], "hand knowledge":[], "prior distribution":[], "conditional distribution":[], "generated samples":[], "agent state copies"[]}
+STARTING_COLUMNS_MOVETRACKING = {"move_idx":[], "move": [], "observable game state":[], "card ids":[], "hand knowledge":[], "prior distribution":[], "conditional distribution":[], "generated samples":[], "agent state copies"[]}
 NUM_SAMPLES = 10
 
 CardChoices = []
@@ -35,14 +35,73 @@ class ChiefPlayer(Player):
 		self.name = name
 		self.pnr = pnr
 		self.move_tracking_table = pd.DataFrame(data=STARTING_COLUMNS_MOVETRACKING)
-		self.move_tracking_table.set_index("move")
+		self.move_tracking_table.set_index("move_idx")
 		self.player_pool = PlayerPool("agent_pool.json")
+		self.card_ids = []
+		self.new_card_id = 0
+		self.move_idx = 0
+		self.store_agent_copies_flag = False
 
-	def get_action(self, game_state, player_model):
+	def get_action(self, game_state, player_model, for_testing_only=False):
+		action = self.get_action_helper(game_state, player_model)
+
+		# code for shifting card ids for keeping track of positions in case we play/discard
+		# this is used for our agents which are meant to model the teammate's point of view
+		if action.type == PLAY or action.type == DISCARD or for_testing_only:
+			new_card_ids = []
+
+			for idx in range(len(self.card_ids)):
+				if idx != action.cnr:
+					new_card_ids.append(self.card_ids[idx])
+
+			new_card_ids.append(self.new_card_id)
+			self.new_card_id += 1
+			self.card_ids = new_card_ids
+			store_agent_copies_flag = True
+
+		return action
+
+
+	def get_action_helper(self, game_state, player_model):
 		pass
 
 	def inform(self, action, player, game_state, player_model):
-		pass
+		new_row = dict()
+
+		new_row["move_idx"] = self.move_idx
+
+		new_row["move"] = action_to_key(action)
+
+		modified_game_state = 
+		modified_player_model =
+		new_row["observable game state"] = (modified_game_state, modified_player_model)
+
+		new_row["card ids"] = self.card_ids
+		new_row["hand knowledge"] = player_model.get_knowledge()
+
+		# Generate samples with corresponding conditionals
+
+
+		# generate average conditional
+		
+
+		# get prior using the average conditoinal and previous prior if available
+
+
+		# store agent copies if flagged
+		if self.store_agent_copies_flag:
+			self.store_agent_copies_flag = False
+			new_row["agent_copies"] = self.player_pool.copies()
+		else:
+			new_row["agent_copies"] = None
+
+
+
+
+
+
+	def action_to_key(action):
+		return  (action.type, action.cnr, action.col, action.num)
 
 	def sample_hash(sample):
 		temp = sample.hand.flatten()
@@ -71,6 +130,7 @@ class ChiefPlayer(Player):
 
 	def agent_probs(hand, row_ref, agent_copies): ## THIS ASSUMES THAT WE ONLY HAVE ONE TEAMMATE
 		game_state, base_player_model = row_ref["observable game state"]
+		move_idx = row_ref["move"]
 
 		for i in range(len(game_state.hands)):
 			if game_state.hands[i] is None:
@@ -82,7 +142,7 @@ class ChiefPlayer(Player):
 		for agent in agent_copies:
 			temp_agent = agent.copy()
 			values = temp_agent.get_action(game_state, base_player_model)
-			probs.append(values_to_probs(values))
+			probs.append(values_to_probs(values)[move_idx])
 			updated_agents.append(temp_agent)
 
 		return np.array(probs), updated_agents
@@ -90,13 +150,13 @@ class ChiefPlayer(Player):
 	def hand_sampler(row_ref, number_needed, agent_copies):
 		existing_samples = row_ref["generated samples"]
 		new_samples = []
-		uniqueness_hash = set()
+		stored_samples = dict()
 		new_knowledge = row_ref["hand knowledge"]
 
 		for sample in existing_samples:
 			if sample.consistent(new_knowledge):
 				new_samples.append(sample.copy())
-				uniqueness_hash.add(sample_hash(sample))
+				stored_samples[sample_hash(sample)] = sample.conditional_distrib
 		
 		n = len(new_samples)
 		updated_copies = None
@@ -106,16 +166,16 @@ class ChiefPlayer(Player):
 			new_samp = new_sample(new_knowledge)
 			h = sample_hash(new_samp)
 
-			while(h in uniqueness_hash):
-				new_samp = new_sample(new_knowledge)
-				h = sample_hash(new_samp)
-
-			uniqueness_hash.add(h)
-
 			# compute conditional game state
-			new_conditional, updated_copies = agent_probs(new_samp.hand, row_ref, agent_copies)
+			if h in stored_samples:
+				new_conditional = stored_samples[h]
+			else:
+				new_conditional, updated_copies = agent_probs(new_samp.hand, row_ref, agent_copies)
+				stored_samples[h] = new_conditional
+
 			new_samp.conditional_distrib = new_conditional
 			new_samples.append(new_samp)
+
 
 		row_ref["generated samples"] = new_samples
 

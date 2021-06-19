@@ -9,6 +9,9 @@ class PlayerPool:
     def get_size(self):
         return self.size
 
+    def copies(self):
+        pass
+
     @staticmethod
     def from_dict(name, pnr, json_dict):
         json_dict["name"] = name
