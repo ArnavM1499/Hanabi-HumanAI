@@ -45,6 +45,18 @@ class Action(object):
     def __hash__(self):
         return hash(str(self))
 
+    def encode(self):
+        if self.type == HINT_COLOR:
+            return (HINT_COLOR, self.col)
+        elif self.type == HINT_NUMBER:
+            return (HINT_NUMBER, self.num - 1)
+        elif self.type == PLAY:
+            return (PLAY, self.cnr)
+        elif self.type == DISCARD:
+            return (DISCARD, self.cnr)
+        else:
+            raise NotImplementedError
+
 
 class Player(object):
     def __init__(self, name, pnr):

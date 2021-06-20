@@ -136,6 +136,78 @@ class GameState(object):
     def get_common_visible_cards(self):
         cards = deepcopy(self.trash)
         for col, num in self.board:
-            for i in range(num):
-                cards.append((col, i + 1))
+            cards.extend([(col, i + 1) for i in range(num)])
         return sorted(cards)
+
+
+ENCODING_MAX = (
+    [25, 25, 25, 25, 26]  # partner hand, 26 includes empty card
+    + [4, 3, 3, 3, 2] * 50  # both knowledges
+    + [6] * 5  # board
+    + [4, 3, 3, 3, 2] * 5  # trash
+    + [3]  # hits
+    + [9]  # hints
+    + [4, 5]  # action
+    + [2]  # pnr
+)
+
+
+def encode_state(
+    partner_hand,
+    partner_knowledge,
+    self_knowledge,
+    board,
+    trash,
+    hits,
+    hints,
+    action,
+    pnr,
+):
+    """compress the game state in favor of saving storage space"""
+
+    try:
+        state = []
+        for (col, num) in partner_hand:
+            state.append(col * 5 + num - 1)
+        if len(state) < 5:
+            state.append(25)
+        assert len(state) == 5
+        knowledges = []
+        knowledges.extend(partner_knowledge)
+        if len(partner_knowledge) < 5:
+            knowledges.append([[0, 0, 0, 0, 0] for _ in range(5)])
+        knowledges.extend(self_knowledge)
+        if len(self_knowledge) < 5:
+            knowledges.append([[0, 0, 0, 0, 0] for _ in range(5)])
+        for knowledge in knowledges:
+            for row in knowledge:
+                state.extend(row)
+        assert len(state) == 255
+        state.extend([num for col, num in sorted(board)])
+        assert len(state) == 260
+        trash_reformat = [[0] * 5 for _ in range(5)]
+        for (col, num) in trash:
+            trash_reformat[col][num - 1] += 1
+        for row in trash_reformat:
+            state.extend(row)
+        assert len(state) == 285
+        state.append(3 - hits)
+        state.append(hints)
+        state.extend(action.encode())
+        state.append(pnr)
+        assert len(state) == 290
+        assert len(state) == len(ENCODING_MAX), "{}, {}".format(
+            len(state), len(ENCODING_MAX)
+        )
+        encoded = 0
+        for i, (v, m) in enumerate(zip(state, ENCODING_MAX)):
+            assert v < m, str(i)
+            assert v >= 0, str(i)
+            encoded += v
+            encoded *= m
+        encoded = encoded // ENCODING_MAX[-1]
+        return hex(encoded)[2:] + "\n"
+    except:
+        import pdb
+
+        pdb.set_trace()

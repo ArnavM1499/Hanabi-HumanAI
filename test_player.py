@@ -129,14 +129,27 @@ def test_player(
     return iters, avg, smin, smax, smid, smod, hints, hits, turns
 
 
-def sequential_test(player, player2=None, iters=5000, seed=0):
+def sequential_test(player, player2=None, iters=5000, seed=0, save_json_dir=None):
     random.seed(seed)
-    for i in range(iters):
-        run_single("sink_{}.csv".format(i), player, player, clean=True)
+    if isinstance(save_json_dir, str):
+        if not os.path.isdir(save_json_dir):
+            os.makedirs(save_json_dir)
+        for i in range(iters):
+            run_single(
+                os.path.join(
+                    save_json_dir, "{}_{}_{}.json".format(player, player2, seed)
+                ),
+                player,
+                player2,
+                clean=False,
+            )
+    else:
+        for i in range(iters):
+            run_single("sink_{}.csv".format(i), player, player2, clean=True)
 
 
 def parameter_search(
-    player, max_key, iters=1000, result_file="search_result.json", pop_size=12
+    player, max_key, iters=1000, result_file="log/search_result.json", pop_size=12
 ):
     if os.path.isfile(result_file):
         table = json.load(open(result_file, "r"))
