@@ -35,7 +35,7 @@ def weight_knowledge(knowledge, weights):
 # less than 5 cards (close to the end of the game). it doesn't crash, but
 # things like self.todo won't behave properly
 
-
+# THIS IS BUGGED - temporary hack for slot_playable_pct etc, but needs to be fixed later
 class ExperimentalPlayer(Player):
     def __init__(self, name, pnr, **kwargs):
         super().__init__(name, pnr)

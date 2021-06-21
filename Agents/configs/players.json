@@ -1,21 +1,26 @@
 {
     "00001" : {
-        "player_class": "ExperimentalPlayer",
-        "get_action_values": false,
-        "hint_weight": 1000.0,
-        "consider": "all"
+        "player_class": "ExperimentalPlayer"
     },
-    "00002" : {
+    "00002": {
+        "player_class": "ExperimentalPlayer",
+        "discard_type": "likely",
+        "default_hint": "mix"
+    },
+    "00003": {
+        "player_class": "ExperimentalPlayer",
+        "hint_weight": 5.0,
+        "discard_type": "likely",
+        "default_hint": "mix",
+        "play_threshold": 0.75,
+        "discard_threshold": 0.5
+    },
+    "00004" : {
+        "player_class": "ValuePlayer"
+    },
+    "00005": {
         "player_class": "ValuePlayer",
-        "get_action_values": false,
-        "hint_weight": 1000.0,
-        "card_count": true,
-        "card_count_partner": true,
-        "discard_type": "first",
-        "discard_on_8": true,
-        "default_hint": "high",
-        "play_threshold": 0.9,
-        "discard_threshold": 0.5,
-        "consider": "all"
+        "play_bias": 4.0,
+        "hint_bias": 2.0
     }
 }

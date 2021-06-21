@@ -66,7 +66,7 @@ params = {
 }
 
 
-def test_param_config(config, iters=100):
+def test_param_config(config, iters=400):
     p = Pool(16)
     res = p.starmap_async(
         from_param_dict,
@@ -83,7 +83,7 @@ def hc2():
 
 
 def hc():
-    for i in range(100):
+    for i in range(1):
         res = from_param_dict("xd", params)
         if res < 3:
             return
@@ -118,7 +118,7 @@ def record_game(
         )
 
 
-def test_player(player="00002", player2=None, iters=500):
+def test_player(player="00005", player2=None, iters=1000):
     p = Pool(16)
     res = p.starmap_async(
         run_single,
