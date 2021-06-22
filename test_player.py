@@ -26,18 +26,14 @@ def run_single(
     if not player2:
         player2 = player
         key2 = key
-    if isinstance(player, str):
-        P1 = PlayerPool.from_dict("Alice", 0, player_pool[player])
-    elif isinstance(player, Player):
+    if isinstance(player, Player):
         P1 = player
     else:
-        assert False
-    if isinstance(player2, str):
-        P2 = PlayerPool.from_dict("Bob", 1, player_pool[player2])
-    elif isinstance(player2, Player):
+        P1 = PlayerPool.from_dict("Alice", 0, player_pool[str(player)])
+    if isinstance(player2, Player):
         P2 = player2
     else:
-        assert False
+        P2 = PlayerPool.from_dict("Bob", 1, player_pool[str(player2)])
     if (key is not None) and hasattr(P1, "set_from_key"):
         P1.set_from_key(key)
     else:
