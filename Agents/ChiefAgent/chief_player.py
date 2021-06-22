@@ -40,7 +40,6 @@ class ChiefPlayer(Player):
 		self.card_ids = dict()
 		self.new_card_id = 0
 		self.move_idx = 0
-		self.store_agent_copies_flag = False
 		self.prev_knowledge = dict()
 		self.drawn_dict = dict()
 		self.hints_to_partner = []
@@ -70,7 +69,6 @@ class ChiefPlayer(Player):
 			self.prev_knowledge[self.new_card_id] = None
 			self.new_card_id += 1
 			self.card_ids = new_card_ids
-			store_agent_copies_flag = True
 		else:
 			self.hints_to_partner.append((self.pnr, action))
 
@@ -111,14 +109,7 @@ class ChiefPlayer(Player):
 
 		new_row["card ids"] = self.card_ids
 		new_row["hand knowledge"] = player_model.get_knowledge()
-
-		# store agent copies if flagged
-		if self.store_agent_copies_flag:
-			self.store_agent_copies_flag = False
-			new_row["agent state copies"] = self.player_pool.copies()
-		else:
-			new_row["agent state copies"] = None
-
+		new_row["agent state copies"] = self.player_pool.copies()
 		new_row["generated samples"] = []
 
 		# add incomplete row to make use of functions below
@@ -126,8 +117,7 @@ class ChiefPlayer(Player):
 
 		# Generate samples with corresponding conditionals
 		current_row = self.move_tracking_table.loc[self.move_idx]
-		copies = self.player_pool.copies()
-		self.hand_sampler(current_row, NUM_SAMPLES, copies)
+		self.hand_sampler(current_row, NUM_SAMPLES)
 
 		# generate average conditional
 		sample_conditionals = [sample.conditional_probs for sample in current_row["generated samples"]]
@@ -193,8 +183,9 @@ class ChiefPlayer(Player):
 		nonnegative_vals = values + min(values)
 		return nonnegative_vals/np.sum(nonnegative_vals)
 
-	def agent_probs(self, hand, row_ref, agent_copies): ## THIS ASSUMES THAT WE ONLY HAVE ONE TEAMMATE
+	def agent_probs(self, hand, row_ref): ## THIS ASSUMES THAT WE ONLY HAVE ONE TEAMMATE
 		game_state, base_player_model = row_ref["observable game state"]
+		agent_copies = row_ref["agent state copies"]
 		action_idx = int(row_ref["move"])
 
 		for i in range(len(game_state.hands)):
@@ -202,17 +193,15 @@ class ChiefPlayer(Player):
 				game_state.hands[i] = hand
 
 		probs = []
-		updated_agents = []
 
 		for agent in agent_copies:
 			temp_agent = deepcopy(agent)
 			values = temp_agent.get_action(game_state, base_player_model)
 			probs.append(self.values_to_probs(values)[action_idx])
-			updated_agents.append(temp_agent)
 
-		return np.array(probs), updated_agents
+		return np.array(probs)
 
-	def hand_sampler(self, row_ref, number_needed, agent_copies):
+	def hand_sampler(self, row_ref, number_needed):
 		existing_samples = row_ref["generated samples"]
 		new_samples = []
 		stored_samples = dict()
@@ -224,7 +213,6 @@ class ChiefPlayer(Player):
 				stored_samples[self.sample_hash(sample)] = sample.conditional_probs
 		
 		n = len(new_samples)
-		updated_copies = agent_copies
 
 		for i in range(number_needed - n):
 			# generate unique sample
@@ -235,18 +223,13 @@ class ChiefPlayer(Player):
 			if h in stored_samples:
 				new_conditional = stored_samples[h]
 			else:
-				new_conditional, updated_copies = self.agent_probs(new_samp.hand, row_ref, updated_copies)
+				new_conditional = self.agent_probs(new_samp.hand, row_ref)
 				stored_samples[h] = new_conditional
 
 			new_samp.conditional_probs = new_conditional
 			new_samples.append(new_samp)
 
 		row_ref["generated samples"] = new_samples
-
-		if updated_copies is None:
-			_, updated_copies = self.agent_probs(new_samples[0].hand, row_ref, agent_copies)
-
-		return updated_copies
 
 
 	def rollforward_move_tracker(self, move_index, most_recent_move, cards_affected_with_new_knowledge):

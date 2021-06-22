@@ -26,6 +26,9 @@ class PlayerPool:
 
         return re
 
+    def get_agents(self):
+        return self.data
+
     def from_dict(self, name, pnr, json_dict):
         json_dict["name"] = name
         json_dict["pnr"] = pnr
