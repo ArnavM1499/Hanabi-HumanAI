@@ -45,12 +45,30 @@ class Action(object):
     def __hash__(self):
         return hash(str(self))
 
+    def encode(self):
+        if self.type == HINT_COLOR:
+            return (HINT_COLOR, self.col)
+        elif self.type == HINT_NUMBER:
+            return (HINT_NUMBER, self.num - 1)
+        elif self.type == PLAY:
+            return (PLAY, self.cnr)
+        elif self.type == DISCARD:
+            return (DISCARD, self.cnr)
+        else:
+            raise NotImplementedError
+
 
 class Player(object):
     def __init__(self, name, pnr):
         self.name = name
         self.pnr = pnr
         self.explanation = []
+
+    @staticmethod
+    def from_dict(name, pnr, json_dict):
+        json_dict["name"] = name
+        json_dict["pnr"] = pnr
+        return getattr(Agents, json_dict["player_class"])(**json_dict)
 
     def get_nr(self):
         return self.pnr

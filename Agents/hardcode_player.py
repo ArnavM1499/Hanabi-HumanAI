@@ -148,6 +148,10 @@ class HardcodePlayer2(Player):
                 print("\n\n\n")
             return
 
+        if action.pnr == self.pnr and action.type in [cgf.PLAY, cgf.DISCARD]:
+            self.wait_for_result = True
+            self._update_index(action.cnr)
+
         if self.self_card_count:
             if self.wait_for_result:
                 # The card just played/discarded by itself in the previous turn
@@ -378,7 +382,6 @@ class HardcodePlayer2(Player):
                 print("Using Default action!")
             chosen_action_name = self.action_classes[0]
             chosen_action = getattr(self, chosen_action_name)
-        # TODO change to other class for less agressive play
 
         if self.return_value:
             final_action = max(chosen_action.keys(), key=lambda a: chosen_action[a])
@@ -386,9 +389,9 @@ class HardcodePlayer2(Player):
             final_action = chosen_action
 
         # Post processes
-        if final_action.type in [cgf.PLAY, cgf.DISCARD]:
-            self.wait_for_result = True
-            self._update_index(final_action.cnr)
+        # if final_action.type in [cgf.PLAY, cgf.DISCARD]:
+        #     self.wait_for_result = True
+        #     self._update_index(final_action.cnr)
 
         if self.return_value:
             value_dict = chosen_action

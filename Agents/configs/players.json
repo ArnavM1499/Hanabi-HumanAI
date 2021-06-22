@@ -1,5 +1,29 @@
 {
   "00001": {
+    "player_class": "ExperimentalPlayer"
+  },
+  "00002": {
+    "player_class": "ExperimentalPlayer",
+    "discard_type": "likely",
+    "default_hint": "mix"
+  },
+  "00003": {
+    "player_class": "ExperimentalPlayer",
+    "hint_weight": 5,
+    "discard_type": "likely",
+    "default_hint": "mix",
+    "play_threshold": 0.75,
+    "discard_threshold": 0.5
+  },
+  "00004": {
+    "player_class": "ValuePlayer"
+  },
+  "00005": {
+    "player_class": "ValuePlayer",
+    "play_bias": 4,
+    "hint_bias": 2
+  },
+  "10001": {
     "player_class": "HardcodePlayer2",
     "self_card_count": true,
     "partner_card_count": true,
@@ -11,7 +35,7 @@
     "self_hint_order": "newest",
     "decision_permutation": 2300
   },
-  "00002": {
+  "10002": {
     "player_class": "HardcodePlayer2",
     "self_card_count": true,
     "partner_card_count": true,
@@ -23,7 +47,7 @@
     "self_hint_order": "newest",
     "decision_permutation": 256
   },
-  "00003": {
+  "10003": {
     "player_class": "HardcodePlayer2",
     "self_card_count": true,
     "partner_card_count": true,
@@ -35,7 +59,7 @@
     "self_hint_order": "newest",
     "decision_permutation": 2809
   },
-  "00004": {
+  "10004": {
     "player_class": "HardcodePlayer2",
     "self_card_count": true,
     "partner_card_count": true,
@@ -47,7 +71,7 @@
     "self_hint_order": "newest",
     "decision_permutation": 763
   },
-  "00005": {
+  "10005": {
     "player_class": "HardcodePlayer2",
     "self_card_count": true,
     "partner_card_count": true,
@@ -58,24 +82,5 @@
     "self_discard_order": "random",
     "self_hint_order": "newest",
     "decision_permutation": 3640
-  },
-  "10001": {
-    "player_class": "ExperimentalPlayer",
-    "get_action_values": false,
-    "hint_weight": 1000,
-    "consider": "all"
-  },
-  "10002": {
-    "player_class": "ValuePlayer",
-    "get_action_values": false,
-    "hint_weight": 1000,
-    "card_count": true,
-    "card_count_partner": true,
-    "discard_type": "first",
-    "discard_on_8": true,
-    "default_hint": "high",
-    "play_threshold": 0.3,
-    "discard_threshold": 0.3,
-    "consider": "all"
   }
 }
