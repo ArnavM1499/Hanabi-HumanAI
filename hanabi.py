@@ -1,14 +1,12 @@
-import random
 import sys
 import copy
 import time
 import csv
 import pickle
+import json
 from common_game_functions import *
 from Agents.player import Action
 
-# comment this line out when running multithreaded tests
-# random.seed(0)  # for reproducing results
 
 def format_card(colnum):
     col, num = colnum
@@ -25,7 +23,7 @@ class Game(object):
         self.hits = 3
         self.hints = 8
         self.current_player = 0
-        self.board = list(map(lambda c: (c, 0), ALL_COLORS))
+        self.board = [(c, 0) for c in ALL_COLORS]
         self.played = []
         self.deck = make_deck()
         self.extra_turns = 0
@@ -37,9 +35,16 @@ class Game(object):
         self.format = format
         self.dopostsurvey = False
         self.study = False
-        self.data_file = open(data_file, "a")
+        self.data_file = open(data_file, "a+")
         self.pickle_file = pickle_file
-        self.data_writer = csv.writer(self.data_file, delimiter=",")
+        if data_file.endswith(".csv"):
+            self.data_format = "csv"
+            self.data_writer = csv.writer(self.data_file, delimiter=",")
+        elif data_file.endswith(".json"):
+            self.data_format = "json"
+        else:
+            print("Unsupported data file format!")
+            raise NotImplementedError
         self.hint_log = dict([(a, []) for a in range(len(players))])
         self.action_log = dict([(a, []) for a in range(len(players))])
         self.http_player = http_player
@@ -103,9 +108,8 @@ class Game(object):
         if not self.deck:
             return
 
-        self.hands[pnr].append(self.deck[0])
+        self.hands[pnr].append(self.deck.pop())
         self.knowledge[pnr].append(initial_knowledge())
-        del self.deck[0]
 
     def perform(self, action):
         hint_indices = []
@@ -264,12 +268,14 @@ class Game(object):
 
     def run(self, turns=-1):
         self.turn = 1
-        while not self.done() and (turns < 0 or self.turn < turns):
+        while (not self.done()) and (turns < 0 or self.turn < turns):
             self.turn += 1
             self.single_turn()
         print("Game done, hits left:", self.hits)
         points = self.score()
         print("Points:", points)
+        print("Board:", self.board)
+        print("Hands:", self.hands)
         self.data_file.close()
         return points
 
@@ -282,7 +288,7 @@ class Game(object):
         action = self.players[self.current_player].get_action(game_state, player_model)
 
         # Data collection
-        if self.pickle_file != None:
+        if self.pickle_file:
             pickle.dump(["Action", game_state, player_model, action], self.pickle_file)
 
         # Process action
@@ -293,22 +299,42 @@ class Game(object):
             if not self.deck:
                 self.extra_turns += 1
 
-            self.data_writer.writerow(
-                [
-                    self.current_player,
-                    action.type,
-                    self.board,
-                    self.trash,
-                    self.hints,
-                    self.knowledge[self.current_player],
-                ]
-            )
+            if self.data_format == "csv":
+                self.data_writer.writerow(
+                    [
+                        self.current_player,
+                        action.type,
+                        self.board,
+                        self.trash,
+                        self.hints,
+                        self.knowledge[self.current_player],
+                    ]
+                )
+            elif self.data_format == "json":
+                trash = [[0] * 5 for _ in range(5)]
+                for (col, num) in self.trash:
+                    trash[col][num - 1] += 1
+                self.data_file.write(
+                    encode_state(
+                        self.hands[1 - self.current_player],
+                        self.knowledge[1 - self.current_player],
+                        self.knowledge[self.current_player],
+                        self.board,
+                        self.trash,
+                        self.hits,
+                        self.hints,
+                        action,
+                        self.current_player,
+                    )
+                )
 
             hint_indices, card_changed = self.perform(action)
 
             for p in self.players:
-                game_state = self._make_game_state(p.get_nr(), hint_indices, card_changed)
-                player_model = self._make_player_model(p.get_nr())     
+                game_state = self._make_game_state(
+                    p.get_nr(), hint_indices, card_changed
+                )
+                player_model = self._make_player_model(p.get_nr())
 
                 p.inform(
                     action,
@@ -318,8 +344,18 @@ class Game(object):
                 )
 
                 # Data collection
-                if self.pickle_file != None:
-                    pickle.dump(["Inform", game_state, player_model, action, p.get_nr(), self.current_player], self.pickle_file)   
+                if self.pickle_file:
+                    pickle.dump(
+                        [
+                            "Inform",
+                            game_state,
+                            player_model,
+                            action,
+                            p.get_nr(),
+                            self.current_player,
+                        ],
+                        self.pickle_file,
+                    )
 
             self.current_player += 1
             self.current_player %= len(self.players)

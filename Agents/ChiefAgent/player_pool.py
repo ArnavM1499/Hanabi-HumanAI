@@ -2,6 +2,7 @@ import Agents
 import json
 from copy import deepcopy
 
+
 # A way to interface with our player pool files
 class PlayerPool:
     def __init__(self, name, pnr, json_file):
