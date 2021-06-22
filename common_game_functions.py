@@ -196,3 +196,14 @@ def encode_state(
         encoded *= m
     encoded = encoded // ENCODING_MAX[-1]
     return hex(encoded)[2:] + "\n"
+
+
+def decode_state(code):
+    if isinstance(code, str):
+        code = int(code, 16)
+    res = []
+    for m in ENCODING_MAX[::-1]:
+        res.append(code % m)
+        code = code // m
+    # player {0, 1}, action [0-19], game state
+    return res[0], res[1] * res[2], res[:2:-1]
