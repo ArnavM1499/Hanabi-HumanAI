@@ -34,8 +34,8 @@ hits = []
 turns = []
 num_games = 100
 for i in range(num_games):
-    P1 = ValuePlayer("player 0", 0)
-    P2 = ExperimentalPlayer("player 1", 1)
+    P1 = ExperimentalPlayer("Alice", 0)
+    P2 = ExperimentalPlayer("Bob", 1)
     G = Game([P1, P2], file_name)
     Result = G.run(500)
     print(Result)
