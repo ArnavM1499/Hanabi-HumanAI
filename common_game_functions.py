@@ -192,9 +192,8 @@ def encode_state(
     state.append(pnr)
     encoded = 0
     for i, (v, m) in enumerate(zip(state, ENCODING_MAX)):
-        encoded += v
         encoded *= m
-    encoded = encoded // ENCODING_MAX[-1]
+        encoded += v
     return hex(encoded)[2:] + "\n"
 
 
