@@ -19,7 +19,7 @@ def gather_json(dataset_dir, *paths):
                 os.makedirs(subdir)
             np.save(
                 open(os.path.join(subdir, "{}.npy".format(str(a).zfill(2))), "ab+"),
-                np.array(s),
+                np.array(s, dtype=np.int8),
             )
 
 
