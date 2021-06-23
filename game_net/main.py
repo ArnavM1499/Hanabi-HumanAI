@@ -5,10 +5,10 @@ import tensorflow_addons as tfa
 from dataset import DatasetGenerator
 from naiveFC import NaiveFC
 
-model = NaiveFC(num_layers=2)
+model = NaiveFC(num_layers=1)
 with tf.device("/GPU:0"):
     loss_func = tfa.losses.TripletSemiHardLoss()
-    optimizer = tf.keras.optimizers.Adam(learning_rate=0.01)
+    optimizer = tf.keras.optimizers.Adam()
 
 
 def train(
