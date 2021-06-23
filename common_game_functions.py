@@ -205,4 +205,4 @@ def decode_state(code):
         res.append(code % m)
         code = code // m
     # player {0, 1}, action [0-19], game state
-    return res[0], res[1] * 5 + res[2], res[:2:-1]
+    return res[0], res[1] + res[2] * 5, res[:2:-1]
