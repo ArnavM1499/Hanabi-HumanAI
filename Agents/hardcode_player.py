@@ -581,6 +581,7 @@ class HardcodePlayer2(Player):
         partner_knowledge = deepcopy(
             self.last_state.get_all_knowledge()[self.partner_nr]
         )
+        print(partner_knowledge)
 
         if self.partner_card_count:
             with timer("processs partner card count", self.timer):

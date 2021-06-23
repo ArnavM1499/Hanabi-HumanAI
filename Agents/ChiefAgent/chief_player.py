@@ -36,7 +36,7 @@ class ChiefPlayer(Player):
 		self.partner_nr = (pnr + 1) % 2
 		self.move_tracking_table = pd.DataFrame(data=STARTING_COLUMNS_MOVETRACKING)
 		self.move_tracking_table = self.move_tracking_table.set_index("move_idx")
-		self.player_pool = PlayerPool(name, pnr, pool_file)
+		self.player_pool = PlayerPool("pool_agent", self.partner_nr, pool_file)
 		self.card_ids = dict()
 		self.new_card_id = 0
 		self.move_idx = 0
@@ -72,6 +72,14 @@ class ChiefPlayer(Player):
 		else:
 			self.hints_to_partner.append((self.pnr, action))
 
+		for agent in self.player_pool.get_agents():
+			modified_game_state = deepcopy(game_state)
+			modified_game_state.hands = [self.new_sample(player_model.get_knowledge()).hand if a != [] else [] for a in game_state.hands]
+			partners_hints = self.hints_to_partner
+			modified_player_model = BasePlayerModel(self.partner_nr, game_state.all_knowledge[self.partner_nr], self.hints_to_partner, player_model.get_actions())
+
+			agent.inform(action, self.pnr, modified_game_state, modified_player_model)
+
 		return action
 
 
@@ -81,6 +89,9 @@ class ChiefPlayer(Player):
 	def inform(self, action, player, game_state, player_model):
 		changed_cards = []
 		drawn_move = []
+
+		if player == self.pnr:
+			return
 
 		# Detecting if any card information has changed that can be used to update previous data
 		for c in self.card_ids:
@@ -110,28 +121,35 @@ class ChiefPlayer(Player):
 		new_row["card ids"] = self.card_ids
 		new_row["hand knowledge"] = player_model.get_knowledge()
 		new_row["agent state copies"] = self.player_pool.copies()
-		new_row["generated samples"] = []
+		new_row["generated samples"] = [None]*NUM_SAMPLES
+		new_row["conditional probabilities"] = [0]*self.player_pool.get_size()
+		new_row["agent distribution"] = [0]*self.player_pool.get_size()
+
+		for agent in self.player_pool.get_agents():
+			game_state_input = deepcopy(modified_game_state)
+			game_state_input.hands = [self.new_sample(player_model.get_knowledge()).hand if a != [] else [] for a in game_state.hands]
+			agent.get_action(game_state_input, modified_player_model)
+			agent.inform(action, player, game_state_input, modified_player_model)
 
 		# add incomplete row to make use of functions below
 		self.move_tracking_table = self.move_tracking_table.append(pd.Series(data=new_row, name=self.move_idx)) # https://stackoverflow.com/questions/39998262/append-an-empty-row-in-dataframe-using-pandas
 
 		# Generate samples with corresponding conditionals
-		current_row = self.move_tracking_table.loc[self.move_idx]
-		self.hand_sampler(current_row, NUM_SAMPLES)
+		self.hand_sampler(self.move_idx, NUM_SAMPLES)
 
 		# generate average conditional
-		sample_conditionals = [sample.conditional_probs for sample in current_row["generated samples"]]
+		sample_conditionals = [sample.conditional_probs for sample in self.move_tracking_table.loc[self.move_idx, "generated samples"]]
 		new_conditional = np.mean(np.array(sample_conditionals), axis=0)
-		current_row["conditional probabilities"] = new_conditional
+		self.move_tracking_table.at[self.move_idx, "conditional probabilities"] = new_conditional
 		
 		# get prior using the average conditional and previous prior if available
 		if self.move_idx == 0:
-			current_row["agent distribution"] = new_conditional
+			self.move_tracking_table.at[self.move_idx,"agent distribution"] = new_conditional
 		else:
 			prev_row = self.move_tracking_table.loc[self.move_idx - 1]
 			prior = prev_row["agent distribution"]
 			updated_prior = new_conditional*prior
-			current_row["agent distribution"] = self.makeprob(updated_prior)
+			self.move_tracking_table.at[self.move_idx,"agent distribution"] = self.makeprob(updated_prior)
 
 		self.move_idx += 1
 
@@ -168,6 +186,7 @@ class ChiefPlayer(Player):
 		new_samp = []
 
 		for card in new_knowledge:
+			print(card)
 			card_idx = np.random.choice(CardChoices, p=self.makeprob(card)) # https://stackoverflow.com/questions/3679694/a-weighted-version-of-random-choice
 			card = (card_idx//5, card_idx%5 + 1)
 			new_samp.append(card)
@@ -183,10 +202,10 @@ class ChiefPlayer(Player):
 		nonnegative_vals = values + min(values)
 		return nonnegative_vals/np.sum(nonnegative_vals)
 
-	def agent_probs(self, hand, row_ref): ## THIS ASSUMES THAT WE ONLY HAVE ONE TEAMMATE
-		game_state, base_player_model = row_ref["observable game state"]
-		agent_copies = row_ref["agent state copies"]
-		action_idx = int(row_ref["move"])
+	def agent_probs(self, hand, move_idx): ## THIS ASSUMES THAT WE ONLY HAVE ONE TEAMMATE
+		game_state, base_player_model = self.move_tracking_table.loc[move_idx,"observable game state"]
+		agent_copies = self.move_tracking_table.loc[move_idx,"agent state copies"]
+		action_idx = int(self.move_tracking_table.loc[move_idx,"move"])
 
 		for i in range(len(game_state.hands)):
 			if game_state.hands[i] is None:
@@ -201,13 +220,16 @@ class ChiefPlayer(Player):
 
 		return np.array(probs)
 
-	def hand_sampler(self, row_ref, number_needed):
-		existing_samples = row_ref["generated samples"]
+	def hand_sampler(self, move_idx, number_needed):
+		existing_samples = self.move_tracking_table.loc[move_idx,"generated samples"]
 		new_samples = []
 		stored_samples = dict()
-		new_knowledge = row_ref["hand knowledge"]
+		new_knowledge = self.move_tracking_table.loc[move_idx,"hand knowledge"]
 
 		for sample in existing_samples:
+			if sample == None:
+				continue
+
 			if sample.consistent(new_knowledge):
 				new_samples.append(deepcopy(sample))
 				stored_samples[self.sample_hash(sample)] = sample.conditional_probs
@@ -223,36 +245,34 @@ class ChiefPlayer(Player):
 			if h in stored_samples:
 				new_conditional = stored_samples[h]
 			else:
-				new_conditional = self.agent_probs(new_samp.hand, row_ref)
+				new_conditional = self.agent_probs(new_samp.hand, move_idx)
 				stored_samples[h] = new_conditional
 
 			new_samp.conditional_probs = new_conditional
 			new_samples.append(new_samp)
 
-		row_ref["generated samples"] = new_samples
+		self.move_tracking_table.at[move_idx,"generated samples"] = new_samples
 
 
 	def rollforward_move_tracker(self, move_index, most_recent_move, cards_affected_with_new_knowledge):
-		agent_copies = self.move_tracking_table.loc[move_index]["agent state copies"]
+		agent_copies = self.move_tracking_table.loc[move_index,"agent state copies"]
 
-		for table_idx in range(move_index, most_recent_move):
-			current_row = self.move_tracking_table.loc[table_idx] # This is passed around everywhere as reference (including into functions)
-			
+		for table_idx in range(move_index, most_recent_move):			
 			# update hand knowledge
 			for card, new_k in cards_affected_with_new_knowledge:
-				pos_idx = current_row["card ids"][card]
-				current_row["hand knowledge"][pos_idx] = new_k
+				pos_idx = self.move_tracking_table.loc[table_idx,"card ids"][card]
+				self.move_tracking_table.at[table_idx,"hand knowledge"][pos_idx] = new_k
 
 
 			# use hand_sampler to get new samples where needed
-			### num_possibilities = np.prod(np.sum(current_row["hand knowledge"], axis=(1,2)))
-			agent_copies = self.hand_sampler(current_row, NUM_SAMPLES)
+			### num_possibilities = np.prod(np.sum(self.move_tracking_table.loc[table_idx]["hand knowledge"], axis=(1,2)))
+			agent_copies = self.hand_sampler(table_idx, NUM_SAMPLES)
 
 
 			# compute new average conditional probabilities
-			sample_conditionals = [sample.conditional_probs for sample in current_row["generated samples"]]
+			sample_conditionals = [sample.conditional_probs for sample in self.move_tracking_table.loc[table_idx]["generated samples"]]
 			new_conditional = np.mean(np.array(sample_conditionals), axis=0)
-			current_row["conditional probabilities"] = new_conditional
+			self.move_tracking_table.at[table_idx,"conditional probabilities"] = new_conditional
 
 
 			# get prior distribution
@@ -268,4 +288,4 @@ class ChiefPlayer(Player):
 			# update current agent distribution using updated conditional and previous prior
 			new_prior_pre = new_conditional * prev_prior
 			new_prior = self.makeprob(new_prior_pre)
-			current_row["agent distribution"] = new_prior
+			self.move_tracking_table.at[table_idx,"agent distribution"] = new_prior

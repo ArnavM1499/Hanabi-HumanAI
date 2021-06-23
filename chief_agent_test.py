@@ -14,8 +14,8 @@ pickle_file_name = "chief_testing"
 pickle_file = open(pickle_file_name, "wb")
 
 for i in range(1):
-	P1 = HardcodePlayer2("P1", 0)
-	P2 = HardcodePlayer2("P2", 1)
+	P1 = ValuePlayer("P1", 0)
+	P2 = ValuePlayer("P2", 1)
 	pickle.dump(["NEW"], pickle_file)
 	G = hanabi.Game([P1, P2], file_name, pickle_file)
 	Result = G.run(100)
@@ -32,10 +32,10 @@ def try_pickle(file):
 with open(pickle_file_name, 'rb') as f:
 	row = try_pickle(f)
 
-	PlayDiscardDistances = []
-	HintDistances = []
-
 	while(row != None):
+		print(row[0], new_chief.move_tracking_table.loc[:, "agent distribution"])
+		print(new_chief.player_pool.copies())
+
 		if row[0] == "Action" and row[1].get_current_player() == 0:
 			game_state = row[1]
 			player_model = row[2]
@@ -43,7 +43,7 @@ with open(pickle_file_name, 'rb') as f:
 
 			new_chief.get_action(game_state, player_model, action_default=action)
 
-		elif row[0] == "Inform" and row[4] == 0:
+		elif row[0] == "Inform":
 			game_state = row[1]
 			player_model = row[2]
 			action = row[3]
