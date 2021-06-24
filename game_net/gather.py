@@ -10,7 +10,7 @@ def gather_json(dataset_dir, *paths):
         if not os.path.isfile(path):
             print(path, "Not Found!")
             continue
-        (p1, p2, _) = tuple(path.split("_"))
+        (p1, p2, _) = tuple(os.path.basename(path).split("_"))
         player = [p1, p2]
         for state in tqdm(open(path)):
             p, a, s = decode_state(state)
