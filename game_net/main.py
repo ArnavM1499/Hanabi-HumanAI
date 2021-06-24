@@ -1,13 +1,16 @@
 from fire import Fire
+import matplotlib.pyplot as plt
 import tensorflow as tf
 import tensorflow_addons as tfa
+import os
+from tqdm import tqdm
 
-from dataset import DatasetGenerator
+from dataset import DatasetGenerator, np2tf_generator
 from naiveFC import NaiveFC
 
-model = NaiveFC(2, num_layers=1)
+model = NaiveFC(2, num_layers=3)
 with tf.device("/GPU:0"):
-    loss_func = tfa.losses.TripletSemiHardLoss()
+    loss_func = tfa.losses.TripletHardLoss(soft=True)
     optimizer = tf.keras.optimizers.Adam()
 
 
@@ -35,11 +38,10 @@ def calculate_distance(label, feature, batch_size):
 def train(
     train_root,
     validation_root,
-    save_model_to=None,
+    save_checkpoint,
     sample_per_epoch=400,
     epoch=10,
-    batch_size=500,
-    model_type="NaiveFC",
+    batch_size=1000,
 ):
     trainset = tf.data.Dataset.range(4).interleave(
         lambda _: DatasetGenerator(train_root, sample_per_epoch, batch_size),
@@ -78,6 +80,7 @@ def train(
                 val_positive(distance_positives)
                 val_negative(distance_negatives)
                 if i % 10 == 0:
+                    model.save(save_checkpoint)
                     print("=" * 20)
                     print("epoch: ", e, "iter: ", i)
                     print(
@@ -104,6 +107,44 @@ def train(
                     val_loss.reset_states()
                     val_positive.reset_states()
                     val_negative.reset_states()
+
+
+def vis(test_dir, load_checkpoint, save_image, num_samples=-1):
+    model = tf.keras.models.load_model(load_checkpoint)
+    markers = ["o", "X", "^", "P"]
+    colors = ["r", "g", "b", "c", "m"]
+    for i in [2]:
+        data = np2tf_generator(
+            os.path.join(test_dir, "{}.npy".format(str(i).zfill(2))),
+            int(num_samples),
+            loop=False,
+        )
+        batch = []
+        cnt = 0
+        with tf.device("/GPU:0"):
+            for state in tqdm(data):
+                batch.append(state)
+                cnt += 1
+                if cnt > 500:
+                    point = model(tf.stack(batch), training=False).numpy()
+                    plt.scatter(
+                        point[:, 0],
+                        point[:, 1],
+                        s=3,
+                        marker=markers[i % 4],
+                        c=colors[i // 4],
+                    )
+                    cnt = 0
+                    batch = []
+            point = model(tf.stack(batch), training=False).numpy()
+            plt.scatter(
+                point[:, 0],
+                point[:, 1],
+                s=3,
+                marker=markers[i % 4],
+                c=colors[i // 4],
+            )
+    plt.savefig(save_image)
 
 
 if __name__ == "__main__":

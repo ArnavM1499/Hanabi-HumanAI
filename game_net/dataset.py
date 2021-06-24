@@ -5,7 +5,7 @@ from random import shuffle
 import tensorflow as tf
 
 
-def np2tf_generator(file_path, num_samples=-1):
+def np2tf_generator(file_path, num_samples=-1, loop=True):
     cnt = 0
     f = open(file_path, "rb")
     while num_samples < 0 or cnt < num_samples:
@@ -15,7 +15,10 @@ def np2tf_generator(file_path, num_samples=-1):
             yield tf.constant(state, dtype=tf.float32)
         except ValueError:
             f.close()
-            f = open(file_path, "rb")
+            if loop:
+                f = open(file_path, "rb")
+            else:
+                break
     f.close()
 
 
