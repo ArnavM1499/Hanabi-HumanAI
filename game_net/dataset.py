@@ -22,7 +22,7 @@ def np2tf_generator(file_path, num_samples=-1, loop=True):
     f.close()
 
 
-def np2tf_generator_randomized(file_path, num_samples=-1, cache_size=20):
+def np2tf_generator_randomized(file_path, num_samples=-1, cache_size=200):
     G = np2tf_generator(file_path)
     cnt = 0
     cache = []
@@ -35,36 +35,26 @@ def np2tf_generator_randomized(file_path, num_samples=-1, cache_size=20):
 
 
 class DatasetGenerator:
-    def __new__(cls, dataset_root, num_samples, batch_size=60):
+    def __new__(cls, dataset_root, num_samples):
         return tf.data.Dataset.from_generator(
             cls._generator,
-            output_signature=(
-                tf.TensorSpec(shape=(batch_size,), dtype=tf.int8),
-                tf.TensorSpec(shape=(batch_size, 287), dtype=tf.float32),
-            ),
-            args=(dataset_root, num_samples, batch_size),
+            output_signature=tf.TensorSpec(shape=(20, 287), dtype=tf.float32),
+            args=(dataset_root, num_samples),
         )
 
-    def _generator(dataset_root, num_samples, batch_size):
+    def _generator(dataset_root, num_samples):
 
         dataset_root = str(dataset_root)[2:-1]
         file_generators = [
             [
-                np2tf_generator_randomized(f, num_samples * 2)
+                np2tf_generator_randomized(f, num_samples)
                 for f in glob("{}/{}/*.npy".format(dataset_root, pid))
             ]
             for pid in os.listdir(dataset_root)
         ]
         file_generators = [x for x in file_generators if x != []]
         num_agents = len(file_generators)
-        num_generators = [len(g) for g in file_generators]
 
         for idx in range(num_samples):
             pos = idx % num_agents
-            labels = []
-            data = []
-            for i in range(batch_size):
-                label = i % num_generators[pos]
-                labels.append(tf.constant(label, dtype=tf.int8))
-                data.append(next(file_generators[pos][label]))
-            yield tf.stack(labels), tf.stack(data)
+            yield tf.stack(next(zip(*file_generators[pos])))
