@@ -179,15 +179,15 @@ def test_player(
     return iters, avg, smin, smax, smid, smod, hints, hits, turns
 
 
-def sequential_test(player, player2=None, iters=5000, seed=0, save_json_dir=None):
+def sequential_test(player, player2=None, iters=5000, seed=0, save_pkl_dir=None):
     random.seed(seed)
-    if isinstance(save_json_dir, str):
-        if not os.path.isdir(save_json_dir):
-            os.makedirs(save_json_dir)
+    if isinstance(save_pkl_dir, str):
+        if not os.path.isdir(save_pkl_dir):
+            os.makedirs(save_pkl_dir)
         for i in range(iters):
             run_single(
                 os.path.join(
-                    save_json_dir, "{}_{}_{}.json".format(player, player2, seed)
+                    save_pkl_dir, "{}_{}_{}.pkl".format(player, player2, seed)
                 ),
                 player,
                 player2,

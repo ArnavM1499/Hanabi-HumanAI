@@ -1,9 +1,5 @@
-import sys
-import copy
-import time
 import csv
 import pickle
-import json
 from common_game_functions import *
 from Agents.player import Action
 
@@ -35,13 +31,14 @@ class Game(object):
         self.format = format
         self.dopostsurvey = False
         self.study = False
-        self.data_file = open(data_file, "a+")
         self.pickle_file = pickle_file
         if data_file.endswith(".csv"):
             self.data_format = "csv"
+            self.data_file = open(data_file, "a+")
             self.data_writer = csv.writer(self.data_file, delimiter=",")
-        elif data_file.endswith(".json"):
-            self.data_format = "json"
+        elif data_file.endswith(".pkl"):
+            self.data_format = "pkl"
+            self.data_file = open(data_file, "ab+")
         else:
             print("Unsupported data file format!")
             raise NotImplementedError
@@ -310,22 +307,29 @@ class Game(object):
                         self.knowledge[self.current_player],
                     ]
                 )
-            elif self.data_format == "json":
+            elif self.data_format == "pkl":
                 trash = [[0] * 5 for _ in range(5)]
                 for (col, num) in self.trash:
                     trash[col][num - 1] += 1
-                self.data_file.write(
+                partner_nr = 1 - self.current_player
+                try:
+                    last_action = self.action_log[partner_nr][-1]
+                except IndexError:
+                    last_action = None
+                pickle.dump(
                     encode_state(
-                        self.hands[1 - self.current_player],
-                        self.knowledge[1 - self.current_player],
+                        self.hands[partner_nr],
+                        self.knowledge[partner_nr],
                         self.knowledge[self.current_player],
                         self.board,
                         self.trash,
                         self.hits,
                         self.hints,
+                        last_action,
                         action,
                         self.current_player,
-                    )
+                    ),
+                    self.data_file,
                 )
 
             hint_indices, card_changed = self.perform(action)

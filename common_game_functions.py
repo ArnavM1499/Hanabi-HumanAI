@@ -1,4 +1,5 @@
 from copy import deepcopy
+import pickle
 import random
 
 global HINT_COLOR, HINT_NUMBER, PLAY, DISCARD, CANDISCARD, GREEN, YELLOW, WHITE, BLUE, RED, ALL_COLORS, COLORNAMES, COUNTS
@@ -140,18 +141,6 @@ class GameState(object):
         return sorted(cards)
 
 
-ENCODING_MAX = (
-    [25, 25, 25, 25, 26]  # partner hand, 26 includes empty card
-    + [4, 3, 3, 3, 2] * 50  # both knowledges
-    + [6] * 5  # board
-    + [4, 3, 3, 3, 2] * 5  # trash
-    + [3]  # hits
-    + [9]  # hints
-    + [4, 5]  # action
-    + [2]  # pnr
-)
-
-
 def encode_state(
     partner_hand,
     partner_knowledge,
@@ -160,12 +149,12 @@ def encode_state(
     trash,
     hits,
     hints,
+    last_action,
     action,
     pnr,
 ):
-    """compress the game state in favor of saving storage space"""
-
     state = []
+    state.extend([(col * 5 + num - 1) for col, num in sorted(board)])
     for (col, num) in partner_hand:
         state.append(col * 5 + num - 1)
     if len(state) < 5:
@@ -180,7 +169,6 @@ def encode_state(
     for knowledge in knowledges:
         for row in knowledge:
             state.extend(row)
-    state.extend([num for col, num in sorted(board)])
     trash_reformat = [[0] * 5 for _ in range(5)]
     for (col, num) in trash:
         trash_reformat[col][num - 1] += 1
@@ -188,21 +176,35 @@ def encode_state(
         state.extend(row)
     state.append(3 - hits)
     state.append(hints)
-    state.extend(action.encode())
+    if last_action is not None:
+        state.append(last_action.encode())
+    else:
+        state.append(20)
+    state.append(action.encode())
     state.append(pnr)
-    encoded = 0
-    for i, (v, m) in enumerate(zip(state, ENCODING_MAX)):
-        encoded *= m
-        encoded += v
-    return hex(encoded)[2:] + "\n"
+    return state
 
 
-def decode_state(code):
-    if isinstance(code, str):
-        code = int(code, 16)
-    res = []
-    for m in ENCODING_MAX[::-1]:
-        res.append(code % m)
-        code = code // m
+def decode_state(state):
+    # convert hand, hint, hit, last action to one hot
     # player {0, 1}, action [0-19], game state
-    return res[0], res[1] + res[2] * 5, res[:2:-1]
+    expanded = []
+    hand = [0] * 25
+    for i in range(9):  # board (5) + first four cards
+        h = hand.copy()
+        h[state[i]] = 1
+        expanded.extend(h)
+    hand.append(0)  # include empty card
+    hand[state[4]] = 1
+    expanded.extend(hand)
+    expanded.extend(state[10:-5])
+    hits, hints, last_action, action, pnr = state[-5:]
+    expanded.append(hits % 2)
+    expanded.append(hits // 2)
+    hints_one_hot = [0] * 9
+    hints_one_hot[hints] = 1
+    expanded.extend(hints_one_hot)
+    action_one_hot = [0] * 21  # include empty last_action
+    action_one_hot[last_action] = 1
+    expanded.extend(action_one_hot)
+    return pnr, action, expanded
