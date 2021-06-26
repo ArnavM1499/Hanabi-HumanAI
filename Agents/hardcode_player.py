@@ -49,13 +49,11 @@ class HardcodePlayer2(Player):
         self.index_discard = []
         self.index_discard_candidate = []
         self.index_protect = []
-        self.index_hinted = []
 
         self.partner_play = []
         self.partner_play_candidate = []
         self.partner_discard = []
         self.partner_protect = []
-        self.partner_hinted = []
 
         # Parameters
 
@@ -133,8 +131,9 @@ class HardcodePlayer2(Player):
         if self.turn == 0:
             if action.type == cgf.HINT_COLOR:
                 hinted_indices = new_state.get_hinted_indices()
-                self.index_play.append(hinted_indices[0])
-                self.index_discard.extend(hinted_indices[1:])
+                if hinted_indices != []:
+                    self.index_play.append(hinted_indices[0])
+                    self.index_discard.extend(hinted_indices[1:])
             elif action.type == cgf.HINT_NUMBER:
                 if action.num == 1:
                     self.index_play.extend(new_state.get_hinted_indices())
@@ -185,7 +184,6 @@ class HardcodePlayer2(Player):
                     self.index_protect = []
                 else:
                     hinted_indices = sorted(new_state.get_hinted_indices())
-                    assert hinted_indices != []
 
                 (
                     self.index_play,
@@ -206,10 +204,6 @@ class HardcodePlayer2(Player):
                 if self.debug:
                     pprint(self.__dict__)
                     print("\n\n\n")
-
-                for idx in hinted_indices:
-                    if idx not in self.index_hinted:
-                        self.index_hinted.append(idx)
 
         elif action.type in [cgf.PLAY, cgf.DISCARD]:
 
@@ -277,7 +271,7 @@ class HardcodePlayer2(Player):
                 if need_protect:
                     self.index_protect.append(i)
 
-            if not flag:
+            if not flag and hinted_indices != []:
                 newest = max(hinted_indices, key=self.self_hint_order)
                 card = knowledge[newest]
                 if playable_pct[idx] > 0.1:
