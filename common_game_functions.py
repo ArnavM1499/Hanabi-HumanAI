@@ -192,9 +192,8 @@ def encode_state(
     state.append(pnr)
     encoded = 0
     for i, (v, m) in enumerate(zip(state, ENCODING_MAX)):
-        encoded += v
         encoded *= m
-    encoded = encoded // ENCODING_MAX[-1]
+        encoded += v
     return hex(encoded)[2:] + "\n"
 
 
@@ -206,4 +205,4 @@ def decode_state(code):
         res.append(code % m)
         code = code // m
     # player {0, 1}, action [0-19], game state
-    return res[0], res[1] * res[2], res[:2:-1]
+    return res[0], res[1] + res[2] * 5, res[:2:-1]
