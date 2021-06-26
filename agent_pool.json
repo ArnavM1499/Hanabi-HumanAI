@@ -1,4 +1,10 @@
 {
+	"00001" : {
+		"player_class" : "HardcodePlayer2",
+		"return_value" : true,
+		"value_wrap" : false
+	},
+
 	"00002" : {
 		"player_class" : "ValuePlayer",
 		"get_action_values" : true

@@ -186,7 +186,6 @@ class ChiefPlayer(Player):
 		new_samp = []
 
 		for card in new_knowledge:
-			print(card)
 			card_idx = np.random.choice(CardChoices, p=self.makeprob(card)) # https://stackoverflow.com/questions/3679694/a-weighted-version-of-random-choice
 			card = (card_idx//5, card_idx%5 + 1)
 			new_samp.append(card)
