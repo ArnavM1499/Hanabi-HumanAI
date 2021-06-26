@@ -4,6 +4,8 @@ import os
 from random import shuffle
 import tensorflow as tf
 
+GAME_STATE_LENGTH = 558
+
 
 def np2tf_generator(file_path, num_samples=-1, loop=True):
     cnt = 0
@@ -12,7 +14,8 @@ def np2tf_generator(file_path, num_samples=-1, loop=True):
         try:
             state = np.load(f)
             cnt += 1
-            yield tf.constant(state, dtype=tf.float32)
+            if len(state) == GAME_STATE_LENGTH:
+                yield tf.constant(state, dtype=tf.float32)
         except ValueError:
             f.close()
             if loop:
@@ -38,7 +41,11 @@ class DatasetGenerator:
     def __new__(cls, dataset_root, num_samples):
         return tf.data.Dataset.from_generator(
             cls._generator,
-            output_signature=tf.TensorSpec(shape=(20, 287), dtype=tf.float32),
+            output_signature=(
+                tf.TensorSpec(shape=(GAME_STATE_LENGTH,), dtype=tf.float32),
+                tf.TensorSpec(shape=(), dtype=tf.int8),  # Agent id
+                tf.TensorSpec(shape=(), dtype=tf.float32),  # Action id
+            ),
             args=(dataset_root, num_samples),
         )
 
@@ -57,4 +64,5 @@ class DatasetGenerator:
 
         for idx in range(num_samples):
             pos = idx % num_agents
-            yield tf.stack(next(zip(*file_generators[pos])))
+            for i in range(20):
+                yield next(file_generators[pos][i]), pos, i

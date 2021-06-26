@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 
-def NaiveFC(num_output=16, num_layers=4, num_units=256, activation="sigmoid"):
+def NaiveFC(num_output=16, num_layers=4, num_units=256, activation="sigmoid", L2=True):
 
     with tf.device("/GPU:0"):
         layers = [
@@ -9,7 +9,10 @@ def NaiveFC(num_output=16, num_layers=4, num_units=256, activation="sigmoid"):
             for _ in range(num_layers)
         ]
         layers.append(tf.keras.layers.Dense(num_output, activation=None))
-        layers.append(tf.keras.layers.Lambda(lambda x: tf.math.l2_normalize(x, axis=1)))
+        if L2:
+            layers.append(
+                tf.keras.layers.Lambda(lambda x: tf.math.l2_normalize(x, axis=1))
+            )
         return tf.keras.Sequential(layers)
 
 

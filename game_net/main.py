@@ -11,10 +11,29 @@ from dataset import DatasetGenerator, np2tf_generator
 from naiveFC import NaiveFC, ResFC
 
 # model = NaiveFC(8, num_layers=4, activation="relu")
-model = ResFC(8, num_layers=8, activation="relu")
+model = ResFC(20, num_layers=8, num_units=768, activation="relu")
+heads = [NaiveFC(20, num_layers=0, activation=None, L2=False) for _ in range(8)]
 with tf.device("/GPU:0"):
-    loss_func = tfa.losses.TripletSemiHardLoss()
+    loss_object = tf.keras.losses.SparseCategoricalCrossentropy()
     optimizer = tf.keras.optimizers.Adam()
+
+
+@tf.function
+def embedding_to_onehot(features, agent_ids, labels):
+    # features has shape [batch_size, embedding_size]
+    # agent_ids has shape [batch_size]
+    # lables has shape [batch_size]
+    pred = []
+    new_labels = []
+    for i, head in enumerate(heads):
+        mask = tf.math.equal(agent_ids, i)
+        output = head(features)
+        pred.append(tf.boolean_mask(output, mask))
+        new_labels.append(tf.boolean_mask(labels, mask))
+    pred = tf.concat(pred, axis=0)
+    new_labels = tf.concat(new_labels, axis=0)
+    # pred has shape [batch_size, 20]
+    return pred, new_labels
 
 
 @tf.function
@@ -41,46 +60,34 @@ def calculate_loss(features):
 
 def train(
     train_root,
-    validation_root,
     save_checkpoint,
     sample_per_epoch=4000,
     epoch=10,
     batch_size=100,
+    shuffle=0,
 ):
     trainset = tf.data.Dataset.range(4).interleave(
         lambda _: DatasetGenerator(train_root, sample_per_epoch)
-        .shuffle(1)
+        .shuffle(1 + int(shuffle * batch_size))
         .batch(batch_size),
         num_parallel_calls=tf.data.AUTOTUNE,
     )
-    valset = tf.data.Dataset.range(4).interleave(
-        lambda _: DatasetGenerator(validation_root, sample_per_epoch).batch(batch_size),
-        num_parallel_calls=tf.data.AUTOTUNE,
-    )
-    distance_positive = tf.keras.metrics.Mean(name="distance_positive")
-    distance_negative = tf.keras.metrics.Mean(name="distance_negative")
     train_loss = tf.keras.metrics.Mean(name="train_loss")
-    val_positive = tf.keras.metrics.Mean(name="val_positive")
-    val_negative = tf.keras.metrics.Mean(name="val_negative")
-    val_loss = tf.keras.metrics.Mean(name="val_loss")
+    train_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name="train_accuracy")
     for e in range(epoch):
-        for i, (state, state_t) in enumerate(zip(trainset, valset)):
+        for i, (state, agent_id, label) in enumerate(trainset):
             with tf.device("/GPU:0"):
                 with tf.GradientTape() as tape:
                     feature = model(state, training=True)
-                    loss, distance_positives, distance_negatives = calculate_loss(
-                        feature
-                    )
-                gradients = tape.gradient(loss, model.trainable_variables)
-                optimizer.apply_gradients(zip(gradients, model.trainable_variables))
+                    pred, new_label = embedding_to_onehot(feature, agent_id, label)
+                    loss = loss_object(new_label, pred)
+                trainable_variables = (
+                    sum([h.trainable_variables for h in heads], [])
+                    + model.trainable_variables
+                )
+                gradients = tape.gradient(loss, trainable_variables)
+                optimizer.apply_gradients(zip(gradients, trainable_variables))
                 train_loss(loss)
-                distance_positive(distance_positives)
-                distance_negative(distance_negatives)
-                feature = model(state_t, training=False)
-                loss, distance_positives, distance_negatives = calculate_loss(feature)
-                val_loss(loss)
-                val_positive(tf.math.reduce_mean(distance_positives))
-                val_negative(tf.math.reduce_mean(distance_negatives))
                 if i % 10 == 0:
                     model.save_weights(save_checkpoint)
                     print("=" * 20)
@@ -89,26 +96,11 @@ def train(
                         "  train: ",
                         "loss:",
                         round(float(train_loss.result()), 5),
-                        "positive:",
-                        round(float(distance_positive.result()), 5),
-                        "negative:",
-                        round(float(distance_negative.result()), 5),
-                    )
-                    print(
-                        "  val: ",
-                        "loss:",
-                        round(float(val_loss.result()), 5),
-                        "positive:",
-                        round(float(val_positive.result()), 5),
-                        "negative:",
-                        round(float(val_negative.result()), 5),
+                        "accuracy:",
+                        round(float(train_accuracy.result()), 5),
                     )
                     train_loss.reset_states()
-                    distance_positive.reset_states()
-                    distance_negative.reset_states()
-                    val_loss.reset_states()
-                    val_positive.reset_states()
-                    val_negative.reset_states()
+                    train_accuracy.reset_states()
 
 
 def vis(test_dir, load_checkpoint, save_image, num_samples=-1, use_pca=True):
