@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 
-def NaiveFC(num_output=16, num_layers=4, num_units=256, activation="sigmoid", L2=True):
+def NaiveFC(num_output=16, num_layers=4, num_units=256, activation="sigmoid", last=""):
 
     with tf.device("/GPU:0"):
         layers = [
@@ -9,16 +9,18 @@ def NaiveFC(num_output=16, num_layers=4, num_units=256, activation="sigmoid", L2
             for _ in range(num_layers)
         ]
         layers.append(tf.keras.layers.Dense(num_output, activation=None))
-        if L2:
+        if last == "L2":
             layers.append(
                 tf.keras.layers.Lambda(lambda x: tf.math.l2_normalize(x, axis=1))
             )
+        elif last == "softmax":
+            layers.append(tf.keras.layers.Softmax())
         return tf.keras.Sequential(layers)
 
 
 class ResFC(tf.keras.Model):
     def __init__(
-        self, num_output=16, num_layers=4, num_units=256, activation="sigmoid"
+        self, num_output=16, num_layers=4, num_units=256, activation="sigmoid", last=""
     ):
         super(ResFC, self).__init__()
         self.num_layers = num_layers
@@ -26,18 +28,20 @@ class ResFC(tf.keras.Model):
             tf.keras.layers.Dense(num_units, activation=activation)
             for _ in range(num_layers)
         ]
-        self.output_layer = tf.keras.layers.Dense(num_output, activation=None)
-        self.L2 = tf.keras.layers.Lambda(lambda x: tf.math.l2_normalize(x, axis=1))
+        self.output_layer = tf.keras.layers.Dense(num_output)
+        if last == "L2":
+            self.last = tf.keras.layers.Lambda(
+                lambda x: tf.math.l2_normalize(x, axis=1)
+            )
+        elif last == "softmax":
+            self.last = tf.keras.layers.Softmax()
 
     def call(self, x):
         layers = [x]
         for i, fc in enumerate(self.hidden_layers):
-            if i > 1:
-                layers.append(fc(layers[-1]) + layers[-2])
+            if i > 0:
+                layers.append(fc(layers[-1]) + layers[-1])
             else:
                 layers.append(fc(layers[-1]))
-        if self.num_layers > 0:
-            output = self.output_layer(layers[-1] + layers[-2])
-        else:
-            output = self.output_layer(layers[0])
-        return self.L2(output)
+        output = self.output_layer(layers[-1])
+        return self.last(output) if self.last else output

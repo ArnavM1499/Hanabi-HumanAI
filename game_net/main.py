@@ -7,15 +7,15 @@ import os
 from sklearn.decomposition import PCA
 from tqdm import tqdm
 
-from dataset import DatasetGenerator, np2tf_generator
+from dataset import DatasetGenerator, np2tf_generator, get_mnist
 from naiveFC import NaiveFC, ResFC
 
 # model = NaiveFC(8, num_layers=4, activation="relu")
-model = ResFC(20, num_layers=8, num_units=768, activation="relu")
-heads = [NaiveFC(20, num_layers=0, activation=None, L2=False) for _ in range(8)]
+model = NaiveFC(20, num_layers=9, num_units=2000, activation="relu")
+heads = [NaiveFC(20, num_layers=0, activation="relu", last="softmax") for _ in range(8)]
 with tf.device("/GPU:0"):
     loss_object = tf.keras.losses.SparseCategoricalCrossentropy()
-    optimizer = tf.keras.optimizers.Adam()
+    optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
 
 
 @tf.function
@@ -66,19 +66,22 @@ def train(
     batch_size=100,
     shuffle=0,
 ):
-    trainset = tf.data.Dataset.range(4).interleave(
+    trainset = tf.data.Dataset.range(1).interleave(
         lambda _: DatasetGenerator(train_root, sample_per_epoch)
         .shuffle(1 + int(shuffle * batch_size))
         .batch(batch_size),
-        num_parallel_calls=tf.data.AUTOTUNE,
+        num_parallel_calls=4,
+        deterministic=False,
     )
     train_loss = tf.keras.metrics.Mean(name="train_loss")
     train_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name="train_accuracy")
+    feature_std = tf.keras.metrics.Mean(name="feature_std")
+    F = tf.keras.layers.Flatten()
     for e in range(epoch):
         for i, (state, agent_id, label) in enumerate(trainset):
             with tf.device("/GPU:0"):
                 with tf.GradientTape() as tape:
-                    feature = model(state, training=True)
+                    feature = model(F(state), training=True)
                     pred, new_label = embedding_to_onehot(feature, agent_id, label)
                     loss = loss_object(new_label, pred)
                 trainable_variables = (
@@ -88,6 +91,8 @@ def train(
                 gradients = tape.gradient(loss, trainable_variables)
                 optimizer.apply_gradients(zip(gradients, trainable_variables))
                 train_loss(loss)
+                feature_std(tf.math.reduce_mean(tf.math.reduce_std(feature, axis=0)))
+                train_accuracy(new_label, pred)
                 if i % 10 == 0:
                     model.save_weights(save_checkpoint)
                     print("=" * 20)
@@ -98,6 +103,8 @@ def train(
                         round(float(train_loss.result()), 5),
                         "accuracy:",
                         round(float(train_accuracy.result()), 5),
+                        "feature std:",
+                        round(float(feature_std.result()), 5),
                     )
                     train_loss.reset_states()
                     train_accuracy.reset_states()
