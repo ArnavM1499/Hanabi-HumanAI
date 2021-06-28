@@ -43,6 +43,8 @@ class ChiefPlayer(Player):
 		self.prev_knowledge = dict()
 		self.drawn_dict = dict()
 		self.hints_to_partner = []
+		self.game_state_before_move = None
+		self.player_model_before_move = None
 
 	def get_action(self, game_state, player_model, action_default=None):
 		if action_default is None:
@@ -91,10 +93,18 @@ class ChiefPlayer(Player):
 		drawn_move = []
 
 		if player == self.pnr:
+			self.game_state_before_move = deepcopy(game_state)
+			self.player_model_before_move = deepcopy(player_model)
 			return
 
 		# Detecting if any card information has changed that can be used to update previous data
+		mark_delete = []
+
 		for c in self.card_ids:
+			if self.card_ids[c] >= len(player_model.get_knowledge()):
+				mark_delete.append(c)
+				continue
+
 			new_k = player_model.get_knowledge()[self.card_ids[c]]
 
 			if self.drawn_dict[c] == None:
@@ -104,18 +114,22 @@ class ChiefPlayer(Player):
 				changed_cards.append((c, new_k))
 				drawn_move.append(self.drawn_dict[c])
 
+		for marked_c in mark_delete:
+			del self.card_ids[marked_c] # new card picked up when game didn't actually have one
+
+
 		if (len(changed_cards) > 0):
 			self.rollforward_move_tracker(min(drawn_move), self.move_idx, changed_cards)
-
 
 		# Creating new row for move tracking table
 		new_row = dict()
 		new_row["move"] = self.action_to_key(action)
 
-		modified_game_state = deepcopy(game_state) # https://stackoverflow.com/questions/48338847/how-to-copy-a-class-instance-in-python
-		modified_game_state.hands = [None if a != [] else [] for a in game_state.hands]
+		## storing game state before move for get_action
+		modified_game_state = deepcopy(self.game_state_before_move)
+		modified_game_state.hands = [None if a != [] else [] for a in self.game_state_before_move.hands]
 		partners_hints = self.hints_to_partner
-		modified_player_model = BasePlayerModel(self.partner_nr, game_state.all_knowledge[self.partner_nr], self.hints_to_partner, player_model.get_actions())
+		modified_player_model = BasePlayerModel(self.partner_nr, self.game_state_before_move.all_knowledge[self.partner_nr], self.hints_to_partner, self.player_model_before_move.get_actions())
 		new_row["observable game state"] = (modified_game_state, modified_player_model)
 
 		new_row["card ids"] = self.card_ids
@@ -125,10 +139,17 @@ class ChiefPlayer(Player):
 		new_row["conditional probabilities"] = [0]*self.player_pool.get_size()
 		new_row["agent distribution"] = [0]*self.player_pool.get_size()
 
+
+		## Informing player pool of "their own" actions
+		modified_game_state = deepcopy(game_state) # https://stackoverflow.com/questions/48338847/how-to-copy-a-class-instance-in-python
+		modified_game_state.hands = [None if a != [] else [] for a in game_state.hands]
+		partners_hints = self.hints_to_partner
+		modified_player_model = BasePlayerModel(self.partner_nr, game_state.all_knowledge[self.partner_nr], self.hints_to_partner, player_model.get_actions())
+
 		for agent in self.player_pool.get_agents():
 			game_state_input = deepcopy(modified_game_state)
 			game_state_input.hands = [self.new_sample(player_model.get_knowledge()).hand if a != [] else [] for a in game_state.hands]
-			agent.get_action(game_state_input, modified_player_model)
+			# agent.get_action(game_state_input, modified_player_model)
 			agent.inform(action, player, game_state_input, modified_player_model)
 
 		# add incomplete row to make use of functions below
@@ -151,14 +172,25 @@ class ChiefPlayer(Player):
 			updated_prior = new_conditional*prior
 			self.move_tracking_table.at[self.move_idx,"agent distribution"] = self.makeprob(updated_prior)
 
+			if (None in updated_prior):
+				raise Exception("whooo")
+
 		self.move_idx += 1
+
+	def weighted_sample(self, choices, probs): # making this because numpy.random.choice has annoying errors with floating point errors
+		x = random.random()
+
+		for idx, p in enumerate(probs):
+			x -= p
+
+			if x < 0:
+				return choices[idx]
+
+		return choices[-1] # in case there were any issues with floating points/should add logging for this at some point
 
 	def makeprob(self, L):
 		x = np.array(L).flatten()
 		p = x/np.sum(x)
-
-		if np.sum(p) != 1:
-			p[-1] = 1 - np.sum(p[:-1])
 
 		return p
 
@@ -186,7 +218,7 @@ class ChiefPlayer(Player):
 		new_samp = []
 
 		for card in new_knowledge:
-			card_idx = np.random.choice(CardChoices, p=self.makeprob(card)) # https://stackoverflow.com/questions/3679694/a-weighted-version-of-random-choice
+			card_idx = self.weighted_sample(CardChoices, self.makeprob(card)) # https://stackoverflow.com/questions/3679694/a-weighted-version-of-random-choice
 			card = (card_idx//5, card_idx%5 + 1)
 			new_samp.append(card)
 
@@ -259,8 +291,9 @@ class ChiefPlayer(Player):
 		for table_idx in range(move_index, most_recent_move):			
 			# update hand knowledge
 			for card, new_k in cards_affected_with_new_knowledge:
-				pos_idx = self.move_tracking_table.loc[table_idx,"card ids"][card]
-				self.move_tracking_table.at[table_idx,"hand knowledge"][pos_idx] = new_k
+				if card in self.move_tracking_table.at[table_idx, "card ids"]:
+					pos_idx = self.move_tracking_table.loc[table_idx,"card ids"][card]
+					self.move_tracking_table.at[table_idx,"hand knowledge"][pos_idx] = new_k
 
 
 			# use hand_sampler to get new samples where needed
@@ -288,3 +321,7 @@ class ChiefPlayer(Player):
 			new_prior_pre = new_conditional * prev_prior
 			new_prior = self.makeprob(new_prior_pre)
 			self.move_tracking_table.at[table_idx,"agent distribution"] = new_prior
+
+			if None in new_prior:
+				print(new_prior_pre, new_prior, new_conditional)
+				raise Exception("NAN IN NEW PRIOR")

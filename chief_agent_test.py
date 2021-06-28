@@ -33,7 +33,8 @@ with open(pickle_file_name, 'rb') as f:
 	row = try_pickle(f)
 
 	while(row != None):
-		print(row[0], new_chief.move_tracking_table.loc[:, ("agent distribution", "hand knowledge")])
+		print(new_chief.player_pool.get_names())
+		print(new_chief.move_tracking_table.loc[:,"agent distribution"])
 
 		if row[0] == "Action" and row[1].get_current_player() == 0:
 			game_state = row[1]
@@ -53,4 +54,4 @@ with open(pickle_file_name, 'rb') as f:
 
 		row = try_pickle(f)
 
-	print(new_chief.move_tracking_table.loc[99])
+	print(new_chief.move_tracking_table.tail())

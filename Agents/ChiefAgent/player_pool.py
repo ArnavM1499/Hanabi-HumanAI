@@ -19,6 +19,9 @@ class PlayerPool:
     def get_size(self):
         return self.size
 
+    def get_names(self):
+        return [type(a).__name__ for a in self.data]
+
     def copies(self):
         re = []
 
