@@ -43,7 +43,7 @@ class DatasetGenerator:
             cls._generator,
             output_signature=(
                 tf.TensorSpec(shape=(GAME_STATE_LENGTH,), dtype=tf.float32),
-                tf.TensorSpec(shape=(), dtype=tf.int8),  # Agent id
+                tf.TensorSpec(shape=(), dtype=tf.int32),  # Agent id
                 tf.TensorSpec(shape=(), dtype=tf.float32),  # Action id
             ),
             args=(dataset_root, num_samples),
@@ -68,7 +68,79 @@ class DatasetGenerator:
         for idx in range(num_samples // 20):
             pos = idx % num_agents
             for i in range(20):
+                # game state, agent_id, action_id
                 yield next(file_generators[pos][i]), pos, i
+
+
+def _3decode(encoding):
+    state = []
+    for i in range(31):
+        state.append(encoding % 3)
+        encoding = encoding // 3
+    return tf.stack(state)
+
+
+def _parse_3encode(encoding):
+    encoding = tf.map_fn(
+        lambda x: tf.strings.to_number(x, out_type=tf.int64),
+        tf.strings.split(encoding),
+        fn_output_signature=tf.int64,
+    )
+    action = float(encoding[1])
+    agent = encoding[0]
+    states = tf.concat(tf.map_fn(_3decode, encoding[2:]), axis=1)
+    states = tf.map_fn(
+        lambda x: 0.333 * float(x), states, fn_output_signature=tf.float32
+    )
+    return states, agent, action
+
+
+def txt_to_dataset(text_files):
+    return tf.data.TextLineDataset(text_files).map(_parse_3encode)
+
+
+def serialize_example(state, agent_id, action_id):
+    feature = {
+        "state": tf.train.Feature(float_list=tf.train.FloatList(value=state)),
+        "agent_id": tf.train.Feature(int64_list=tf.train.Int64List(value=[agent_id])),
+        "action_id": tf.train.Feature(int64_list=tf.train.Int64List(value=[action_id])),
+    }
+    proto = tf.train.Example(features=tf.train.Features(feature=feature))
+    return proto.SerializeToString()
+
+
+def tf_serialize_example(state, agent_id, action_id):
+    tf_string = tf.py_function(
+        serialize_example, (state, agent_id, action_id), tf.string
+    )
+    return tf.reshape(tf_string, ())
+
+
+def np_to_tfrecord(dataset_root, output_record, num_samples):
+    # num_samples used to manually balence sample weights
+    original = DatasetGenerator(dataset_root, num_samples)
+    serialized = original.map(tf_serialize_example)
+    writer = tf.data.experimental.TFRecordWriter(output_record)
+    writer.write(serialized)
+
+
+game_state_discription = {
+    "state": tf.io.FixedLenFeature([], tf.float32),
+    "agent_id": tf.io.FixedLenFeature([], tf.int64),
+    "action_id": tf.io.FixedLenFeature([], tf.int64),
+}
+
+
+def parse_state_func(proto):
+    return tf.io.parse_single_example(proto, game_state_discription)
+
+
+def get_dataset_from_tfrecord(tfrecord):
+    raw = tf.data.TFRecordDataset([tfrecord])
+    for data in raw:
+        import pdb
+
+        pdb.set_trace()
 
 
 def get_mnist():

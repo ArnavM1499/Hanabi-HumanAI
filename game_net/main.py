@@ -1,13 +1,15 @@
 from fire import Fire
+from glob import glob
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 import tensorflow_addons as tfa
 import os
 from sklearn.decomposition import PCA
+from time import time
 from tqdm import tqdm
 
-from dataset import DatasetGenerator, np2tf_generator, get_mnist
+from dataset import DatasetGenerator, np2tf_generator, txt_to_dataset
 from naiveFC import NaiveFC, ResFC
 
 # model = NaiveFC(8, num_layers=4, activation="relu")
@@ -78,6 +80,7 @@ def train(
     feature_std = tf.keras.metrics.Mean(name="feature_std")
     F = tf.keras.layers.Flatten()
     for e in range(epoch):
+        t = time()
         for i, (state, agent_id, label) in enumerate(trainset):
             with tf.device("/GPU:0"):
                 with tf.GradientTape() as tape:
@@ -105,7 +108,10 @@ def train(
                         round(float(train_accuracy.result()), 5),
                         "feature std:",
                         round(float(feature_std.result()), 5),
+                        "sec passed:",
+                        round(time() - t, 5),
                     )
+                    t = time()
                     train_loss.reset_states()
                     train_accuracy.reset_states()
 
