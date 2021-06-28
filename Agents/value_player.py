@@ -311,6 +311,9 @@ class ValuePlayer(Player):
 
     def inform(self, action, player, new_state, new_model):
         self._update_info(new_state, new_model)
+        self._count_cards()
+        self.weighted_knowledge = weight_knowledge(self.knowledge, self.weights)
+        self.partner_weighted_knowledge = weight_knowledge(self.partner_knowledge, self.partner_weights)
         if player == self.pnr:
             if action.type in [PLAY, DISCARD]:
                 # reset weights for specific slot
