@@ -137,11 +137,11 @@ class HardcodePlayer2(Player):
             elif action.type == cgf.HINT_NUMBER:
                 if action.num == 1:
                     self.index_play.extend(new_state.get_hinted_indices())
-                else:
-                    for i in range(self.card_nr):
-                        for j in range(5):
-                            for k in range(action.num - 1):
-                                self.knowledge[i][j][k] = 0
+                # else:
+                #     for i in range(self.card_nr):
+                #         for j in range(5):
+                #             for k in range(action.num - 1):
+                #                 self.knowledge[i][j][k] = 0
             if self.debug:
                 pprint(self.__dict__)
                 print("\n\n\n")
