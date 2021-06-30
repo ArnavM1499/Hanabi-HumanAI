@@ -171,7 +171,7 @@ class ChiefPlayer(Player):
 		for agent in self.player_pool.get_agents():
 			game_state_input = deepcopy(modified_game_state2)
 			game_state_input.hands = [self.new_sample(player_model.get_knowledge()).hand if a == [] else [] for a in game_state.hands]
-			agent.get_action(modified_game_state2, modified_player_model2)
+			agent.get_action(game_state_input, modified_player_model2)
 			agent.inform(action, player, game_state_input, modified_player_model2)
 
 		# add incomplete row to make use of functions below
