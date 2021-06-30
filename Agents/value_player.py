@@ -24,6 +24,9 @@ def remove_card(card, knowledge):
 
 def weight_knowledge(knowledge, weights):
     new_knowledge = copy.deepcopy(weights)
+
+    print(len(knowledge), len(weights))
+
     for slot in range(len(new_knowledge)):
         for col in range(5):
             for num in range(5):

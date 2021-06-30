@@ -317,6 +317,8 @@ class HardcodePlayer2(Player):
 
     def get_action(self, state, model):
         def _wrapper(value_dict, best=None):
+            print([(value_dict[v], v.__str__()) for v in value_dict])
+
             if self.return_value and self.value_wrap:
                 if not best:
                     best = max(value_dict.keys(), key=lambda k: value_dict[k])
@@ -633,7 +635,6 @@ class HardcodePlayer2(Player):
             print("comparing hints")
 
         for action in self.last_state.get_valid_actions():
-
             if action.type not in [cgf.HINT_NUMBER, cgf.HINT_COLOR]:
                 continue
             pred_play = self.partner_play.copy()
