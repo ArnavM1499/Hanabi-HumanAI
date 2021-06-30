@@ -1,5 +1,4 @@
 from fire import Fire
-from glob import glob
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
@@ -9,11 +8,11 @@ from sklearn.decomposition import PCA
 from time import time
 from tqdm import tqdm
 
-from dataset import DatasetGenerator, np2tf_generator, txt_to_dataset
-from naiveFC import NaiveFC, ResFC
+from dataset import DatasetGenerator2, np2tf_generator
+from naiveFC import NaiveFC
 
 # model = NaiveFC(8, num_layers=4, activation="relu")
-model = NaiveFC(20, num_layers=9, num_units=2000, activation="relu")
+model = NaiveFC(10, num_layers=4, num_units=1000, activation="relu")
 heads = [NaiveFC(20, num_layers=0, activation="relu", last="softmax") for _ in range(8)]
 with tf.device("/GPU:0"):
     loss_object = tf.keras.losses.SparseCategoricalCrossentropy()
@@ -63,13 +62,12 @@ def calculate_loss(features):
 def train(
     train_root,
     save_checkpoint,
-    sample_per_epoch=4000,
-    epoch=10,
-    batch_size=100,
-    shuffle=0,
+    epoch=100,
+    batch_size=6000,
+    shuffle=3,
 ):
     trainset = tf.data.Dataset.range(1).interleave(
-        lambda _: DatasetGenerator(train_root, sample_per_epoch)
+        lambda _: DatasetGenerator2(train_root, 0)
         .shuffle(1 + int(shuffle * batch_size))
         .batch(batch_size),
         num_parallel_calls=4,

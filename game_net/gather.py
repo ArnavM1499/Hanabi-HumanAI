@@ -1,4 +1,5 @@
 from fire import Fire
+from glob import glob
 import numpy as np
 import os
 import pickle
@@ -42,12 +43,30 @@ def pkl_to_txt(dataset_dir, *paths):
                         fout.write("\n")
 
 
-def pkl_to_np(dataset_dir, *paths):
+def pkl_to_np(dataset_dir, *paths, rename=False):
+    name2id = {}
+    cnt = 0
+    if not os.path.isdir(dataset_dir):
+        os.makedirs(dataset_dir)
+    if len(paths) == 1 and os.path.isdir(paths[0]):
+        paths = glob(os.path.join(paths[0], "*.pkl"))
     for path in tqdm(paths):
         if not os.path.isfile(path):
             print(path, "Not Found!")
             continue
         (p1, p2, _) = tuple(os.path.basename(path).split("_"))
+        if p1 not in name2id.keys():
+            if rename:
+                name2id[p1] = str(cnt).zfill(5)
+                cnt += 1
+            else:
+                name2id[p1] = p1
+        if p2 not in name2id.keys():
+            if rename:
+                name2id[p2] = str(cnt).zfill(5)
+                cnt += 1
+            else:
+                name2id[p2] = p2
         player = [p1, p2]
         with open(path, "rb") as f:
             while True:
@@ -55,13 +74,18 @@ def pkl_to_np(dataset_dir, *paths):
                     p, a, s = decode_state(pickle.load(f))
                 except EOFError:
                     break
-                subdir = os.path.join(dataset_dir, player[p])
-                if not os.path.isdir(subdir):
-                    os.makedirs(subdir)
-                np.save(
-                    open(os.path.join(subdir, "{}.npy".format(str(a).zfill(2))), "ab+"),
-                    np.array(s, dtype=np.int8),
+                output_path = os.path.join(
+                    dataset_dir, "{}.npy".format(name2id[player[p]])
                 )
+                with open(output_path, "ab+") as fout:
+                    np.save(
+                        fout,
+                        np.array(s, dtype=np.int8),
+                    )
+                    np.save(
+                        fout,
+                        np.array([a], dtype=np.int8),
+                    )
 
 
 if __name__ == "__main__":

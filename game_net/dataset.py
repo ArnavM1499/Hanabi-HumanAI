@@ -1,4 +1,3 @@
-from glob import glob
 import numpy as np
 import os
 from random import shuffle
@@ -22,6 +21,19 @@ def np2tf_generator(file_path, num_samples=-1, loop=True):
                 f = open(file_path, "rb")
             else:
                 break
+    f.close()
+
+
+def merged_np2tf_generator(file_path):
+    f = open(file_path, "rb")
+    while True:
+        try:
+            state = np.load(f)
+            action = np.load(f)
+            if len(state) == GAME_STATE_LENGTH:
+                yield tf.constant(state * 0.333, dtype=tf.float32), action[0]
+        except ValueError:
+            break
     f.close()
 
 
@@ -70,6 +82,42 @@ class DatasetGenerator:
             for i in range(20):
                 # game state, agent_id, action_id
                 yield next(file_generators[pos][i]), pos, i
+
+
+class DatasetGenerator2:
+    def __new__(cls, dataset_root, dummy=0):
+        return tf.data.Dataset.from_generator(
+            cls._generator,
+            output_signature=(
+                tf.TensorSpec(shape=(GAME_STATE_LENGTH,), dtype=tf.float32),
+                tf.TensorSpec(shape=(), dtype=tf.int32),  # Agent id
+                tf.TensorSpec(shape=(), dtype=tf.float32),  # Action id
+            ),
+            args=(dataset_root, dummy),
+        )
+
+    def _generator(dataset_root, dummy=0):
+
+        dataset_root = str(dataset_root)[2:-1]
+        all_agents = [
+            os.path.join(dataset_root, pid) for pid in os.listdir(dataset_root)
+        ]
+        file_generators = [merged_np2tf_generator(pid) for pid in all_agents]
+        num_agents = len(file_generators)
+        pos = 0
+        visited = set()
+        while True:
+            try:
+                # game state, agent_id, action_id
+                state, action = next(file_generators[pos])
+                yield state, pos, action
+                pos = (pos + 1) % num_agents
+            except StopIteration:
+                file_generators[pos] = merged_np2tf_generator(all_agents[pos])
+                if pos not in visited:
+                    visited.add(pos)
+                    if len(visited) == num_agents:
+                        break
 
 
 def _3decode(encoding):
