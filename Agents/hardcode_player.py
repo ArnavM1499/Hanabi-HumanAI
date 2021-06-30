@@ -30,7 +30,6 @@ class HardcodePlayer2(Player):
         self.return_value = True
         self.value_wrap = True
         self.action_classes = ["_execute", "_hint", "_discard"]
-        self.wait_for_result = False
         self.discard_internal = False
         self.partner_cache = True
 
@@ -70,10 +69,6 @@ class HardcodePlayer2(Player):
                 "_execute_force",
             ),
             (lambda p, s, m: True, "_execute"),
-            # (
-            #     lambda p, s, m: p.partner_play == [] and s.get_num_hints() > 4,
-            #     "_hint_force",
-            # ),
         ]
         self.decision_permutation = 0
         self.risk_play = {0: 0.5, 5: 0, 12: 0.4, 30: 1}
@@ -137,33 +132,17 @@ class HardcodePlayer2(Player):
             elif action.type == cgf.HINT_NUMBER:
                 if action.num == 1:
                     self.index_play.extend(new_state.get_hinted_indices())
-                # else:
-                #     for i in range(self.card_nr):
-                #         for j in range(5):
-                #             for k in range(action.num - 1):
-                #                 self.knowledge[i][j][k] = 0
             if self.debug:
                 pprint(self.__dict__)
                 print("\n\n\n")
             return
 
-        if action.pnr == self.pnr and action.type in [cgf.PLAY, cgf.DISCARD]:
-            self.wait_for_result = True
-            self._update_index(action.cnr)
-
-        if self.self_card_count:
-            if self.wait_for_result:
-                # The card just played/discarded by itself in the previous turn
-                self.wait_for_result = False
-                col, num = new_state.get_card_changed()
+        if self.self_card_count and action.type in [cgf.DISCARD, cgf.PLAY]:
+            partner_hand = new_state.get_hands()[self.partner_nr]
+            if len(partner_hand) == 5:
+                col, num = partner_hand[-1]
                 for k in self.knowledge:
                     k[col][num - 1] = max(0, k[col][num - 1] - 1)
-            elif action.type in [cgf.DISCARD, cgf.PLAY]:
-                partner_hand = new_state.get_hands()[self.partner_nr]
-                if len(partner_hand) == 5:
-                    col, num = partner_hand[-1]
-                    for k in self.knowledge:
-                        k[col][num - 1] = max(0, k[col][num - 1] - 1)
 
         if action.pnr != self.pnr:
             return
@@ -204,24 +183,6 @@ class HardcodePlayer2(Player):
                 if self.debug:
                     pprint(self.__dict__)
                     print("\n\n\n")
-
-        elif action.type in [cgf.PLAY, cgf.DISCARD]:
-
-            with timer("interpret play/discard", self.timer):
-
-                self._update_index(action.cnr, partner=True)
-
-                if action.type == cgf.DISCARD and new_state.get_num_hints() > 1:
-                    for i in range(self.card_nr):
-                        if not (
-                            (i in self.index_play)
-                            or (i in self.index_play_candidate)
-                            or (i in self.index_protect)
-                        ):
-                            self.index_discard_candidate.append(i)
-
-        else:
-            assert False
 
     def _interpret(
         self,
@@ -345,14 +306,15 @@ class HardcodePlayer2(Player):
             self._update_state(state, model)
             if self.return_value:
                 value_dict = {}
-                for A in state.get_valid_actions():
-                    value_dict[A] = 0
+                for i in range(5):
+                    value_dict[Action(cgf.PLAY, cnr=i)] = 0
+                    value_dict[Action(cgf.DISCARD, cnr=i)] = 0
+                    value_dict[Action(cgf.HINT_NUMBER, num=i)] = 0
+                    value_dict[Action(cgf.HINT_COLOR, col=i)] = 0
                 value_dict[action] = 1
                 return _wrapper(value_dict)
             else:
                 return action
-
-        self._update_state(state, model)
 
         # Pattern matcing [self._decide() in version 1]
         chosen_action = None
@@ -381,11 +343,6 @@ class HardcodePlayer2(Player):
             final_action = max(chosen_action.keys(), key=lambda a: chosen_action[a])
         else:
             final_action = chosen_action
-
-        # Post processes
-        # if final_action.type in [cgf.PLAY, cgf.DISCARD]:
-        #     self.wait_for_result = True
-        #     self._update_index(final_action.cnr)
 
         if self.return_value:
             value_dict = chosen_action
@@ -521,14 +478,13 @@ class HardcodePlayer2(Player):
                 value_dict = {}
                 for i, action in enumerate(order):
                     value_dict[action] = 1 - 0.1 * i
-                for action in self.last_state.get_valid_actions():
-                    if action.type == cgf.DISCARD and action not in value_dict.keys():
-                        value_dict[action] = -1
+                for i in range(self.card_nr):
+                    A = Action(cgf.DISCARD, cnr=i)
+                    if A not in value_dict.keys():
+                        value_dict[A] = -1
             else:
                 value_dict = {
-                    action: 0
-                    for action in self.last_state.get_valid_actions()
-                    if action.type == cgf.DISCARD
+                    Action(cgf.DISCARD, cnr=i): 0 for i in range(self.card_nr)
                 }
                 value_dict[
                     Action(
@@ -632,10 +588,10 @@ class HardcodePlayer2(Player):
         if self.debug:
             print("comparing hints")
 
-        for action in self.last_state.get_valid_actions():
+        for i, t in product(range(5), [cgf.HINT_NUMBER, cgf.HINT_COLOR]):
 
-            if action.type not in [cgf.HINT_NUMBER, cgf.HINT_COLOR]:
-                continue
+            action = Action(t, pnr=self.partner_nr, col=i, num=i)
+
             pred_play = self.partner_play.copy()
             pred_play_candidate = self.partner_play_candidate.copy()
             pred_discard = self.partner_discard.copy()
