@@ -315,8 +315,6 @@ class ValuePlayer(Player):
     def inform(self, action, player, new_state, new_model):
         self._update_info(new_state, new_model)
         self._count_cards()
-        self.weighted_knowledge = weight_knowledge(self.knowledge, self.weights)
-        self.partner_weighted_knowledge = weight_knowledge(self.partner_knowledge, self.partner_weights)
         if player == self.pnr:
             if action.type in [PLAY, DISCARD]:
                 # reset weights for specific slot
@@ -339,6 +337,8 @@ class ValuePlayer(Player):
                     del hint_indices[-1]
                 update_weights(
                     self.partner_weights, self.hint_weight, new_state.get_board(), target)
+            self.weighted_knowledge = weight_knowledge(self.knowledge, self.weights)
+            self.partner_weighted_knowledge = weight_knowledge(self.partner_knowledge, self.partner_weights)
             return
 
         # for 2 player games there's only 1 other player
@@ -364,3 +364,5 @@ class ValuePlayer(Player):
                 self.partner_weights.append([
                     [1 for _ in range(5)] for _ in range(5)
                 ])
+        self.weighted_knowledge = weight_knowledge(self.knowledge, self.weights)
+        self.partner_weighted_knowledge = weight_knowledge(self.partner_knowledge, self.partner_weights)
