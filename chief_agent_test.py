@@ -15,8 +15,8 @@ pickle_file_name = "chief_testing"
 pickle_file = open(pickle_file_name, "wb")
 
 for i in range(1):
-	P1 = ExperimentalPlayer("P1", 0)
-	P2 = ExperimentalPlayer("P2", 1)
+	P1 = ValuePlayer("P1", 0)
+	P2 = ValuePlayer("P2", 1)
 	pickle.dump(["NEW"], pickle_file)
 	G = hanabi.Game([P1, P2], file_name, pickle_file)
 	Result = G.run(100)
@@ -35,6 +35,9 @@ with open(pickle_file_name, 'rb') as f:
 
 	while(row != None):
 		# print(new_chief.player_pool.get_names())
+
+		if row[0] == "Inform" and row[4] == 1:
+			print("indices", row[1].hinted_indices)
 		
 
 		if row[0] == "Action" and row[1].get_current_player() == 0:
@@ -51,7 +54,7 @@ with open(pickle_file_name, 'rb') as f:
 			action = row[3]
 			curr_player = row[5]
 
-			print(action, curr_player, game_state.get_current_player())
+			print("player",curr_player,"does",action)
 
 			new_chief.inform(action, curr_player, game_state, player_model)
 			print(new_chief.move_tracking_table.loc[:,("agent distribution", "MLE probabilities")])
