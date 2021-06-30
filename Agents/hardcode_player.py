@@ -306,14 +306,15 @@ class HardcodePlayer2(Player):
             self._update_state(state, model)
             if self.return_value:
                 value_dict = {}
-                for A in state.get_valid_actions():
-                    value_dict[A] = 0
+                for i in range(5):
+                    value_dict[Action(cgf.PLAY, cnr=i)] = 0
+                    value_dict[Action(cgf.DISCARD, cnr=i)] = 0
+                    value_dict[Action(cgf.HINT_NUMBER, num=i)] = 0
+                    value_dict[Action(cgf.HINT_COLOR, col=i)] = 0
                 value_dict[action] = 1
                 return _wrapper(value_dict)
             else:
                 return action
-
-        self._update_state(state, model)
 
         # Pattern matcing [self._decide() in version 1]
         chosen_action = None
@@ -477,14 +478,13 @@ class HardcodePlayer2(Player):
                 value_dict = {}
                 for i, action in enumerate(order):
                     value_dict[action] = 1 - 0.1 * i
-                for action in self.last_state.get_valid_actions():
-                    if action.type == cgf.DISCARD and action not in value_dict.keys():
-                        value_dict[action] = -1
+                for i in range(self.card_nr):
+                    A = Action(cgf.DISCARD, cnr=i)
+                    if A not in value_dict.keys():
+                        value_dict[A] = -1
             else:
                 value_dict = {
-                    action: 0
-                    for action in self.last_state.get_valid_actions()
-                    if action.type == cgf.DISCARD
+                    Action(cgf.DISCARD, cnr=i): 0 for i in range(self.card_nr)
                 }
                 value_dict[
                     Action(
@@ -588,10 +588,10 @@ class HardcodePlayer2(Player):
         if self.debug:
             print("comparing hints")
 
-        for action in self.last_state.get_valid_actions():
+        for i, t in product(range(5), [cgf.HINT_NUMBER, cgf.HINT_COLOR]):
 
-            if action.type not in [cgf.HINT_NUMBER, cgf.HINT_COLOR]:
-                continue
+            action = Action(t, pnr=self.partner_nr, col=i, num=i)
+
             pred_play = self.partner_play.copy()
             pred_play_candidate = self.partner_play_candidate.copy()
             pred_discard = self.partner_discard.copy()
