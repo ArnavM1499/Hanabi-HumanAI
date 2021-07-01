@@ -118,7 +118,7 @@ def record_game(
         )
 
 
-def test_player(player="00005", player2=None, iters=1000):
+def test_player(player="00004", player2=None, iters=1000):
     p = Pool(16)
     res = p.starmap_async(
         run_single,
