@@ -362,7 +362,7 @@ class HardcodePlayer2(Player):
 
     def _execute(self, force=False):
 
-        # print("executing")
+        print("executing", self.last_state.get_board())
 
         with timer("execute main", self.timer):
             board = self.last_state.get_board()
@@ -542,6 +542,8 @@ class HardcodePlayer2(Player):
         partner_knowledge = deepcopy(
             self.last_state.get_all_knowledge()[self.partner_nr]
         )
+
+        print("hinting", partner_hand)
 
         if self.partner_card_count:
             with timer("processs partner card count", self.timer):

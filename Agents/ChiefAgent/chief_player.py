@@ -171,7 +171,10 @@ class ChiefPlayer(Player):
 		for agent in self.player_pool.get_agents():
 			game_state_input = deepcopy(modified_game_state2)
 			game_state_input.hands = [self.new_sample(player_model.get_knowledge()).hand if a == [] else [] for a in game_state.hands]
-			agent.get_action(game_state_input, modified_player_model2)
+			prev_game = deepcopy(modified_game_state)
+			prev_game.hands = [self.new_sample(player_model.get_knowledge()).hand if a == None else [] for a in modified_game_state.hands]
+			d = agent.get_action(prev_game, modified_player_model)
+			# print(max(d, key=d.get), type(agent).__name__, prev_game.hands)
 			agent.inform(action, player, game_state_input, modified_player_model2)
 
 		# add incomplete row to make use of functions below
@@ -263,9 +266,12 @@ class ChiefPlayer(Player):
 		return nonnegative_vals/np.sum(nonnegative_vals)
 
 	def agent_probs(self, hand, move_idx): ## THIS ASSUMES THAT WE ONLY HAVE ONE TEAMMATE
-		game_state, base_player_model = self.move_tracking_table.loc[move_idx,"observable game state"]
+		game_state_ref, base_player_model_ref = self.move_tracking_table.loc[move_idx,"observable game state"]
 		agent_copies = self.move_tracking_table.loc[move_idx,"agent state copies"]
 		action_idx = int(self.move_tracking_table.loc[move_idx,"move"])
+
+		game_state = deepcopy(game_state_ref)
+		base_player_model = deepcopy(base_player_model_ref)
 
 		for i in range(len(game_state.hands)):
 			if game_state.hands[i] is None:
@@ -278,9 +284,8 @@ class ChiefPlayer(Player):
 			temp_agent = deepcopy(agent)
 			# print(base_player_model.knowledge)
 			values = temp_agent.get_action(game_state, base_player_model)
-			# print("    ", action_idx, hand, temp_agent.partner_nr)
-			# for v in values:
-			# 	print("           ", v, values[v])
+			if type(agent).__name__ == "HardcodePlayer2":
+				print(max(values, key=values.get), game_state.hands)
 			probs.append(self.values_to_probs(values)[action_idx])
 			prob_array = np.array(self.values_to_probs(values))
 			# print(prob_array, prob_array == max(prob_array))
