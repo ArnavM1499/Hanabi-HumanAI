@@ -1,40 +1,50 @@
 from fire import Fire
+from glob import glob
 import matplotlib.pyplot as plt
 import numpy as np
-import tensorflow as tf
-import tensorflow_addons as tfa
 import os
 from sklearn.decomposition import PCA
+import tensorflow as tf
+import tensorflow_addons as tfa
 from time import time
 from tqdm import tqdm
 
-from dataset import DatasetGenerator2, np2tf_generator
+from dataset import GAME_STATE_LENGTH
+from dataset import DatasetGenerator_cached, DatasetGenerator2
+from dataset import np2tf_generator, merged_np2tf_generator
 from naiveFC import NaiveFC
 
-# model = NaiveFC(8, num_layers=4, activation="relu")
-model = NaiveFC(10, num_layers=4, num_units=1000, activation="relu")
-heads = [NaiveFC(20, num_layers=0, activation="relu", last="softmax") for _ in range(8)]
+# tf.config.set_visible_devices([], "GPU")
+
+model = NaiveFC(10, num_layers=5, num_units=1600, activation="relu", dropout=0.1)
+heads = [
+    NaiveFC(20, num_layers=0, activation="relu", last="softmax") for _ in range(20)
+]
 with tf.device("/GPU:0"):
     loss_object = tf.keras.losses.SparseCategoricalCrossentropy()
-    optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
+    optimizer = tf.keras.optimizers.Adam(learning_rate=0.003)
 
 
 @tf.function
-def embedding_to_onehot(features, agent_ids, labels):
+def embedding_to_onehot(features, agent_ids, labels, weights, num_heads):
     # features has shape [batch_size, embedding_size]
     # agent_ids has shape [batch_size]
     # lables has shape [batch_size]
+    # weights has shape [batch_size]
     pred = []
     new_labels = []
-    for i, head in enumerate(heads):
+    new_weights = []
+    for i, head in enumerate(heads[:num_heads]):
         mask = tf.math.equal(agent_ids, i)
         output = head(features)
         pred.append(tf.boolean_mask(output, mask))
         new_labels.append(tf.boolean_mask(labels, mask))
+        new_weights.append(tf.boolean_mask(weights, mask))
     pred = tf.concat(pred, axis=0)
     new_labels = tf.concat(new_labels, axis=0)
+    new_weights = tf.concat(new_weights, axis=0)
     # pred has shape [batch_size, 20]
-    return pred, new_labels
+    return pred, new_labels, new_weights
 
 
 @tf.function
@@ -60,43 +70,79 @@ def calculate_loss(features):
 
 
 def train(
-    train_root,
+    dataset_root,
     save_checkpoint,
-    epoch=100,
-    batch_size=6000,
-    shuffle=3,
+    epoch=1000,
+    samples_per_batch=14000000,  # default for 5 + 2 train
+    batch_size=10000,
+    shuffle=2,
+    use_val=True,
+    start_from_scratch=False,
 ):
-    trainset = tf.data.Dataset.range(1).interleave(
-        lambda _: DatasetGenerator2(train_root, 0)
+    if not start_from_scratch:
+        try:
+            model.load_weights(save_checkpoint)
+            for i in range(20):
+                heads[i].load_weights(save_checkpoint + "_head_" + str(i).zfill(3))
+        except:
+            print("cannot load existing model")
+    num_heads = len(glob(os.path.join(dataset_root, "train", "*.npy")))
+    # trainset = (
+    #     DatasetGenerator2(os.path.join(dataset_root, "train"), 0)
+    #     .shuffle(1 + int(shuffle * batch_size))
+    #     .batch(batch_size)
+    #     .prefetch(1)
+    # )
+    trainset = (
+        DatasetGenerator_cached(os.path.join(dataset_root, "train"), samples_per_batch)
         .shuffle(1 + int(shuffle * batch_size))
-        .batch(batch_size),
-        num_parallel_calls=4,
-        deterministic=False,
+        .batch(batch_size)
+        .prefetch(2)
     )
     train_loss = tf.keras.metrics.Mean(name="train_loss")
     train_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name="train_accuracy")
-    feature_std = tf.keras.metrics.Mean(name="feature_std")
-    F = tf.keras.layers.Flatten()
+    valset = (
+        DatasetGenerator2(os.path.join(dataset_root, "val"), 0)
+        .cache()
+        .batch(batch_size)
+        .prefetch(2)
+    )
+    val_loss = tf.keras.metrics.Mean(name="val_loss")
+    val_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name="val_accuracy")
     for e in range(epoch):
         t = time()
-        for i, (state, agent_id, label) in enumerate(trainset):
+        for i, (state, agent_id, label, weights) in enumerate(trainset):
             with tf.device("/GPU:0"):
                 with tf.GradientTape() as tape:
-                    feature = model(F(state), training=True)
-                    pred, new_label = embedding_to_onehot(feature, agent_id, label)
-                    loss = loss_object(new_label, pred)
+                    feature = model(state, training=True)
+                    pred, new_label, new_weights = embedding_to_onehot(
+                        feature, agent_id, label, weights, num_heads
+                    )
+                    loss = loss_object(new_label, pred, sample_weight=new_weights)
                 trainable_variables = (
-                    sum([h.trainable_variables for h in heads], [])
+                    sum([h.trainable_variables for h in heads[:num_heads]], [])
                     + model.trainable_variables
                 )
                 gradients = tape.gradient(loss, trainable_variables)
                 optimizer.apply_gradients(zip(gradients, trainable_variables))
                 train_loss(loss)
-                feature_std(tf.math.reduce_mean(tf.math.reduce_std(feature, axis=0)))
                 train_accuracy(new_label, pred)
-                if i % 10 == 0:
+                if i % 50 == 0:
+                    if use_val:
+                        for state_t, agent_id_t, label_t, weights_t in valset:
+                            feature = model(state_t, training=False)
+                            pred, new_label, new_weights = embedding_to_onehot(
+                                feature, agent_id_t, label_t, weights_t, num_heads
+                            )
+                            loss = loss_object(
+                                new_label, pred, sample_weight=new_weights
+                            )
+                            val_loss(loss)
+                            val_accuracy(new_label, pred)
+                        for j, h in enumerate(heads[:num_heads]):
+                            h.save_weights(save_checkpoint + "_head_" + str(j).zfill(3))
                     model.save_weights(save_checkpoint)
-                    print("=" * 20)
+                    print("=" * 40)
                     print("epoch: ", e, "iter: ", i)
                     print(
                         "  train: ",
@@ -104,14 +150,21 @@ def train(
                         round(float(train_loss.result()), 5),
                         "accuracy:",
                         round(float(train_accuracy.result()), 5),
-                        "feature std:",
-                        round(float(feature_std.result()), 5),
                         "sec passed:",
                         round(time() - t, 5),
+                    )
+                    print(
+                        "  val: ",
+                        "loss:",
+                        round(float(val_loss.result()), 5),
+                        "accuracy:",
+                        round(float(val_accuracy.result()), 5),
                     )
                     t = time()
                     train_loss.reset_states()
                     train_accuracy.reset_states()
+                    val_loss.reset_states()
+                    val_accuracy.reset_states()
 
 
 def vis(test_dir, load_checkpoint, save_image, num_samples=-1, use_pca=True):
@@ -152,6 +205,92 @@ def vis(test_dir, load_checkpoint, save_image, num_samples=-1, use_pca=True):
         print("#{}: {}".format(i, np.array(tf.math.reduce_mean(sample, axis=0))))
         plt.scatter(points[:, 0], points[:, 1], s=1, c=colors[i % 4][i // 4])
     plt.savefig(save_image, dpi=1000)
+
+
+def transfer(
+    train_file,
+    val_file,
+    load_checkpoint,
+    save_result,
+    *heads_checkpoints,
+    save_head="",
+    step=10,
+    learning_rate=0.001,
+    epoch=5,
+):
+    trainset = (
+        tf.data.Dataset.from_generator(
+            lambda: merged_np2tf_generator(train_file),
+            output_signature=(
+                tf.TensorSpec(shape=(GAME_STATE_LENGTH,), dtype=tf.float32),
+                tf.TensorSpec(shape=(), dtype=tf.float32),  # Action id
+                tf.TensorSpec(shape=(), dtype=tf.float32),  # Weight
+            ),
+        )
+        .cache()
+        .batch(step)
+        .prefetch(2)
+    )
+    # dummmy traverse to enable cache
+    for _ in trainset:
+        pass
+    valset = (
+        tf.data.Dataset.from_generator(
+            lambda: merged_np2tf_generator(val_file),
+            output_signature=(
+                tf.TensorSpec(shape=(GAME_STATE_LENGTH,), dtype=tf.float32),
+                tf.TensorSpec(shape=(), dtype=tf.float32),  # Action id
+                tf.TensorSpec(shape=(), dtype=tf.float32),  # Weight
+            ),
+        )
+        .cache()
+        .batch(10000)
+        .prefetch(2)
+    )
+    val_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name="val_accuracy")
+    optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
+
+    def eval(idx):
+        val_accuracy.reset_states()
+        for state, label, weight in valset:
+            agent_id = tf.broadcast_to(idx, label.shape)
+            with tf.device("/GPU:0"):
+                feature = model(state, training=False)
+                pred, new_label, new_weights = embedding_to_onehot(
+                    feature, agent_id, label, weight, idx + 1
+                )
+                val_accuracy(new_label, pred)
+        return float(val_accuracy.result())
+
+    model.load_weights(load_checkpoint)
+    model.trainable = False
+    num_heads = len(heads_checkpoints)
+    if num_heads > 0:
+        for i, h in enumerate(heads_checkpoints):
+            heads[i].load_weights(h)
+        # pick best exisiting head
+        accuracy = []
+        for i in tqdm(list(range(num_heads))):
+            accuracy.append(eval(num_heads - 1))
+        best_id = max(range(num_heads), key=lambda x: accuracy[x])
+        heads[0] = heads[best_id]
+    with open(save_result, "wb") as fout:
+        for i, _ in enumerate(tqdm(trainset)):
+            for state, label, weight in trainset.take(i).repeat(epoch):
+                with tf.device("/GPU:0"):
+                    with tf.GradientTape() as tape:
+                        feature = model(state, training=False)
+                        pred, new_label, new_weights = embedding_to_onehot(
+                            feature, tf.zeros(label.shape), label, weight, 1
+                        )
+                        loss = loss_object(new_label, pred)
+                    gradients = tape.gradient(loss, heads[0].trainable_variables)
+                    optimizer.apply_gradients(
+                        zip(gradients, heads[0].trainable_variables)
+                    )
+            np.save(fout, np.array([i * step, eval(0)], dtype=np.float32))
+            if i % 20 == 0 and save_head != "":
+                heads[0].save_weights(save_head)
 
 
 if __name__ == "__main__":

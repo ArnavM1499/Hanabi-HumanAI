@@ -1,9 +1,11 @@
+from glob import glob
 import numpy as np
 import os
 from random import shuffle
 import tensorflow as tf
 
 GAME_STATE_LENGTH = 558
+CACHE_QUOTA = 30 << 30  # about 30G
 
 
 def np2tf_generator(file_path, num_samples=-1, loop=True):
@@ -24,14 +26,27 @@ def np2tf_generator(file_path, num_samples=-1, loop=True):
     f.close()
 
 
-def merged_np2tf_generator(file_path):
+def merged_np2tf_generator(file_path, idx=None):
     f = open(file_path, "rb")
+    weights = np.load(f).tolist()
     while True:
         try:
             state = np.load(f)
             action = np.load(f)
             if len(state) == GAME_STATE_LENGTH:
-                yield tf.constant(state * 0.333, dtype=tf.float32), action[0]
+                if idx is not None:
+                    yield (
+                        tf.constant(state * 0.333, dtype=tf.float32),
+                        idx,
+                        action,
+                        weights[action],
+                    )
+                else:
+                    yield (
+                        tf.constant(state * 0.333, dtype=tf.float32),
+                        action,
+                        weights[action],
+                    )
         except ValueError:
             break
     f.close()
@@ -85,32 +100,34 @@ class DatasetGenerator:
 
 
 class DatasetGenerator2:
-    def __new__(cls, dataset_root, dummy=0):
+    def __new__(cls, dataset_root, filter_size=0):
         return tf.data.Dataset.from_generator(
             cls._generator,
             output_signature=(
                 tf.TensorSpec(shape=(GAME_STATE_LENGTH,), dtype=tf.float32),
                 tf.TensorSpec(shape=(), dtype=tf.int32),  # Agent id
                 tf.TensorSpec(shape=(), dtype=tf.float32),  # Action id
+                tf.TensorSpec(shape=(), dtype=tf.float32),  # Weight
             ),
-            args=(dataset_root, dummy),
+            args=(dataset_root, filter_size),
         )
 
-    def _generator(dataset_root, dummy=0):
+    def _generator(dataset_root, filter_size=0):
 
         dataset_root = str(dataset_root)[2:-1]
-        all_agents = [
-            os.path.join(dataset_root, pid) for pid in os.listdir(dataset_root)
-        ]
+        all_agents = glob(os.path.join(dataset_root, "*.npy"))
+        if filter_size > 1000:
+            all_agents = [x for x in all_agents if os.path.getsize(x) > filter_size]
+        all_agents.sort()
         file_generators = [merged_np2tf_generator(pid) for pid in all_agents]
         num_agents = len(file_generators)
         pos = 0
         visited = set()
         while True:
             try:
-                # game state, agent_id, action_id
-                state, action = next(file_generators[pos])
-                yield state, pos, action
+                # game state, agent_id, action_id, weight
+                state, action, weight = next(file_generators[pos])
+                yield state, pos, action, weight
                 pos = (pos + 1) % num_agents
             except StopIteration:
                 file_generators[pos] = merged_np2tf_generator(all_agents[pos])
@@ -120,84 +137,45 @@ class DatasetGenerator2:
                         break
 
 
-def _3decode(encoding):
-    state = []
-    for i in range(31):
-        state.append(encoding % 3)
-        encoding = encoding // 3
-    return tf.stack(state)
+class merged_tf2np_wrapper:
+    def __new__(cls, dataset_file, idx=0):
+        return tf.data.Dataset.from_generator(
+            cls._generator,
+            output_signature=(
+                tf.TensorSpec(shape=(GAME_STATE_LENGTH,), dtype=tf.float32),
+                tf.TensorSpec(shape=(), dtype=tf.int32),  # Agent id
+                tf.TensorSpec(shape=(), dtype=tf.float32),  # Action id
+                tf.TensorSpec(shape=(), dtype=tf.float32),  # Weight
+            ),
+            args=(dataset_file, idx),
+        )
+
+    def _generator(dataset_file, idx):
+        return merged_np2tf_generator(dataset_file, idx)
 
 
-def _parse_3encode(encoding):
-    encoding = tf.map_fn(
-        lambda x: tf.strings.to_number(x, out_type=tf.int64),
-        tf.strings.split(encoding),
-        fn_output_signature=tf.int64,
-    )
-    action = float(encoding[1])
-    agent = encoding[0]
-    states = tf.concat(tf.map_fn(_3decode, encoding[2:]), axis=1)
-    states = tf.map_fn(
-        lambda x: 0.333 * float(x), states, fn_output_signature=tf.float32
-    )
-    return states, agent, action
-
-
-def txt_to_dataset(text_files):
-    return tf.data.TextLineDataset(text_files).map(_parse_3encode)
-
-
-def serialize_example(state, agent_id, action_id):
-    feature = {
-        "state": tf.train.Feature(float_list=tf.train.FloatList(value=state)),
-        "agent_id": tf.train.Feature(int64_list=tf.train.Int64List(value=[agent_id])),
-        "action_id": tf.train.Feature(int64_list=tf.train.Int64List(value=[action_id])),
-    }
-    proto = tf.train.Example(features=tf.train.Features(feature=feature))
-    return proto.SerializeToString()
-
-
-def tf_serialize_example(state, agent_id, action_id):
-    tf_string = tf.py_function(
-        serialize_example, (state, agent_id, action_id), tf.string
-    )
-    return tf.reshape(tf_string, ())
-
-
-def np_to_tfrecord(dataset_root, output_record, num_samples):
-    # num_samples used to manually balence sample weights
-    original = DatasetGenerator(dataset_root, num_samples)
-    serialized = original.map(tf_serialize_example)
-    writer = tf.data.experimental.TFRecordWriter(output_record)
-    writer.write(serialized)
-
-
-game_state_discription = {
-    "state": tf.io.FixedLenFeature([], tf.float32),
-    "agent_id": tf.io.FixedLenFeature([], tf.int64),
-    "action_id": tf.io.FixedLenFeature([], tf.int64),
-}
-
-
-def parse_state_func(proto):
-    return tf.io.parse_single_example(proto, game_state_discription)
-
-
-def get_dataset_from_tfrecord(tfrecord):
-    raw = tf.data.TFRecordDataset([tfrecord])
-    for data in raw:
-        import pdb
-
-        pdb.set_trace()
-
-
-def get_mnist():
-    mnist = tf.keras.datasets.mnist
-    (x_train, y_train), (x_test, y_test) = mnist.load_data()
-    x_train, x_test = x_train / 255.0, x_test / 255.0
-    x_train = x_train[..., tf.newaxis].astype("float32")
-    x_test = x_test[..., tf.newaxis].astype("float32")
-    return (
-        tf.data.Dataset.from_tensor_slices((x_train, y_train)).shuffle(10000),
-        tf.data.Dataset.from_tensor_slices((x_test, y_test)).shuffle(10000),
-    )
+def DatasetGenerator_cached(dataset_root, num_samples, max_cache=-1):
+    all_datasets = []
+    for i, np_file in enumerate(sorted(glob(os.path.join(dataset_root, "*.npy")))):
+        all_datasets.append(
+            (
+                merged_tf2np_wrapper(np_file, i),
+                os.path.getsize(np_file) * 4,  # estimated size of all data
+            )
+        )
+    num_dataset = len(all_datasets)
+    num_samples_individual = num_samples // num_dataset + 1
+    if max_cache < 0:
+        max_cache = CACHE_QUOTA
+    for i in range(num_dataset):
+        if all_datasets[i][1] < max_cache:
+            max_cache -= all_datasets[i][1]
+            all_datasets[i] = all_datasets[i][0].cache()
+            #  initialize cache
+            for _ in all_datasets[i]:
+                pass
+        else:
+            all_datasets[i] = all_datasets[i][0]
+    all_datasets = [d.repeat() for d in all_datasets]
+    choice_dataset = tf.data.Dataset.range(num_dataset).repeat(num_samples_individual)
+    return tf.data.experimental.choose_from_datasets(all_datasets, choice_dataset)
