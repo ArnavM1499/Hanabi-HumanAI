@@ -322,6 +322,8 @@ class HardcodePlayer2(Player):
             else:
                 return action
 
+        self._update_state(state, model)
+
         # Pattern matcing [self._decide() in version 1]
         chosen_action = None
         chosen_action_name = None
@@ -362,7 +364,7 @@ class HardcodePlayer2(Player):
 
     def _execute(self, force=False):
 
-        print("executing", self.last_state.get_board())
+        # print("executing", self.last_state.get_board())
 
         with timer("execute main", self.timer):
             board = self.last_state.get_board()
@@ -543,7 +545,7 @@ class HardcodePlayer2(Player):
             self.last_state.get_all_knowledge()[self.partner_nr]
         )
 
-        print("hinting", partner_hand)
+        # print("hinting", partner_hand)
 
         if self.partner_card_count:
             with timer("processs partner card count", self.timer):
