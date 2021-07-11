@@ -91,15 +91,13 @@ class ValuePlayer(Player):
         # whether we return a dictionary of all actions/values, or just the best action
         self.get_action_values = False
 
-        # parameters and default values
+        # parameters and default values below
         self.hint_weight = 1000.0
+        self.hint_direction = "right"
 
         # left, right, best
         self.play_preference = "best"
         self.discard_preference = "best"
-
-        # doesn't actually do anything at the moment; still trying to parameterize
-        self.default_hint = "high"
 
         # card counting
         self.card_count = True
@@ -243,7 +241,7 @@ class ValuePlayer(Player):
         # assert(action.type in [HINT_COLOR, HINT_NUMBER])
 
         target = get_multi_target(action, self.partner_hand, self.partner_weighted_knowledge,
-                                  self.state.get_board(), self.play_threshold, self.discard_threshold)
+                                  self.state.get_board(), self.play_threshold, self.hint_direction)
         copy_weights = copy.deepcopy(self.partner_weights)
         new_partner_weights = update_weights(copy_weights, self.hint_weight, self.state.get_board(), target)
         copy_knowledge = copy.deepcopy(self.partner_knowledge)
@@ -346,6 +344,8 @@ class ValuePlayer(Player):
                 # on hint, update partner weights accordingly
                 target = -1
                 hint_indices = copy.deepcopy(new_state.get_hinted_indices())
+                if self.hint_direction == "left":
+                    hint_indices.reverse()
                 while hint_indices:
                     potential_target = hint_indices[-1]
                     if slot_playable_pct(self.partner_weighted_knowledge[potential_target], new_state.get_board()) \
@@ -365,6 +365,8 @@ class ValuePlayer(Player):
             target = -1
             self.weighted_knowledge = weight_knowledge(self.knowledge, self.weights)
             hint_indices = copy.deepcopy(new_state.get_hinted_indices())
+            if self.hint_direction == "left":
+                hint_indices.reverse()
             while hint_indices:
                 potential_target = hint_indices[-1]
                 if slot_playable_pct(self.weighted_knowledge[potential_target], new_state.get_board()) <= self.play_threshold:

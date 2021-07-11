@@ -37,9 +37,9 @@ class Game(object):
         self.format = format
         self.dopostsurvey = False
         self.study = False
-        self.data_file = open(data_file, "a")
+        # self.data_file = open(data_file, "a")
         self.pickle_file = pickle_file
-        self.data_writer = csv.writer(self.data_file, delimiter=",")
+        # self.data_writer = csv.writer(self.data_file, delimiter=",")
         self.hint_log = dict([(a, []) for a in range(len(players))])
         self.action_log = dict([(a, []) for a in range(len(players))])
         self.http_player = http_player
@@ -270,7 +270,7 @@ class Game(object):
         print("Game done, hits left:", self.hits)
         points = self.score()
         print("Points:", points)
-        self.data_file.close()
+        # self.data_file.close()
         return points
 
     def score(self):
@@ -293,16 +293,16 @@ class Game(object):
             if not self.deck:
                 self.extra_turns += 1
 
-            self.data_writer.writerow(
-                [
-                    self.current_player,
-                    action.type,
-                    self.board,
-                    self.trash,
-                    self.hints,
-                    self.knowledge[self.current_player],
-                ]
-            )
+#            self.data_writer.writerow(
+#                [
+#                    self.current_player,
+#                    action.type,
+#                    self.board,
+#                    self.trash,
+#                    self.hints,
+#                    self.knowledge[self.current_player],
+#                ]
+#            )
 
             hint_indices, card_changed = self.perform(action)
 

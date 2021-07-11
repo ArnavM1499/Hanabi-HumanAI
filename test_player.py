@@ -5,6 +5,7 @@ from multiprocessing import Pool
 import os
 import random
 import time
+import copy
 from hanabi import Game
 from Agents.player import Player
 from Agents.value_player import ValuePlayer
@@ -30,8 +31,8 @@ def run_single(
     hints = G.hints
     hits = G.hits
     turns = G.turn
-    if clean:
-        os.remove(file_name)
+    #if clean:
+    #    os.remove(file_name)
     return (score, hints, hits, turns)
 
 
@@ -44,23 +45,27 @@ def from_param_dict(file_name, dict):
     p2 = ValuePlayer(**dict)
     G = Game([p1, p2], file_name)
     score = G.run(100)
-    os.remove(file_name)
+    # os.remove(file_name)
     return score
 
 
+# starting configuration for hill climbing search
 params = {
-    "name": "Alice",
     "hint_weight": 1000.0,
-    "discard_type": "first",
-    "default_hint": "high",
+    "play_preference": "left",
+    "discard_preference": "left",
     "card_count": True,
     "card_count_partner": True,
-    "get_action_values": False,
+    "discard_base_value": 0.2,
+    "protect_importance": 0.4,
+    "play_low_multiplier": 0.1,
+    "discard_low_multiplier": 0.5,
     "play_threshold": 0.95,
     "discard_threshold": 0.5,
     "play_bias": 1.0,
     "disc_bias": 0.7,
     "hint_bias": 0.9,
+    "dynamic_bias": True,
     "hint_biases": [0, 0.6, 0.7, 0.8, 0.9, 0.95, 1.0, 1.0, 1.0],
     "play_biases": [0, 0.7, 0.9, 1.0]
 }
@@ -74,19 +79,63 @@ def test_param_config(config, iters=400):
     )
     p.close()
     ls = res.get()
-    print(sum(ls) / iters)
-    print(ls)
+    return sum(ls) / iters
 
 
-def hc2():
-    test_param_config(params)
+def hc1():
+    print(test_param_config(params))
 
 
-def hc():
-    for i in range(1):
-        res = from_param_dict("xd", params)
-        if res < 3:
-            return
+# list of parameters to do search on
+settings = ["discard_base_value", "protect_importance", "play_low_multiplier", "discard_low_multiplier",
+            "play_threshold", "discard_threshold", "play_bias", "disc_bias", "hint_bias",
+            ["hint_biases"], ["play_biases"]]
+# settings = ["play_bias", "disc_bias", "hint_bias"]
+
+
+# Hill climbing algorithm. Does a random mutation each iteration
+def hill_climb(start_mutation_size, end_mutation_size, start_params, list_params):
+    current_mutation_size = start_mutation_size
+    best_score = test_param_config(start_params)
+    best_params = start_params
+    num_tests = 0
+    global_num_tests = 0
+    while current_mutation_size > end_mutation_size:
+        test_params = copy.deepcopy(best_params)
+        for param in list_params:
+            # small hack to be able to process list variables
+            if isinstance(param, list):
+                for i in range(len(test_params[param[0]])):
+                    mutation_pct = random.uniform(1.0 - current_mutation_size, 1.0 + current_mutation_size)
+                    test_params[param[0]][i] *= mutation_pct
+            else:
+                mutation_pct = random.uniform(1.0 - current_mutation_size, 1.0 + current_mutation_size)
+                test_params[param] *= mutation_pct
+        new_score = test_param_config(test_params)
+        num_tests += 1
+        global_num_tests += 1
+        if new_score > best_score:
+            best_params = test_params
+            best_score = new_score
+            num_tests = 0
+            filename = "result_" + str(global_num_tests) + ".txt"
+            with open(filename, "w") as outfile:
+                json.dump(best_params, outfile)
+                outfile.write(str(best_score))
+                outfile.close()
+        if global_num_tests % 25 == 0:
+            current_mutation_size *= 0.5
+    with open("result.json", "w") as outfile:
+        print(best_score)
+        json.dump(best_params, outfile)
+
+
+def start_hc():
+    hill_climb(0.2, 0.01, params, settings)
+
+
+def start_hc_from_json(player="00008"):
+    hill_climb(0.2, 0.05, player_pool[player], settings)
 
 
 def record_game(
@@ -118,7 +167,7 @@ def record_game(
         )
 
 
-def test_player(player="00004", player2=None, iters=1000):
+def test_player(player="00008", player2=None, iters=1000):
     p = Pool(16)
     res = p.starmap_async(
         run_single,
