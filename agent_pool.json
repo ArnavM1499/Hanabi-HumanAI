@@ -8,11 +8,5 @@
 	"00002" : {
 		"player_class" : "ValuePlayer",
 		"get_action_values" : true
-	},
-
-	"00003" : {
-		"player_class" : "ExperimentalPlayer",
-		"get_action_values" : true
 	}
-
 }

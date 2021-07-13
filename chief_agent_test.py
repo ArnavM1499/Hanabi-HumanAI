@@ -15,8 +15,8 @@ pickle_file_name = "chief_testing"
 pickle_file = open(pickle_file_name, "wb")
 
 for i in range(1):
-	P1 = ExperimentalPlayer("P1", 0)
-	P2 = ExperimentalPlayer("P2", 1)
+	P1 = HardcodePlayer2("P1", 0)
+	P2 = HardcodePlayer2("P2", 1)
 	pickle.dump(["NEW"], pickle_file)
 	G = hanabi.Game([P1, P2], file_name, pickle_file)
 	Result = G.run(100)
@@ -81,20 +81,21 @@ with open(pickle_file_name, 'rb') as f:
 # plt.show()
 
 
-# A = [a.values[0].tolist() for a in A[1:]]
-# B = [b.values[0].tolist() for b in B[1:]]
+A = [a.values[0].tolist() for a in A[1:]]
+B = [b.values[0].tolist() for b in B[1:]]
 
 
-# # for idx, name in enumerate(["Hardcode", "Value", "Experimental"]):
-# # 	plt.plot([a[idx] for a in A], label=name)
-
-# # plt.legend()
-# # plt.title("Trying to recognize Value - bayesian w/ boltzmann B = 1")
-# # plt.show()
-
-# for idx, name in enumerate(["Hardcode", "Value", "Experimental"]):
-# 	plt.plot([b[idx] for b in B], label=name)
+# for idx, name in enumerate(["Hardcode", "Value"]):
+# 	plt.plot([a[idx] for a in A], label=name)
 
 # plt.legend()
-# plt.title("Trying to recognize Value - MLE w/ boltzmann")
-# plt.show()
+# plt.title("Trying to recognize" + type(P2).__name__ + "- bayesian w/ boltzmann")
+# plt.savefig("chiefplots/highboltzmann/bayesian_" + type(P2).__name__)
+
+
+for idx, name in enumerate(["Hardcode", "Value"]):
+	plt.plot([b[idx] for b in B], label=name)
+
+plt.legend()
+plt.title("Trying to recognize" + type(P2).__name__ + "- MLE w/ boltzmann")
+plt.savefig("chiefplots/highboltzmann/mle_" + type(P2).__name__)
