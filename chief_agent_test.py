@@ -15,8 +15,8 @@ pickle_file_name = "chief_testing"
 pickle_file = open(pickle_file_name, "wb")
 
 for i in range(1):
-	P1 = ValuePlayer("P1", 0)
-	P2 = ValuePlayer("P2", 1)
+	P1 = ExperimentalPlayer("P1", 0)
+	P2 = ExperimentalPlayer("P2", 1)
 	pickle.dump(["NEW"], pickle_file)
 	G = hanabi.Game([P1, P2], file_name, pickle_file)
 	Result = G.run(100)
@@ -31,6 +31,7 @@ def try_pickle(file):
 
 B = []
 A = []
+C = []
 
 with open(pickle_file_name, 'rb') as f:
 	row = try_pickle(f)
@@ -39,7 +40,7 @@ with open(pickle_file_name, 'rb') as f:
 		# print(new_chief.player_pool.get_names())
 
 		if row[0] == "Inform" and row[4] == 1:
-			print("indices", row[1].hinted_indices)
+			print(row[1].hands)
 		
 
 		if row[0] == "Action" and row[1].get_current_player() == 0:
@@ -56,32 +57,44 @@ with open(pickle_file_name, 'rb') as f:
 			action = row[3]
 			curr_player = row[5]
 
+			print(row[1].hands)
 			print("player",curr_player,"does",action)
-
 			new_chief.inform(action, curr_player, game_state, player_model)
-			print(new_chief.move_tracking_table.loc[:,("agent distribution", "MLE probabilities")])
+			print(new_chief.move_tracking_table.loc[:,("conditional probabilities", "MLE probabilities")].applymap(lambda L: [round(l,2) for l in L]))
+			
 			if (curr_player == 1):
 				A.append(new_chief.move_tracking_table.tail(1)["agent distribution"])
 				B.append(new_chief.move_tracking_table.tail(1)["MLE probabilities"])
+				C.append(new_chief.move_tracking_table.tail(1)["conditional probabilities"])
 
 
 		row = try_pickle(f)
 
 
-A = [a.values[0].tolist() for a in A[1:]]
-B = [b.values[0].tolist() for b in B[1:]]
+
+# C = [c.values[0].tolist() for c in C[1:]]
+
+# for idx, name in enumerate(["Hardcode", "Value", "Experimental"]):
+# 	plt.plot([a[idx] for a in C], label=name)
+
+# plt.legend()
+# plt.show()
 
 
-for idx, name in enumerate(["Hardcode", "Value", "Experimental"]):
-	plt.plot([a[idx] for a in A], label=name)
+# A = [a.values[0].tolist() for a in A[1:]]
+# B = [b.values[0].tolist() for b in B[1:]]
 
-plt.legend()
-plt.title("Trying to recognize Value - bayesian w/ boltzmann B = 1")
-plt.show()
 
-for idx, name in enumerate(["Hardcode", "Value", "Experimental"]):
-	plt.plot([b[idx] for b in B], label=name)
+# # for idx, name in enumerate(["Hardcode", "Value", "Experimental"]):
+# # 	plt.plot([a[idx] for a in A], label=name)
 
-plt.legend()
-plt.title("Trying to recognize Value - MLE w/ boltzmann")
-plt.show()
+# # plt.legend()
+# # plt.title("Trying to recognize Value - bayesian w/ boltzmann B = 1")
+# # plt.show()
+
+# for idx, name in enumerate(["Hardcode", "Value", "Experimental"]):
+# 	plt.plot([b[idx] for b in B], label=name)
+
+# plt.legend()
+# plt.title("Trying to recognize Value - MLE w/ boltzmann")
+# plt.show()

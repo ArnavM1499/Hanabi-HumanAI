@@ -9,7 +9,7 @@ from copy import deepcopy
 
 STARTING_COLUMNS_MOVETRACKING = {"move_idx":[], "move": [], "observable game state":[], "card ids":[], "hand knowledge":[], "agent distribution":[], "conditional probabilities":[], "MLE probabilities":[], "generated samples":[], "agent state copies":[]}
 NUM_SAMPLES = 25
-BOLTZMANN_CONSTANT = 1
+BOLTZMANN_CONSTANT = 30
 
 CardChoices = []
 
@@ -67,16 +67,12 @@ class ChiefPlayer(Player):
 		if action.type == PLAY or action.type == DISCARD:
 			new_card_ids = dict()
 
-			print("HELLO")
-
 			for cid in self.card_ids:
-				print(self.card_ids[cid], cid, action.cnr)
 				if self.card_ids[cid] < action.cnr:
 					new_card_ids[cid] = self.card_ids[cid]
 				elif self.card_ids[cid] > action.cnr:
 					new_card_ids[cid] = self.card_ids[cid] - 1
 				else:
-					print("wassup")
 					self.played_or_discarded_card = [cid, [], self.drawn_dict[cid]] # will fill in knowledge during inform
 					del self.drawn_dict[cid]
 					del self.prev_knowledge[cid]
@@ -109,7 +105,6 @@ class ChiefPlayer(Player):
 				card = game_state.played[-1]
 				temp[card[0]][card[1] - 1] = 1
 				self.played_or_discarded_card[1] = temp
-				print(temp)
 			elif action.type == DISCARD:
 				temp = np.zeros(shape=(5,5))
 				card = game_state.trash[-1]
@@ -303,12 +298,12 @@ class ChiefPlayer(Player):
 	# 	return nonnegative_vals/np.sum(nonnegative_vals)
 
 	def values_to_probs(self, actionvalues):
-		values = np.zeros(20)
+		values = min(actionvalues.values())*np.ones(20)
 
 		for action in actionvalues:
 			values[self.action_to_key(action)] = actionvalues[action]
 
-		E = np.exp(values) * BOLTZMANN_CONSTANT
+		E = np.exp(values * BOLTZMANN_CONSTANT)
 		return E/np.sum(E)
 
 	def agent_probs(self, hand, move_idx): ## THIS ASSUMES THAT WE ONLY HAVE ONE TEAMMATE
@@ -328,13 +323,13 @@ class ChiefPlayer(Player):
 
 		for agent in agent_copies:
 			temp_agent = deepcopy(agent)
-			# print(base_player_model.knowledge)
 			values = temp_agent.get_action(game_state, base_player_model)
+
+			# print(type(agent).__name__, game_state.hands, game_state.board, [round(a,2) for a in values.values()])
+
 			probs.append(self.values_to_probs(values)[action_idx])
 			prob_array = np.array(self.values_to_probs(values))
-			# print(prob_array, prob_array == max(prob_array))
 			MLEs.append(float((prob_array[action_idx] == max(prob_array))/(np.sum(prob_array == max(prob_array)))))
-			# print(MLEs)
 
 		return np.array(probs), np.array(MLEs)
 
@@ -367,7 +362,7 @@ class ChiefPlayer(Player):
 				stored_samples[h] = (new_conditional, new_MLE)
 
 			new_samp.conditional_probs = new_conditional
-			new_samp.MLE_probs = new_MLE
+			new_samp.MLE_probs = new_conditional
 			# print(new_samp.hand, new_samp.MLE_probs)
 			new_samples.append(new_samp)
 
