@@ -86,19 +86,18 @@ class ValuePlayer(Player):
         self.protect = []
         self.discard = []
         self.play = []
+        self.partner_knowledge_index = 0.0
 
         # whether we return a dictionary of all actions/values, or just the best action
         self.get_action_values = False
 
-        # parameters and default values
+        # parameters and default values below
         self.hint_weight = 1000.0
+        self.hint_direction = "right"
 
         # left, right, best
         self.play_preference = "best"
         self.discard_preference = "best"
-
-        # doesn't actually do anything at the moment; still trying to parameterize
-        self.default_hint = "high"
 
         # card counting
         self.card_count = True
@@ -119,8 +118,8 @@ class ValuePlayer(Player):
 
         # how much we like playing, discarding, hinting in general
         self.play_bias = 1.0
-        self.disc_bias = 0.8
-        self.hint_bias = 0.9
+        self.disc_bias = 0.6
+        self.hint_bias = 2.5
 
         # if dynamic bias is true, then hint and play biases are further multiplied
         # by the following values as the game goes on
@@ -224,47 +223,61 @@ class ValuePlayer(Player):
         else:
             return value * self.discard_low_multiplier
 
+    def _eval_partner_knowledge(self, knowledge):
+        diff_score = 0
+        # print(knowledge)
+        for i in range(len(knowledge)):
+            if self.partner_hand[i] in self.play:
+                variance = (1 - slot_pct(knowledge[i], self.play))
+                diff_score += variance * variance
+            elif self.partner_hand[i] in self.discard:
+                variance = slot_pct(knowledge[i], self.discard)
+                diff_score += 0.2 * variance * variance
+        return diff_score
+
     def _eval_hint(self, action):
         # if self.last_hint is not None and action == self.last_hint:
         #     return 0
         # assert(action.type in [HINT_COLOR, HINT_NUMBER])
 
         target = get_multi_target(action, self.partner_hand, self.partner_weighted_knowledge,
-                                  self.state.get_board(), self.play_threshold, self.discard_threshold)
-        # copy_weights = copy.deepcopy(self.partner_weights)
-        # new_partner_weights = update_weights(copy_weights, self.hint_weight, self.state.get_board(), target)
-        # copy_knowledge = copy.deepcopy(self.partner_knowledge)
+                                  self.state.get_board(), self.play_threshold, self.hint_direction)
+        copy_weights = copy.deepcopy(self.partner_weights)
+        new_partner_weights = update_weights(copy_weights, self.hint_weight, self.state.get_board(), target)
+        copy_knowledge = copy.deepcopy(self.partner_knowledge)
 
-        # # update knowledge ourselves as part of simulation
-        # if action.type == HINT_COLOR:
-        #     for i in range(len(copy_knowledge)):
-        #         if self.partner_hand[i][0] == action.col:
-        #             for j in range(0, 5):
-        #                 if j != action.col:
-        #                     copy_knowledge[i][j] = [0, 0, 0, 0, 0]
-        #         else:
-        #             copy_knowledge[i][action.col] = [0, 0, 0, 0, 0]
-        # elif action.type == HINT_NUMBER:
-        #     for i in range(len(copy_knowledge)):
-        #         if self.partner_hand[i][1] == action.num:
-        #             for j in range(0, 5):
-        #                 if j != action.cnr:
-        #                     copy_knowledge[i][j][action.num - 1] = 0
-        #         else:
-        #             for j in range(0, 5):
-        #                 copy_knowledge[i][j][action.num - 1] = 0
+        # update knowledge ourselves as part of simulation
+        if action.type == HINT_COLOR:
+            for i in range(len(copy_knowledge)):
+                if self.partner_hand[i][0] == action.col:
+                    for j in range(0, 5):
+                        if j != action.col:
+                            copy_knowledge[i][j] = [0, 0, 0, 0, 0]
+                else:
+                    copy_knowledge[i][action.col] = [0, 0, 0, 0, 0]
+        elif action.type == HINT_NUMBER:
+            for i in range(len(copy_knowledge)):
+                if self.partner_hand[i][1] == action.num:
+                    for j in range(0, 5):  # number of colors
+                        for k in range(0, 5):
+                            if k != action.num - 1:
+                                copy_knowledge[i][j][k] = 0
+                else:
+                    for j in range(0, 5):
+                        copy_knowledge[i][j][action.num - 1] = 0
 
-        # new_weighted_knowledge = weight_knowledge(copy_knowledge, new_partner_weights)
-
-        if target == -1:
-            return 0.25
-        if target_possible(action, target, self.partner_weighted_knowledge, self.state.get_board()):
-            if card_playable(self.partner_hand[target], self.state.get_board()):
-                # TODO: differentiate between valid hints
-                return 0.8
-            else:
-                return 0.1
-        return 0.25
+        new_weighted_knowledge = weight_knowledge(copy_knowledge, new_partner_weights)
+        # print(action)
+        return self.partner_knowledge_index - self._eval_partner_knowledge(new_weighted_knowledge)
+        #if target == -1:
+        #    return 0.25
+        #if target_possible(action, target, self.partner_weighted_knowledge, self.state.get_board()):
+        #    if card_playable(self.partner_hand[target], self.state.get_board()):
+        #        # TODO: differentiate between valid hints
+        #        return 0.8
+        #    else:
+        #        return 0.1
+        #return 0.25
 
     def eval_action(self, action):
         if action.type == PLAY:
@@ -289,6 +302,12 @@ class ValuePlayer(Player):
         self.weighted_knowledge = weight_knowledge(self.knowledge, self.weights)
         self.partner_weighted_knowledge = weight_knowledge(self.partner_knowledge, self.partner_weights)
 
+        # print("partner cards: ")
+        # print(self.partner_hand)
+        # print("partner knowledge: ")
+        # print(self.partner_knowledge)
+        self.partner_knowledge_index = self._eval_partner_knowledge(self.partner_weighted_knowledge)
+
         value_dict = {}
         # evaluate all moves and return maximum
         best_action = None
@@ -311,6 +330,7 @@ class ValuePlayer(Player):
 
     def inform(self, action, player, new_state, new_model):
         self._update_info(new_state, new_model)
+        self._count_cards()
         if player == self.pnr:
             if action.type in [PLAY, DISCARD]:
                 # reset weights for specific slot
@@ -324,6 +344,8 @@ class ValuePlayer(Player):
                 # on hint, update partner weights accordingly
                 target = -1
                 hint_indices = copy.deepcopy(new_state.get_hinted_indices())
+                if self.hint_direction == "left":
+                    hint_indices.reverse()
                 while hint_indices:
                     potential_target = hint_indices[-1]
                     if slot_playable_pct(self.partner_weighted_knowledge[potential_target], new_state.get_board()) \
@@ -333,6 +355,8 @@ class ValuePlayer(Player):
                     del hint_indices[-1]
                 update_weights(
                     self.partner_weights, self.hint_weight, new_state.get_board(), target)
+            self.weighted_knowledge = weight_knowledge(self.knowledge, self.weights)
+            self.partner_weighted_knowledge = weight_knowledge(self.partner_knowledge, self.partner_weights)
             return
 
         # for 2 player games there's only 1 other player
@@ -341,6 +365,8 @@ class ValuePlayer(Player):
             target = -1
             self.weighted_knowledge = weight_knowledge(self.knowledge, self.weights)
             hint_indices = copy.deepcopy(new_state.get_hinted_indices())
+            if self.hint_direction == "left":
+                hint_indices.reverse()
             while hint_indices:
                 potential_target = hint_indices[-1]
                 if slot_playable_pct(self.weighted_knowledge[potential_target], new_state.get_board()) <= self.play_threshold:
@@ -358,3 +384,5 @@ class ValuePlayer(Player):
                 self.partner_weights.append([
                     [1 for _ in range(5)] for _ in range(5)
                 ])
+        self.weighted_knowledge = weight_knowledge(self.knowledge, self.weights)
+        self.partner_weighted_knowledge = weight_knowledge(self.partner_knowledge, self.partner_weights)
