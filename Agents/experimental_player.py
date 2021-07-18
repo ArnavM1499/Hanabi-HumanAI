@@ -303,11 +303,6 @@ class ExperimentalPlayer(Player):
             self.last_state = game_state
 
 
-        # ARNAV's CHANGES
-        self.last_state = game_state
-        self.last_model = player_model
-
-
         self.knowledge = copy.deepcopy(self.last_model.get_knowledge())
         #print("player " + str(self.pnr) + " knowledge: " + str(self.knowledge))
         if self.card_count:
