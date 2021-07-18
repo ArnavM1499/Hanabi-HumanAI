@@ -209,8 +209,6 @@ class HardcodePlayer2(Player):
             for idx, card in enumerate(knowledge)
         }
 
-        # print(playable_pct)
-
         with timer("interpret main", self.timer):
 
             flag = False
@@ -276,14 +274,10 @@ class HardcodePlayer2(Player):
                 if i in protect and discardable_pct[i] < 0.5
             ]
 
-        # print(play_candidate)
-
         return play, play_candidate, discard, protect
 
     def get_action(self, state, model):
         def _wrapper(value_dict, best=None):
-            # print([(value_dict[v], v.__str__()) for v in value_dict])
-
             if self.return_value and self.value_wrap:
                 if not best:
                     best = max(value_dict.keys(), key=lambda k: value_dict[k])
@@ -363,9 +357,6 @@ class HardcodePlayer2(Player):
             return chosen_action
 
     def _execute(self, force=False):
-
-        # print("executing", self.last_state.get_board())
-
         with timer("execute main", self.timer):
             board = self.last_state.get_board()
             knowledge = self.knowledge
@@ -410,7 +401,6 @@ class HardcodePlayer2(Player):
 
         # TODO add more conditions for more aggressive play
 
-        # print("reached", order)
 
         with timer("execute postprocess", self.timer):
             if (
@@ -544,8 +534,6 @@ class HardcodePlayer2(Player):
         partner_knowledge = deepcopy(
             self.last_state.get_all_knowledge()[self.partner_nr]
         )
-
-        # print("hinting", partner_hand)
 
         if self.partner_card_count:
             with timer("processs partner card count", self.timer):
