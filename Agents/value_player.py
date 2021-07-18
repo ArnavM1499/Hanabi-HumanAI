@@ -44,6 +44,7 @@ def update_weights(weights, weight, board, target):
 def slot_pct(knowledge, list):
     total_combos = 0.0
     satisf_combos = 0.0
+    # print(len(knowledge))
     for col in range(len(knowledge)):
         # there are 5 possible numbers
         for num in range(5):
@@ -51,6 +52,7 @@ def slot_pct(knowledge, list):
             if (col, num + 1) in list:
                 satisf_combos += knowledge[col][num]
     if total_combos < 1:
+        return 0
         print("slot_pct error")
     return satisf_combos / total_combos
 
@@ -228,6 +230,7 @@ class ValuePlayer(Player):
         diff_score = 0
         # print(knowledge)
         for i in range(len(knowledge)):
+            # print(knowledge[i], i)
             if self.partner_hand[i] in self.play:
                 variance = (1 - slot_pct(knowledge[i], self.play))
                 diff_score += variance * variance
@@ -244,8 +247,10 @@ class ValuePlayer(Player):
         target = get_multi_target(action, self.partner_hand, self.partner_weighted_knowledge,
                                   self.state.get_board(), self.play_threshold, self.hint_direction)
         copy_weights = copy.deepcopy(self.partner_weights)
+        # print(self.hint_weight, copy_weights)
         new_partner_weights = update_weights(copy_weights, self.hint_weight, self.state.get_board(), target)
         copy_knowledge = copy.deepcopy(self.partner_knowledge)
+        # print("before",copy_knowledge)
 
         # update knowledge ourselves as part of simulation
         if action.type == HINT_COLOR:
@@ -267,6 +272,7 @@ class ValuePlayer(Player):
                     for j in range(0, 5):
                         copy_knowledge[i][j][action.num - 1] = 0
 
+        # print("after",copy_knowledge)
         new_weighted_knowledge = weight_knowledge(copy_knowledge, new_partner_weights)
         # print(action)
         return self.partner_knowledge_index - self._eval_partner_knowledge(new_weighted_knowledge)

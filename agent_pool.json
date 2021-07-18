@@ -1,12 +1,42 @@
 {
 	"00001" : {
-		"player_class" : "HardcodePlayer2",
-		"return_value" : true,
-		"value_wrap" : false
+		"player_class" : "ValuePlayer",
+		"get_action_values" : true,
+		"hint_weight" : 1
 	},
 
 	"00002" : {
 		"player_class" : "ValuePlayer",
-		"get_action_values" : true
+		"get_action_values" : true,
+		"hint_weight" : 10
+	},
+
+	"00003" : {
+		"player_class" : "ValuePlayer",
+		"get_action_values" : true,
+		"hint_weight" : 50
+	},
+
+	"00004" : {
+		"player_class" : "ValuePlayer",
+		"get_action_values" : true,
+		"hint_weight" : 100
+	},
+
+	"00005" : {
+		"player_class" : "ValuePlayer",
+		"get_action_values" : true,
+		"hint_weight" : 1000
+	},
+
+	"00006" : {
+		"player_class" : "ValuePlayer",
+		"get_action_values" : true,
+		"hint_weight" : 2000
+	},
+
+	"00007" : {
+		"player_class" : "HardcodePlayer2",
+		"value_wrap" : false
 	}
 }

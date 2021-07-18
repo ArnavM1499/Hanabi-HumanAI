@@ -8,8 +8,8 @@ import random
 from copy import deepcopy
 
 STARTING_COLUMNS_MOVETRACKING = {"move_idx":[], "move": [], "observable game state":[], "card ids":[], "hand knowledge":[], "agent distribution":[], "conditional probabilities":[], "MLE probabilities":[], "generated samples":[], "agent state copies":[]}
-NUM_SAMPLES = 25
-BOLTZMANN_CONSTANT = 30
+NUM_SAMPLES = 10
+BOLTZMANN_CONSTANT = 100
 
 CardChoices = []
 
@@ -19,10 +19,9 @@ for i in range(25):
 # Note: hand is formmated as [(color, number)] - can use indices for color and indices + 1 for number
 
 class Sample(object):
-	def __init__(self, hand, conditional_probs, MLE_probs):
+	def __init__(self, hand, conditional_probs):
 		self.hand = hand
 		self.conditional_probs = conditional_probs
-		self.MLE_probs = MLE_probs
 
 	def consistent(self, knowledge):
 		for i, card in enumerate(self.hand):
@@ -96,7 +95,10 @@ class ChiefPlayer(Player):
 		changed_cards = []
 		drawn_move = []
 
-		if player == self.pnr: # chief agent just took action
+		#############################################################
+		### Update agents in pool if chief agent just took action ###
+		#############################################################
+		if player == self.pnr:
 			self.game_state_before_move = deepcopy(game_state)
 			self.player_model_before_move = deepcopy(player_model)
 
@@ -124,7 +126,10 @@ class ChiefPlayer(Player):
 
 			return
 
-		# Detecting if any card information has changed that can be used to update previous data
+
+		###########################################################
+		## Detecting relevant changes to all-time card knowledge ##
+		###########################################################
 		mark_delete = []
 
 		for c in self.card_ids:
@@ -141,10 +146,14 @@ class ChiefPlayer(Player):
 				changed_cards.append((c, new_k))
 				drawn_move.append(self.drawn_dict[c])
 
+		## If a card was "picked up" by the internal system, but not in the game engine, correct issue
 		for marked_c in mark_delete:
-			del self.card_ids[marked_c] # new card picked up when game didn't actually have one
+			del self.card_ids[marked_c]
 
 
+		#########################################################################
+		### Updating historical data based on all-time card knowledge changes ###
+		#########################################################################
 		if (len(changed_cards) > 0) or self.played_or_discarded_card != None:
 			if (self.played_or_discarded_card):
 				changed_cards.append(tuple(self.played_or_discarded_card[:-1]))
@@ -159,14 +168,17 @@ class ChiefPlayer(Player):
 			self.rollforward_move_tracker(starting_move, self.move_idx, changed_cards)
 			self.played_or_discarded_card = None
 
-		# Creating new row for move tracking table
+
+		##################################################################
+		### Creating initial row for this move index in tracking table ###
+		##################################################################
 		new_row = dict()
 		new_row["move"] = self.action_to_key(action)
-		# print(action, self.action_to_key(action))
 
 		## storing game state before move for get_action
 		modified_game_state = deepcopy(self.game_state_before_move)
 		modified_game_state.hands = [None if a == [] else [] for a in self.game_state_before_move.hands]
+		modified_game_state.hands[self.pnr] = None
 		modified_game_state.hinted_indices = []
 		modified_game_state.card_changed = None
 		VA = []
@@ -178,6 +190,7 @@ class ChiefPlayer(Player):
 				VA.append(a)
 
 		modified_game_state.valid_actions = deepcopy(VA)
+
 		partners_hints = self.hints_to_partner
 		modified_player_model = BasePlayerModel(self.partner_nr, self.game_state_before_move.all_knowledge[self.partner_nr], self.hints_to_partner, self.player_model_before_move.get_actions())
 		new_row["observable game state"] = (modified_game_state, modified_player_model)
@@ -206,7 +219,6 @@ class ChiefPlayer(Player):
 			prev_game = deepcopy(modified_game_state)
 			prev_game.hands = [self.new_sample(player_model.get_knowledge()).hand if a == None else [] for a in modified_game_state.hands]
 			d = agent.get_action(prev_game, modified_player_model)
-			# print(max(d, key=d.get), type(agent).__name__, prev_game.hands)
 			agent.inform(action, player, game_state_input, modified_player_model2)
 
 		# add incomplete row to make use of functions below
@@ -219,22 +231,18 @@ class ChiefPlayer(Player):
 		sample_conditionals = [sample.conditional_probs for sample in self.move_tracking_table.loc[self.move_idx, "generated samples"]]
 		new_conditional = np.mean(np.array(sample_conditionals), axis=0)
 		self.move_tracking_table.at[self.move_idx, "conditional probabilities"] = new_conditional
-
-		# generate average MLE prob
-		sample_MLEs = [sample.MLE_probs for sample in self.move_tracking_table.loc[self.move_idx, "generated samples"]]
-		new_MLE = np.mean(np.array(sample_MLEs), axis=0)
 		
 		# get prior using the average conditional and previous prior if available
 		if self.move_idx == 0:
 			self.move_tracking_table.at[self.move_idx,"agent distribution"] = new_conditional
-			self.move_tracking_table.at[self.move_idx,"MLE probabilities"] = new_MLE
+			self.move_tracking_table.at[self.move_idx,"MLE probabilities"] = new_conditional
 		else:
 			prev_row = self.move_tracking_table.loc[self.move_idx - 1]
 			prior = prev_row["agent distribution"]
 			prior2 = prev_row["MLE probabilities"]
 			updated_prior = new_conditional*prior
 			self.move_tracking_table.at[self.move_idx,"agent distribution"] = self.makeprob(updated_prior)
-			self.move_tracking_table.at[self.move_idx,"MLE probabilities"] = (new_MLE + prior2*self.move_idx)/(self.move_idx + 1)
+			self.move_tracking_table.at[self.move_idx,"MLE probabilities"] = (new_conditional + prior2*self.move_idx)/(self.move_idx + 1)
 
 		self.move_idx += 1
 
@@ -286,16 +294,7 @@ class ChiefPlayer(Player):
 			card = (card_idx//5, card_idx%5 + 1)
 			new_samp.append(card)
 
-		return Sample(new_samp, None, None)
-
-	# def values_to_probs(self, actionvalues):
-	# 	values = np.zeros(20)
-
-	# 	for action in actionvalues:
-	# 		values[self.action_to_key(action)] = actionvalues[action]
-
-	# 	nonnegative_vals = values - min(values)
-	# 	return nonnegative_vals/np.sum(nonnegative_vals)
+		return Sample(new_samp, None)
 
 	def values_to_probs(self, actionvalues):
 		values = min(actionvalues.values())*np.ones(20)
@@ -319,19 +318,14 @@ class ChiefPlayer(Player):
 				game_state.hands[i] = hand
 
 		probs = []
-		MLEs = []
 
 		for agent in agent_copies:
 			temp_agent = deepcopy(agent)
 			values = temp_agent.get_action(game_state, base_player_model)
-
-			# print(type(agent).__name__, game_state.hands, game_state.board, [round(a,2) for a in values.values()])
-
 			probs.append(self.values_to_probs(values)[action_idx])
 			prob_array = np.array(self.values_to_probs(values))
-			MLEs.append(float((prob_array[action_idx] == max(prob_array))/(np.sum(prob_array == max(prob_array)))))
 
-		return np.array(probs), np.array(MLEs)
+		return np.array(probs)
 
 	def hand_sampler(self, move_idx, number_needed):
 		existing_samples = self.move_tracking_table.loc[move_idx,"generated samples"]
@@ -345,7 +339,7 @@ class ChiefPlayer(Player):
 
 			if sample.consistent(new_knowledge):
 				new_samples.append(deepcopy(sample))
-				stored_samples[self.sample_hash(sample)] = (sample.conditional_probs, sample.MLE_probs)
+				stored_samples[self.sample_hash(sample)] = sample.conditional_probs
 		
 		n = len(new_samples)
 
@@ -356,14 +350,12 @@ class ChiefPlayer(Player):
 
 			# compute conditional game state
 			if h in stored_samples:
-				new_conditional, new_MLE = stored_samples[h]
+				new_conditional = stored_samples[h]
 			else:
-				new_conditional, new_MLE = self.agent_probs(new_samp.hand, move_idx)
-				stored_samples[h] = (new_conditional, new_MLE)
+				new_conditional = self.agent_probs(new_samp.hand, move_idx)
+				stored_samples[h] = new_conditional
 
 			new_samp.conditional_probs = new_conditional
-			new_samp.MLE_probs = new_conditional
-			# print(new_samp.hand, new_samp.MLE_probs)
 			new_samples.append(new_samp)
 
 		self.move_tracking_table.at[move_idx,"generated samples"] = new_samples
@@ -386,8 +378,6 @@ class ChiefPlayer(Player):
 			# compute new average conditional probabilities
 			sample_conditionals = [sample.conditional_probs for sample in self.move_tracking_table.loc[table_idx]["generated samples"]]
 			new_conditional = np.mean(np.array(sample_conditionals), axis=0)
-			sample_MLEs = [sample.MLE_probs for sample in self.move_tracking_table.loc[table_idx]["generated samples"]]
-			new_MLE = np.mean(np.array(sample_MLEs), axis=0)
 			self.move_tracking_table.at[table_idx,"conditional probabilities"] = new_conditional
 
 
@@ -407,4 +397,4 @@ class ChiefPlayer(Player):
 			new_prior_pre = new_conditional * prev_prior
 			new_prior = self.makeprob(new_prior_pre)
 			self.move_tracking_table.at[table_idx,"agent distribution"] = new_prior
-			self.move_tracking_table.at[table_idx,"MLE probabilities"] = (new_MLE + prev_prior2*table_idx)/(table_idx + 1)
+			self.move_tracking_table.at[table_idx,"MLE probabilities"] = (new_conditional + prev_prior2*table_idx)/(table_idx + 1)
