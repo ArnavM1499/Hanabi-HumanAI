@@ -228,9 +228,7 @@ class ValuePlayer(Player):
 
     def _eval_partner_knowledge(self, knowledge):
         diff_score = 0
-        # print(knowledge)
         for i in range(len(knowledge)):
-            # print(knowledge[i], i)
             if self.partner_hand[i] in self.play:
                 variance = (1 - slot_pct(knowledge[i], self.play))
                 diff_score += variance * variance
@@ -247,10 +245,8 @@ class ValuePlayer(Player):
         target = get_multi_target(action, self.partner_hand, self.partner_weighted_knowledge,
                                   self.state.get_board(), self.play_threshold, self.hint_direction)
         copy_weights = copy.deepcopy(self.partner_weights)
-        # print(self.hint_weight, copy_weights)
         new_partner_weights = update_weights(copy_weights, self.hint_weight, self.state.get_board(), target)
         copy_knowledge = copy.deepcopy(self.partner_knowledge)
-        # print("before",copy_knowledge)
 
         # update knowledge ourselves as part of simulation
         if action.type == HINT_COLOR:
@@ -272,7 +268,6 @@ class ValuePlayer(Player):
                     for j in range(0, 5):
                         copy_knowledge[i][j][action.num - 1] = 0
 
-        # print("after",copy_knowledge)
         new_weighted_knowledge = weight_knowledge(copy_knowledge, new_partner_weights)
         # print(action)
         return self.partner_knowledge_index - self._eval_partner_knowledge(new_weighted_knowledge)
@@ -309,10 +304,6 @@ class ValuePlayer(Player):
         self.weighted_knowledge = weight_knowledge(self.knowledge, self.weights)
         self.partner_weighted_knowledge = weight_knowledge(self.partner_knowledge, self.partner_weights)
 
-        # print("partner cards: ")
-        # print(self.partner_hand)
-        # print("partner knowledge: ")
-        # print(self.partner_knowledge)
         self.partner_knowledge_index = self._eval_partner_knowledge(self.partner_weighted_knowledge)
 
         value_dict = {}
