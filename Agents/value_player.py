@@ -24,6 +24,7 @@ def remove_card(card, knowledge):
 
 def weight_knowledge(knowledge, weights):
     new_knowledge = copy.deepcopy(weights)
+
     for slot in range(len(new_knowledge)):
         for col in range(5):
             for num in range(5):
@@ -43,6 +44,7 @@ def update_weights(weights, weight, board, target):
 def slot_pct(knowledge, list):
     total_combos = 0.0
     satisf_combos = 0.0
+    # print(len(knowledge))
     for col in range(len(knowledge)):
         # there are 5 possible numbers
         for num in range(5):
@@ -50,6 +52,7 @@ def slot_pct(knowledge, list):
             if (col, num + 1) in list:
                 satisf_combos += knowledge[col][num]
     if total_combos < 1:
+        return 0
         print("slot_pct error")
     return satisf_combos / total_combos
 
@@ -225,7 +228,6 @@ class ValuePlayer(Player):
 
     def _eval_partner_knowledge(self, knowledge):
         diff_score = 0
-        # print(knowledge)
         for i in range(len(knowledge)):
             if self.partner_hand[i] in self.play:
                 variance = (1 - slot_pct(knowledge[i], self.play))
@@ -302,10 +304,6 @@ class ValuePlayer(Player):
         self.weighted_knowledge = weight_knowledge(self.knowledge, self.weights)
         self.partner_weighted_knowledge = weight_knowledge(self.partner_knowledge, self.partner_weights)
 
-        # print("partner cards: ")
-        # print(self.partner_hand)
-        # print("partner knowledge: ")
-        # print(self.partner_knowledge)
         self.partner_knowledge_index = self._eval_partner_knowledge(self.partner_weighted_knowledge)
 
         value_dict = {}

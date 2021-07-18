@@ -316,6 +316,8 @@ class HardcodePlayer2(Player):
             else:
                 return action
 
+        self._update_state(state, model)
+
         # Pattern matcing [self._decide() in version 1]
         chosen_action = None
         chosen_action_name = None
@@ -355,10 +357,10 @@ class HardcodePlayer2(Player):
             return chosen_action
 
     def _execute(self, force=False):
-
         with timer("execute main", self.timer):
             board = self.last_state.get_board()
             knowledge = self.knowledge
+
             if self.return_value:
                 order = []
 
@@ -398,6 +400,7 @@ class HardcodePlayer2(Player):
                     return action
 
         # TODO add more conditions for more aggressive play
+
 
         with timer("execute postprocess", self.timer):
             if (
@@ -591,7 +594,7 @@ class HardcodePlayer2(Player):
         for i, t in product(range(5), [cgf.HINT_NUMBER, cgf.HINT_COLOR]):
 
             action = Action(t, pnr=self.partner_nr, col=i, num=i)
-
+            
             pred_play = self.partner_play.copy()
             pred_play_candidate = self.partner_play_candidate.copy()
             pred_discard = self.partner_discard.copy()
