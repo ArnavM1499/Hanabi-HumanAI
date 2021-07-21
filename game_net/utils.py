@@ -87,7 +87,7 @@ def pkl_to_np(dataset_dir, *paths, rename=False):
                     )
 
 
-def merge_np(dataset_root, agent_name, train_split=0.9):
+def merge_np(dataset_root, agent_name, train_split=0.7):
     agent_name = str(agent_name)
     all_data = []
     print("loading all data into memory")
@@ -120,14 +120,14 @@ def merge_np(dataset_root, agent_name, train_split=0.9):
     shuffle(all_train)
 
     train_np = open(os.path.join(dataset_root, "{}_train.npy".format(agent_name)), "wb")
-    print("writing into train")
+    print("writing {} entries into train".format(len(all_train)))
     np.save(train_np, np.array(weights, dtype=np.float32))
     for i, state in all_train:
         np.save(train_np, state)
         np.save(train_np, i)
     train_np.close()
     val_np = open(os.path.join(dataset_root, "{}_val.npy".format(agent_name)), "wb")
-    print("writing into val")
+    print("writing {} entries into val".format(sum([len(x) for x in vals])))
     np.save(val_np, np.ones(20, dtype=np.float32))
     for i in range(20):
         for j in range(len(vals[i])):

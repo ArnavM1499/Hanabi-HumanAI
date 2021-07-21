@@ -5,13 +5,14 @@ def NaiveFC(
     num_output=16, num_layers=4, num_units=256, activation="sigmoid", last="", dropout=0
 ):
 
+    if isinstance(num_units, int):
+        num_units = [num_units for _ in range(num_layers)]
+    assert isinstance(num_units, list)
+
     with tf.device("/GPU:0"):
-        layers = [
-            tf.keras.layers.Dense(num_units, activation=activation)
-            for _ in range(num_layers)
-        ]
-        if dropout > 0:
-            layers = sum([[L, tf.keras.layers.Dropout(dropout)] for L in layers], [])
+        layers = [tf.keras.layers.Dense(u, activation=activation) for u in num_units]
+        # if dropout > :
+        #     layers = sum([[L, tf.keras.layers.Dropout(dropout)] for L in layers], [])
         layers.append(tf.keras.layers.Dense(num_output, activation=None))
         if last == "L2":
             layers.append(

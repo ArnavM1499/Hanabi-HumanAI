@@ -14,15 +14,25 @@ from dataset import DatasetGenerator_cached, DatasetGenerator2
 from dataset import np2tf_generator, merged_np2tf_generator
 from naiveFC import NaiveFC
 
-# tf.config.set_visible_devices([], "GPU")
+GPU = True
 
-model = NaiveFC(10, num_layers=5, num_units=1600, activation="relu", dropout=0.1)
+if GPU:
+    gpus = tf.config.experimental.list_physical_devices("GPU")
+    for gpu in gpus:
+        tf.config.experimental.set_memory_growth(gpu, True)
+else:
+    tf.config.set_visible_devices([], "GPU")
+
+# model = NaiveFC(20, num_units=[600, 400, 200], activation="relu", dropout=0)
+model = NaiveFC(20, num_units=[800, 800, 800, 800], activation="relu", dropout=0)
 heads = [
-    NaiveFC(20, num_layers=0, activation="relu", last="softmax") for _ in range(20)
+    NaiveFC(20, num_units=[20], activation="relu", last="softmax") for _ in range(30)
 ]
 with tf.device("/GPU:0"):
     loss_object = tf.keras.losses.SparseCategoricalCrossentropy()
-    optimizer = tf.keras.optimizers.Adam(learning_rate=0.003)
+    optimizer = tf.keras.optimizers.Adam(
+        learning_rate=0.001, beta_1=0.995, beta_2=0.9999
+    )
 
 
 @tf.function
@@ -71,20 +81,21 @@ def calculate_loss(features):
 
 def train(
     dataset_root,
-    save_checkpoint,
-    epoch=1000,
-    samples_per_batch=14000000,  # default for 5 + 2 train
+    save_checkpoint_dir,
+    epoch=100,
+    samples_per_batch=14000000,  # default for 5 + 3 train
     batch_size=10000,
-    shuffle=2,
+    shuffle=5,
     use_val=True,
     start_from_scratch=False,
 ):
+    save_checkpoint = os.path.join(save_checkpoint_dir, "model")
     if not start_from_scratch:
         try:
             model.load_weights(save_checkpoint)
             for i in range(20):
                 heads[i].load_weights(save_checkpoint + "_head_" + str(i).zfill(3))
-        except:
+        except:  # noqa E722
             print("cannot load existing model")
     num_heads = len(glob(os.path.join(dataset_root, "train", "*.npy")))
     # trainset = (
@@ -121,7 +132,7 @@ def train(
                     loss = loss_object(new_label, pred, sample_weight=new_weights)
                 trainable_variables = (
                     sum([h.trainable_variables for h in heads[:num_heads]], [])
-                    + model.trainable_variables
+                    + model.trainable_variables  # noqa W503
                 )
                 gradients = tape.gradient(loss, trainable_variables)
                 optimizer.apply_gradients(zip(gradients, trainable_variables))
@@ -168,6 +179,7 @@ def train(
 
 
 def vis(test_dir, load_checkpoint, save_image, num_samples=-1, use_pca=True):
+    # deprecated
     colors = [
         ["#d61a1a", "#d67b1a", "#d6b41a", "#d0d61a", "#9ed61a"],
         ["#1ad620", "#1ad6b4", "#1ac6d6", "#1a9ed6", "#1a6bd6"],
@@ -197,9 +209,9 @@ def vis(test_dir, load_checkpoint, save_image, num_samples=-1, use_pca=True):
     if use_pca:
         pca = PCA(n_components=2)
         pca.fit(np.concatenate(samples))
-        transform = lambda x: pca.transform(x)
+        transform = lambda x: pca.transform(x)  # noqa E731
     else:
-        transform = lambda x: np.array(x)
+        transform = lambda x: np.array(x)  # noqa E731
     for i, sample in enumerate(samples):
         points = transform(sample)
         print("#{}: {}".format(i, np.array(tf.math.reduce_mean(sample, axis=0))))
@@ -210,14 +222,21 @@ def vis(test_dir, load_checkpoint, save_image, num_samples=-1, use_pca=True):
 def transfer(
     train_file,
     val_file,
-    load_checkpoint,
+    load_checkpoint_dir,
     save_result,
-    *heads_checkpoints,
+    load_heads=True,
     save_head="",
     step=10,
     learning_rate=0.001,
     epoch=5,
+    max_samples=4000,
 ):
+    load_checkpoint = os.path.join(load_checkpoint_dir, "model")
+    if load_heads:
+        heads_checkpoints = [x[:-6] for x in glob(load_checkpoint + "_head_*")]
+    else:
+        heads_checkpoints = []
+    print(len(heads_checkpoints), " heads found")
     trainset = (
         tf.data.Dataset.from_generator(
             lambda: merged_np2tf_generator(train_file),
@@ -227,6 +246,7 @@ def transfer(
                 tf.TensorSpec(shape=(), dtype=tf.float32),  # Weight
             ),
         )
+        .take(max_samples)
         .cache()
         .batch(step)
         .prefetch(2)
