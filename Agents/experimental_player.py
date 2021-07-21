@@ -301,6 +301,8 @@ class ExperimentalPlayer(Player):
             self.last_model = player_model
         if self.last_state is None:
             self.last_state = game_state
+
+
         self.knowledge = copy.deepcopy(self.last_model.get_knowledge())
         #print("player " + str(self.pnr) + " knowledge: " + str(self.knowledge))
         if self.card_count:
