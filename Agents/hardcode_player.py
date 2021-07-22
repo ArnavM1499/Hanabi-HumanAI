@@ -288,6 +288,8 @@ class HardcodePlayer2(Player):
                         print("    ", str(k), "has value: ", v)
                     print("wrapped to:")
                     print("    ", str(best))
+                if value_dict[best] == -1:
+                    return Action(cgf.DISCARD, pnr=self.pnr, cnr=0)
                 return best
             else:
                 return value_dict

@@ -41,6 +41,19 @@ class BehaviorCloneBase:
         action = int(tf.math.argmax(pred, axis=1).numpy())
         return Action.from_encoded(action, pnr=current_player)
 
+    def __contains__(self, agent_id):
+        return os.path.isfile(
+            os.path.join(
+                self.current_dir, MODEL_DIR, "model_head_" + agent_id + ".index"
+            )
+        ) and os.path.isfile(
+            os.path.join(
+                self.current_dir,
+                MODEL_DIR,
+                "model_head_" + agent_id + ".data-00000-of-00001",
+            )
+        )
+
     def _convert_game_state(
         self, game_state: cgf.GameState, player_model: cgf.BasePlayerModel
     ) -> list:

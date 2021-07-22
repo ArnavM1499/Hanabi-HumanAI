@@ -4,7 +4,8 @@ from glob import glob
 import matplotlib.pyplot as plt
 import numpy as np
 import os
-from settings import model, classification_head
+
+# from settings import model, classification_head
 from sklearn.decomposition import PCA
 import tensorflow as tf
 import tensorflow_addons as tfa
@@ -14,13 +15,15 @@ from tqdm import tqdm
 from dataset import GAME_STATE_LENGTH
 from dataset import DatasetGenerator_cached, DatasetGenerator2
 from dataset import np2tf_generator, merged_np2tf_generator
-
-# from naiveFC import NaiveFC
+from naiveFC import NaiveFC
 
 
 # model = NaiveFC(20, num_units=[600, 400, 200], activation="relu", dropout=0)
-# model = NaiveFC(20, num_units=[800, 800, 800, 800], activation="relu", dropout=0)
-heads = [deepcopy(classification_head) for _ in range(30)]
+model = NaiveFC(20, num_units=[800, 800, 800, 800], activation="relu", dropout=0)
+heads = [
+    NaiveFC(20, num_layers=0, activation="relu", last="softmax") for _ in range(20)
+]
+# heads = [deepcopy(classification_head) for _ in range(30)]
 with tf.device("/GPU:0"):
     loss_object = tf.keras.losses.SparseCategoricalCrossentropy()
     optimizer = tf.keras.optimizers.Adam(
@@ -101,9 +104,8 @@ def train(
     train_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name="train_accuracy")
     valset = (
         DatasetGenerator2(os.path.join(dataset_root, "val"), 0)
-        .cache()
-        .batch(batch_size)
-        .prefetch(2)
+        #     .cache()
+        .batch(batch_size).prefetch(2)
     )
     val_loss = tf.keras.metrics.Mean(name="val_loss")
     val_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name="val_accuracy")
@@ -125,7 +127,7 @@ def train(
                 optimizer.apply_gradients(zip(gradients, trainable_variables))
                 train_loss(loss)
                 train_accuracy(new_label, pred)
-                if i % 50 == 0:
+                if i % 200 == 0:
                     if use_val:
                         for state_t, agent_id_t, label_t, weights_t in valset:
                             feature = model(state_t, training=False)
