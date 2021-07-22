@@ -34,26 +34,43 @@ class Action(object):
             return "discards their " + str(self.cnr)
 
     def __eq__(self, other):
-        return (self.type, self.pnr, self.col, self.num, self.cnr) == (
-            other.type,
-            other.pnr,
-            other.col,
-            other.num,
-            other.cnr,
-        )
+        return isinstance(other, Action) and (self.encode() == other.encode())
+        # return (self.type, self.pnr, self.col, self.num, self.cnr) == (
+        #     other.type,
+        #     other.pnr,
+        #     other.col,
+        #     other.num,
+        #     other.cnr,
+        # )
 
     def __hash__(self):
         return hash(str(self))
 
     def encode(self):
         if self.type == HINT_COLOR:
-            return (HINT_COLOR, self.col)
+            t = (HINT_COLOR, self.col)
         elif self.type == HINT_NUMBER:
-            return (HINT_NUMBER, self.num - 1)
+            t = (HINT_NUMBER, self.num - 1)
         elif self.type == PLAY:
-            return (PLAY, self.cnr)
+            t = (PLAY, self.cnr)
         elif self.type == DISCARD:
-            return (DISCARD, self.cnr)
+            t = (DISCARD, self.cnr)
+        else:
+            raise NotImplementedError
+        return t[0] * 5 + t[1]
+
+    @staticmethod
+    def from_encoded(encoded, pnr):
+        action_type = encoded // 5
+        action_idx = encoded % 5
+        if action_type == HINT_COLOR:
+            return Action(HINT_COLOR, col=action_idx, pnr=1 - pnr)
+        elif action_type == HINT_NUMBER:
+            return Action(HINT_NUMBER, num=1 + action_idx, pnr=1 - pnr)
+        elif action_type == PLAY:
+            return Action(PLAY, cnr=action_idx, pnr=pnr)
+        elif action_type == DISCARD:
+            return Action(DISCARD, cnr=action_idx, pnr=pnr)
         else:
             raise NotImplementedError
 

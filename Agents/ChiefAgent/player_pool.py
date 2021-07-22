@@ -6,15 +6,16 @@ from copy import deepcopy
 # A way to interface with our player pool files
 class PlayerPool:
     def __init__(self, name, pnr, json_file):
-        with open(json_file, 'r') as f:
+        with open(json_file, "r") as f:
             json_vals = json.load(f)
+        self.player_dict = {
+            k: self.from_dict(name, pnr, v) for k, v in json_vals.items()
+        }
+        self.size = len(self.player_dict)
 
-        self.data = []
-
-        for val in json_vals:
-            self.data.append(self.from_dict(name, pnr, json_vals[val]))
-
-        self.size = len(self.data)
+    @property
+    def data(self):
+        return [self.player_dict[k] for k in sorted(self.player_dict.keys())]
 
     def get_size(self):
         return self.size
@@ -32,6 +33,9 @@ class PlayerPool:
 
     def get_agents(self):
         return self.data
+
+    def get_player_dict(self):
+        return self.player_dict
 
     def from_dict(self, name, pnr, json_dict):
         json_dict["name"] = name
