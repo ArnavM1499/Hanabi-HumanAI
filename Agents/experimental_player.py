@@ -215,7 +215,7 @@ class ExperimentalPlayer(Player):
                 nums = [card[1] for card in partner_hand]
                 return Action(HINT_NUMBER, self.partner_nr, num=min(nums))
             elif self.default_hint == "mix":
-                return Action(HINT_NUMBER, self.partner_nr, num=random.randrange(0, len(nums)))
+                return Action(HINT_NUMBER, self.partner_nr, num=nums[random.randrange(0, len(nums))])
         else:
             return self._discard(True)
 
