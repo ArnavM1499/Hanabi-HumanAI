@@ -9,7 +9,7 @@ from copy import deepcopy
 
 STARTING_COLUMNS_MOVETRACKING = {"move_idx":[], "move": [], "observable game state":[], "card ids":[], "hand knowledge":[], "agent distribution":[], "conditional probabilities":[], "MLE probabilities":[], "generated samples":[], "agent state copies":[]}
 NUM_SAMPLES = 10
-BOLTZMANN_CONSTANT = 100
+BOLTZMANN_CONSTANT = 4
 
 CardChoices = []
 
@@ -302,6 +302,10 @@ class ChiefPlayer(Player):
 		for action in actionvalues:
 			values[self.action_to_key(action)] = actionvalues[action]
 
+		values +=  0 - min(values)
+		values /= max(values) - min(values)
+
+
 		E = np.exp(values * BOLTZMANN_CONSTANT)
 		return E/np.sum(E)
 
@@ -324,6 +328,9 @@ class ChiefPlayer(Player):
 			values = temp_agent.get_action(game_state, base_player_model)
 			probs.append(self.values_to_probs(values)[action_idx])
 			prob_array = np.array(self.values_to_probs(values))
+
+			if type(agent).__name__ == "ValuePlayer" and agent.hint_weight == 50 and move_idx == 17:
+				print([(str(a), values[a]) for a in sorted(values, key=values.get)[-3:]])
 
 		return np.array(probs)
 

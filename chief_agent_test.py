@@ -12,16 +12,18 @@ new_chief = ChiefPlayer("chief", 0, "agent_pool.json")
 
 file_name = "blank.csv"
 pickle_file_name = "chief_testing"
-pickle_file = open(pickle_file_name, "wb")
+# pickle_file = open(pickle_file_name, "wb")
 
-for i in range(1):
-	P1 = ValuePlayer("P1", 0, hint_weight=50)
-	P2 = ValuePlayer("P2", 1, hint_weight=50)
-	pickle.dump(["NEW"], pickle_file)
-	G = hanabi.Game([P1, P2], file_name, pickle_file)
-	Result = G.run(100)
+# for i in range(1):
+# 	P1 = ValuePlayer("P1", 0, hint_weight=50)
+# 	P2 = ValuePlayer("P2", 1, hint_weight=50)
+# 	pickle.dump(["NEW"], pickle_file)
+# 	G = hanabi.Game([P1, P2], file_name, pickle_file)
+# 	Result = G.run(100)
 
-pickle_file.close()
+# pickle_file.close()
+
+P2 = ValuePlayer("P2", 1, hint_weight=50)
 
 def try_pickle(file):
 	try:
@@ -55,7 +57,7 @@ with open(pickle_file_name, 'rb') as f:
 
 			print("player",curr_player,"does",action)
 			new_chief.inform(action, curr_player, game_state, player_model)
-			print(new_chief.move_tracking_table.loc[:,("conditional probabilities", "MLE probabilities")].applymap(lambda L: [round(l,2) for l in L]))
+			print(new_chief.move_tracking_table.loc[:,("conditional probabilities", "agent distribution")].applymap(lambda L: [round(l,2) for l in L]))
 			
 			if (curr_player == 1):
 				A.append(new_chief.move_tracking_table.tail(1)["agent distribution"])
@@ -90,8 +92,8 @@ B = [b.values[0].tolist() for b in B[1:]]
 valueplayerlist = new_chief.player_pool.copies()[:-1]
 
 for idx, name in enumerate(["Value-hint_weight=" + str(v.hint_weight) for v in valueplayerlist] + ["Hardcode"]):
-	plt.plot([b[idx] for b in B], label=name)
+	plt.plot([b[idx] for b in A], label=name)
 
 plt.legend()
-plt.title("Trying to recognize Value-hint_weight=" + str(P2.hint_weight) + " - MLE w/ boltzmann")
-plt.savefig("chiefplots/highboltzmann/mle_Value" + str(P2.hint_weight))
+plt.title("Trying to recognize Value-hint_weight=" + str(P2.hint_weight) + " - bayesian w/ boltzmann")
+plt.show()
