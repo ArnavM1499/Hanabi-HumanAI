@@ -12,6 +12,7 @@ from Agents.ChiefAgent.player_pool import PlayerPool
 from Agents.value_player import ValuePlayer
 
 player_pool = json.load(open("Agents/configs/players.json"))
+dummy_pool = PlayerPool("dummy", 0, "Agents/configs/players.json")
 
 
 def run_single(
@@ -29,11 +30,11 @@ def run_single(
     if isinstance(player, Player):
         P1 = player
     else:
-        P1 = PlayerPool.from_dict("Alice", 0, player_pool[str(player)])
+        P1 = dummy_pool.from_dict("Alice", 0, player_pool[str(player)])
     if isinstance(player2, Player):
         P2 = player2
     else:
-        P2 = PlayerPool.from_dict("Bob", 1, player_pool[str(player2)])
+        P2 = dummy_pool.from_dict("Bob", 1, player_pool[str(player2)])
     if (key is not None) and hasattr(P1, "set_from_key"):
         P1.set_from_key(key)
     else:
@@ -179,15 +180,16 @@ def test_player(
     return iters, avg, smin, smax, smid, smod, hints, hits, turns
 
 
-def sequential_test(player, player2=None, iters=5000, seed=0, save_json_dir=None):
+def sequential_test(player, player2=None, iters=5000, seed=0, save_pkl_dir=None):
     random.seed(seed)
-    if isinstance(save_json_dir, str):
-        if not os.path.isdir(save_json_dir):
-            os.makedirs(save_json_dir)
+    if isinstance(save_pkl_dir, str):
+        print("saving into ", os.path.abspath(save_pkl_dir))
+        if not os.path.isdir(save_pkl_dir):
+            os.makedirs(save_pkl_dir)
         for i in range(iters):
             run_single(
                 os.path.join(
-                    save_json_dir, "{}_{}_{}.json".format(player, player2, seed)
+                    save_pkl_dir, "{}_{}_{}.pkl".format(player, player2, seed)
                 ),
                 player,
                 player2,
