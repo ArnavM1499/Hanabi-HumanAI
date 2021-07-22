@@ -5,6 +5,7 @@ import numpy as np
 import os
 import pickle
 from random import shuffle
+from shutil import copyfile
 from tqdm import tqdm
 from common_game_functions import decode_state
 
@@ -150,6 +151,30 @@ def draw_transfer_curve(np_file, save_image, title=""):
     plt.ylabel("accuracy")
     plt.plot(points[:, 0], points[:, 1], linewidth=1)
     plt.savefig(save_image, dpi=1000)
+
+
+def publish_models(model_dir, output_dir, train_dir):
+    def _copy(file_name, new_name=None):
+        if not new_name:
+            new_name = file_name
+        for ext in [".index", ".data-00000-of-00001"]:
+            copyfile(
+                os.path.join(model_dir, file_name + ext),
+                os.path.join(output_dir, new_name + ext),
+            )
+
+    if not os.path.isdir(output_dir):
+        os.makedirs(output_dir)
+
+    if not os.path.isfile(os.path.join(model_dir, "model.index")):
+        print("no models found!")
+        raise FileNotFoundError
+    else:
+        _copy("model")
+    for i, name in enumerate(sorted(glob(os.path.join(train_dir, "*.npy")))):
+        _copy(
+            "model_head_" + str(i).zfill(3), "model_head_" + os.path.basename(name)[:5]
+        )
 
 
 if __name__ == "__main__":

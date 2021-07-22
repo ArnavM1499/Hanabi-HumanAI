@@ -401,7 +401,6 @@ class HardcodePlayer2(Player):
 
         # TODO add more conditions for more aggressive play
 
-
         with timer("execute postprocess", self.timer):
             if (
                 (self.return_value and not order) or not self.return_value
@@ -530,6 +529,16 @@ class HardcodePlayer2(Player):
 
     def _hint(self, force=False):
 
+        if self.last_state.get_num_hints() < 1:
+            assert (not force) or self.return_value, "force hinting when no hints left"
+            if self.return_value:
+                return {
+                    Action(t, pnr=self.partner_nr, col=i, num=i): -1
+                    for i, t in product(range(5), [cgf.HINT_NUMBER, cgf.HINT_COLOR])
+                }
+            else:
+                self._discard(force=True)
+
         partner_hand = self.last_state.get_hands()[self.partner_nr]
         partner_knowledge = deepcopy(
             self.last_state.get_all_knowledge()[self.partner_nr]
@@ -594,7 +603,7 @@ class HardcodePlayer2(Player):
         for i, t in product(range(5), [cgf.HINT_NUMBER, cgf.HINT_COLOR]):
 
             action = Action(t, pnr=self.partner_nr, col=i, num=i)
-            
+
             pred_play = self.partner_play.copy()
             pred_play_candidate = self.partner_play_candidate.copy()
             pred_discard = self.partner_discard.copy()
@@ -715,7 +724,7 @@ class HardcodePlayer2(Player):
                 if self.self_card_count:
                     visible_cards = (
                         self.last_state.get_common_visible_cards()
-                        + self.last_state.get_hands()[self.partner_nr]
+                        + self.last_state.get_hands()[self.partner_nr]  # noqa E503
                     )
                     for col, num in visible_cards:
                         new_knowledge[col][num - 1] -= 1
@@ -740,7 +749,7 @@ class HardcodePlayer2(Player):
             new_knowledge = new_model.get_knowledge()
             visible_cards = (
                 self.last_state.get_common_visible_cards()
-                + self.last_state.get_hands()[self.partner_nr]
+                + self.last_state.get_hands()[self.partner_nr]  # noqa W503
             )
             knowledge_mask = [cgf.COUNTS.copy() for _ in range(5)]
             for col, num in visible_cards:

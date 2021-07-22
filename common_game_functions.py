@@ -141,6 +141,13 @@ class GameState(object):
         return sorted(cards)
 
 
+def checkpoint(passed):
+    if not passed:
+        import pdb
+
+        pdb.set_trace()
+
+
 def encode_state(
     partner_hand,
     partner_knowledge,
@@ -157,8 +164,8 @@ def encode_state(
     state.extend([(col * 5 + num - 1) for col, num in sorted(board)])
     for (col, num) in partner_hand:
         state.append(col * 5 + num - 1)
-    if len(state) < 5:
-        state.append(25)
+    state.extend([25] * (5 - len(partner_hand)))
+    checkpoint(len(state) == 10)
     knowledges = []
     knowledges.extend(partner_knowledge)
     if len(partner_knowledge) < 5:
@@ -167,21 +174,25 @@ def encode_state(
     if len(self_knowledge) < 5:
         knowledges.append([[0, 0, 0, 0, 0] for _ in range(5)])
     for knowledge in knowledges:
-        for row in knowledge:
-            state.extend(row)
+        state.extend(sum(knowledge, []))
+    checkpoint(len(state) == 260)
     trash_reformat = [[0] * 5 for _ in range(5)]
     for (col, num) in trash:
         trash_reformat[col][num - 1] += 1
-    for row in trash_reformat:
-        state.extend(row)
+    state.extend(sum(trash_reformat, []))
+    checkpoint(len(state) == 285)
     state.append(3 - hits)
     state.append(hints)
-    if last_action is not None:
+    if last_action:
         state.append(last_action.encode())
     else:
         state.append(20)
     state.append(action.encode())
     state.append(pnr)
+    if len(state) != 290:
+        import pdb
+
+        pdb.set_trace()
     return state
 
 

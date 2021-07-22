@@ -1,8 +1,10 @@
+from copy import deepcopy
 from fire import Fire
 from glob import glob
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+from settings import model, classification_head
 from sklearn.decomposition import PCA
 import tensorflow as tf
 import tensorflow_addons as tfa
@@ -12,22 +14,13 @@ from tqdm import tqdm
 from dataset import GAME_STATE_LENGTH
 from dataset import DatasetGenerator_cached, DatasetGenerator2
 from dataset import np2tf_generator, merged_np2tf_generator
-from naiveFC import NaiveFC
 
-GPU = True
+# from naiveFC import NaiveFC
 
-if GPU:
-    gpus = tf.config.experimental.list_physical_devices("GPU")
-    for gpu in gpus:
-        tf.config.experimental.set_memory_growth(gpu, True)
-else:
-    tf.config.set_visible_devices([], "GPU")
 
 # model = NaiveFC(20, num_units=[600, 400, 200], activation="relu", dropout=0)
-model = NaiveFC(20, num_units=[800, 800, 800, 800], activation="relu", dropout=0)
-heads = [
-    NaiveFC(20, num_units=[20], activation="relu", last="softmax") for _ in range(30)
-]
+# model = NaiveFC(20, num_units=[800, 800, 800, 800], activation="relu", dropout=0)
+heads = [deepcopy(classification_head) for _ in range(30)]
 with tf.device("/GPU:0"):
     loss_object = tf.keras.losses.SparseCategoricalCrossentropy()
     optimizer = tf.keras.optimizers.Adam(
@@ -98,12 +91,6 @@ def train(
         except:  # noqa E722
             print("cannot load existing model")
     num_heads = len(glob(os.path.join(dataset_root, "train", "*.npy")))
-    # trainset = (
-    #     DatasetGenerator2(os.path.join(dataset_root, "train"), 0)
-    #     .shuffle(1 + int(shuffle * batch_size))
-    #     .batch(batch_size)
-    #     .prefetch(1)
-    # )
     trainset = (
         DatasetGenerator_cached(os.path.join(dataset_root, "train"), samples_per_batch)
         .shuffle(1 + int(shuffle * batch_size))
