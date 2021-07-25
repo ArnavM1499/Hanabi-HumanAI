@@ -39,7 +39,13 @@ class BehaviorCloneBase:
         features = self.model(game_net_input, training=False)
         pred = self.heads[agent_id](features, training=False)
         action = int(tf.math.argmax(pred, axis=1).numpy())
-        return Action.from_encoded(action, pnr=current_player)
+        print(pred)
+        ret = dict()
+
+        for i, p in enumerate(pred):
+            ret[Action.from_encoded(i, pnr=current_player)] = p
+
+        return ret
 
     def __contains__(self, agent_id):
         return os.path.isfile(

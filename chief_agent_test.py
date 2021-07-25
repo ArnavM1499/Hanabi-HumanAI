@@ -7,23 +7,20 @@ import hanabi
 import numpy as np
 import matplotlib.pyplot as plt
 
-
-new_chief = ChiefPlayer("chief", 0, "agent_pool.json")
+new_chief = ChiefPlayer("chief", 0, "Agents/configs/players.json")
 
 file_name = "blank.csv"
 pickle_file_name = "chief_testing"
-# pickle_file = open(pickle_file_name, "wb")
+pickle_file = open(pickle_file_name, "wb")
 
-# for i in range(1):
-# 	P1 = ValuePlayer("P1", 0, hint_weight=50)
-# 	P2 = ValuePlayer("P2", 1, hint_weight=50)
-# 	pickle.dump(["NEW"], pickle_file)
-# 	G = hanabi.Game([P1, P2], file_name, pickle_file)
-# 	Result = G.run(100)
+for i in range(1):
+	P1 = ValuePlayer("P1", 0, hint_weight=50)
+	P2 = ValuePlayer("P2", 1, hint_weight=50)
+	pickle.dump(["NEW"], pickle_file)
+	G = hanabi.Game([P1, P2], file_name, pickle_file)
+	Result = G.run(100)
 
-# pickle_file.close()
-
-P2 = ValuePlayer("P2", 1, hint_weight=50)
+pickle_file.close()
 
 def try_pickle(file):
 	try:

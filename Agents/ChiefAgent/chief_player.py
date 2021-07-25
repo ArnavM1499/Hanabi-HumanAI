@@ -2,6 +2,7 @@ from common_game_functions import *
 from Agents.common_player_functions import *
 from Agents.player import Player, Action
 from Agents.ChiefAgent.player_pool import PlayerPool
+from game_net.behavior_clone import BehaviorClone
 import pandas as pd
 import numpy as np
 import random
@@ -322,15 +323,22 @@ class ChiefPlayer(Player):
 				game_state.hands[i] = hand
 
 		probs = []
+		agent_ids = sorted(self.player_pool.get_player_dict().keys())
 
-		for agent in agent_copies:
+		for idx, agent in enumerate(agent_copies):
 			temp_agent = deepcopy(agent)
-			values = temp_agent.get_action(game_state, base_player_model)
-			probs.append(self.values_to_probs(values)[action_idx])
-			prob_array = np.array(self.values_to_probs(values))
+			# values = temp_agent.get_action(game_state, base_player_model)
+			# probs.append(self.values_to_probs(values)[action_idx])
+			# prob_array = np.array(self.values_to_probs(values))
 
-			if type(agent).__name__ == "ValuePlayer" and agent.hint_weight == 50 and move_idx == 17:
-				print([(str(a), values[a]) for a in sorted(values, key=values.get)[-3:]])
+			agent_id = agent_ids[idx]
+			actionvalues = BehaviorClone.predict(agent_id, game_state, base_player_model)
+			values = np.ones(20)
+
+			for action in actionvalues:
+				values[self.action_to_key(action)] = actionvalues[action]
+
+			probs = self.makeprobs(value)
 
 		return np.array(probs)
 
