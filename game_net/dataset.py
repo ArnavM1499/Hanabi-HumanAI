@@ -5,7 +5,7 @@ from random import shuffle
 import tensorflow as tf
 
 GAME_STATE_LENGTH = 558
-CACHE_QUOTA = 30 << 30  # about 30G
+CACHE_QUOTA = 24 << 30  # about 24G
 
 
 def np2tf_generator(file_path, num_samples=-1, loop=True):
@@ -167,7 +167,7 @@ def DatasetGenerator_cached(dataset_root, num_samples, max_cache=-1):
     num_samples_individual = num_samples // num_dataset + 1
     if max_cache < 0:
         max_cache = CACHE_QUOTA
-    for i in range(num_dataset):
+    for i in sorted(range(num_dataset), key=lambda j: all_datasets[j][1]):
         if all_datasets[i][1] < max_cache:
             max_cache -= all_datasets[i][1]
             all_datasets[i] = all_datasets[i][0].cache()
@@ -179,3 +179,13 @@ def DatasetGenerator_cached(dataset_root, num_samples, max_cache=-1):
     all_datasets = [d.repeat() for d in all_datasets]
     choice_dataset = tf.data.Dataset.range(num_dataset).repeat(num_samples_individual)
     return tf.data.experimental.choose_from_datasets(all_datasets, choice_dataset)
+
+
+def DatasetGenerator_concat(dataset_root):
+    all_datasets = []
+    for i, np_file in enumerate(sorted(glob(os.path.join(dataset_root, "*.npy")))):
+        all_datasets.append(merged_tf2np_wrapper(np_file, i))
+    assert all_datasets != []
+    for i in range(1, len(all_datasets)):
+        all_datasets[0] = all_datasets[0].concatenate(all_datasets[i])
+    return all_datasets[0]

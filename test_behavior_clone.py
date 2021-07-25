@@ -56,7 +56,7 @@ def test_single(player1_id, player2_id):
         return {}
 
 
-def test_all(*agent_ids, output_json="", iters=20, seed=0):
+def test_all(*agent_ids, output_json="", iters=20, seed=0, threads=16):
     random.seed(seed)
     profile = {}
     if len(agent_ids) == 0:
@@ -70,7 +70,7 @@ def test_all(*agent_ids, output_json="", iters=20, seed=0):
     results = []
     stdout = sys.stdout
     sys.stdout = open(os.devnull, "w")
-    p = Pool(16)
+    p = Pool(threads)
     for ids in product(agent_ids, agent_ids):
         for i in range(iters):
             results.append(p.apply_async(test_single, ids))

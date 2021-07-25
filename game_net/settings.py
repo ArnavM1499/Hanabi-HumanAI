@@ -1,5 +1,5 @@
-from naiveFC import NaiveFC
 import tensorflow as tf
+from dataset import GAME_STATE_LENGTH
 
 
 GPU = False
@@ -10,6 +10,21 @@ if GPU:
 else:
     tf.config.set_visible_devices([], "GPU")
 
-model = NaiveFC(20, num_units=[600, 400, 200], activation="relu")
-plain_head = NaiveFC(20, num_units=[20], activation="relu")
-classification_head = NaiveFC(20, num_units=[20], activation="relu", last="softmax")
+model_config = {
+    "num_output": 20,
+    "num_units": [800, 800, 800, 800],
+    "num_input": GAME_STATE_LENGTH,
+    "activation": "relu",
+    "last": "L2",
+}
+plain_head_config = {
+    "num_output": 20,
+    "num_units": [20],
+    "activation": "relu",
+}
+classification_head_config = {
+    "num_output": 20,
+    "num_units": [20],
+    "activation": "relu",
+    "last": "softmax",
+}

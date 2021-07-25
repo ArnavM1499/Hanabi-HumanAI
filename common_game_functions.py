@@ -142,6 +142,7 @@ class GameState(object):
 
 
 def checkpoint(passed):
+    assert passed
     if not passed:
         import pdb
 
@@ -189,10 +190,6 @@ def encode_state(
         state.append(20)
     state.append(action.encode())
     state.append(pnr)
-    if len(state) != 290:
-        import pdb
-
-        pdb.set_trace()
     return state
 
 

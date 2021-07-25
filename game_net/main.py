@@ -1,11 +1,10 @@
-from copy import deepcopy
+from copy import deepcopy  # noqa F401
 from fire import Fire
 from glob import glob
 import matplotlib.pyplot as plt
 import numpy as np
 import os
-
-# from settings import model, classification_head
+from pprint import pprint
 from sklearn.decomposition import PCA
 import tensorflow as tf
 import tensorflow_addons as tfa
@@ -13,21 +12,23 @@ from time import time
 from tqdm import tqdm
 
 from dataset import GAME_STATE_LENGTH
-from dataset import DatasetGenerator_cached, DatasetGenerator2
+from dataset import DatasetGenerator_cached, DatasetGenerator_concat
 from dataset import np2tf_generator, merged_np2tf_generator
+from settings import model_config, classification_head_config
 from naiveFC import NaiveFC
 
-
-# model = NaiveFC(20, num_units=[600, 400, 200], activation="relu", dropout=0)
-model = NaiveFC(20, num_units=[800, 800, 800, 800], activation="relu", dropout=0)
-heads = [
-    NaiveFC(20, num_layers=0, activation="relu", last="softmax") for _ in range(20)
-]
-# heads = [deepcopy(classification_head) for _ in range(30)]
+model = NaiveFC(**model_config)
+heads = []
+dummy_head = NaiveFC(**classification_head_config)
+# initialize weights
+_ = dummy_head.layers[0].get_weights()
+for i in range(20):
+    new_head = tf.keras.models.clone_model(dummy_head)
+    heads.append(new_head)
 with tf.device("/GPU:0"):
     loss_object = tf.keras.losses.SparseCategoricalCrossentropy()
     optimizer = tf.keras.optimizers.Adam(
-        learning_rate=0.001, beta_1=0.995, beta_2=0.9999
+        learning_rate=0.008, beta_1=0.95, beta_2=0.9999
     )
 
 
@@ -46,9 +47,9 @@ def embedding_to_onehot(features, agent_ids, labels, weights, num_heads):
         pred.append(tf.boolean_mask(output, mask))
         new_labels.append(tf.boolean_mask(labels, mask))
         new_weights.append(tf.boolean_mask(weights, mask))
-    pred = tf.concat(pred, axis=0)
-    new_labels = tf.concat(new_labels, axis=0)
-    new_weights = tf.concat(new_weights, axis=0)
+    # pred = tf.concat(pred, axis=0)
+    # new_labels = tf.concat(new_labels, axis=0)
+    # new_weights = tf.concat(new_weights, axis=0)
     # pred has shape [batch_size, 20]
     return pred, new_labels, new_weights
 
@@ -78,7 +79,7 @@ def calculate_loss(features):
 def train(
     dataset_root,
     save_checkpoint_dir,
-    epoch=100,
+    epoch=400,
     samples_per_batch=14000000,  # default for 5 + 3 train
     batch_size=10000,
     shuffle=5,
@@ -89,7 +90,7 @@ def train(
     if not start_from_scratch:
         try:
             model.load_weights(save_checkpoint)
-            for i in range(20):
+            for i in range(len(heads)):
                 heads[i].load_weights(save_checkpoint + "_head_" + str(i).zfill(3))
         except:  # noqa E722
             print("cannot load existing model")
@@ -98,73 +99,82 @@ def train(
         DatasetGenerator_cached(os.path.join(dataset_root, "train"), samples_per_batch)
         .shuffle(1 + int(shuffle * batch_size))
         .batch(batch_size)
-        .prefetch(2)
+        .prefetch(5)
     )
     train_loss = tf.keras.metrics.Mean(name="train_loss")
     train_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name="train_accuracy")
     valset = (
-        DatasetGenerator2(os.path.join(dataset_root, "val"), 0)
-        #     .cache()
-        .batch(batch_size).prefetch(2)
+        DatasetGenerator_concat(os.path.join(dataset_root, "val"))
+        .cache()
+        .batch(batch_size)
+        .prefetch(5)
     )
-    val_loss = tf.keras.metrics.Mean(name="val_loss")
-    val_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name="val_accuracy")
+    val_loss = [tf.keras.metrics.Mean(name="val_loss") for i in range(num_heads)]
+    val_accuracy = [
+        tf.keras.metrics.SparseCategoricalAccuracy(name="val_accuracy")
+        for i in range(num_heads)
+    ]
     for e in range(epoch):
         t = time()
         for i, (state, agent_id, label, weights) in enumerate(trainset):
-            with tf.device("/GPU:0"):
-                with tf.GradientTape() as tape:
-                    feature = model(state, training=True)
-                    pred, new_label, new_weights = embedding_to_onehot(
-                        feature, agent_id, label, weights, num_heads
-                    )
-                    loss = loss_object(new_label, pred, sample_weight=new_weights)
-                trainable_variables = (
-                    sum([h.trainable_variables for h in heads[:num_heads]], [])
-                    + model.trainable_variables  # noqa W503
+            with tf.GradientTape() as tape:
+                feature = model(state, training=True)
+                pred, new_label, new_weights = embedding_to_onehot(
+                    feature, agent_id, label, weights, num_heads
                 )
-                gradients = tape.gradient(loss, trainable_variables)
-                optimizer.apply_gradients(zip(gradients, trainable_variables))
-                train_loss(loss)
-                train_accuracy(new_label, pred)
-                if i % 200 == 0:
-                    if use_val:
-                        for state_t, agent_id_t, label_t, weights_t in valset:
-                            feature = model(state_t, training=False)
-                            pred, new_label, new_weights = embedding_to_onehot(
-                                feature, agent_id_t, label_t, weights_t, num_heads
-                            )
-                            loss = loss_object(
-                                new_label, pred, sample_weight=new_weights
-                            )
-                            val_loss(loss)
-                            val_accuracy(new_label, pred)
-                        for j, h in enumerate(heads[:num_heads]):
-                            h.save_weights(save_checkpoint + "_head_" + str(j).zfill(3))
-                    model.save_weights(save_checkpoint)
-                    print("=" * 40)
-                    print("epoch: ", e, "iter: ", i)
+                new_label = tf.concat(new_label, axis=0)
+                pred = tf.concat(pred, axis=0)
+                new_weights = tf.concat(new_weights, axis=0)
+                loss = loss_object(new_label, pred, sample_weight=new_weights)
+                loss = loss_object(new_label, pred, sample_weight=new_weights)
+            trainable_variables = (
+                sum([h.trainable_variables for h in heads[:num_heads]], [])
+                + model.trainable_variables  # noqa W503
+            )
+            gradients = tape.gradient(loss, trainable_variables)
+            optimizer.apply_gradients(zip(gradients, trainable_variables))
+            train_loss(loss)
+            train_accuracy(new_label, pred)
+            if i % 500 == 0:
+                if use_val:
+                    for k, (state_t, agent_id_t, label_t, weights_t) in enumerate(
+                        valset
+                    ):
+                        feature = model(state_t, training=False)
+                        pred, new_label, new_weights = embedding_to_onehot(
+                            feature, agent_id_t, label_t, weights_t, num_heads
+                        )
+                        for j in range(num_heads):
+                            loss = loss_object(new_label[j], pred[j])
+                            val_loss[j](loss)
+                            val_accuracy[j](new_label[j], pred[j])
+                    for j, h in enumerate(heads[:num_heads]):
+                        h.save_weights(save_checkpoint + "_head_" + str(j).zfill(3))
+                model.save_weights(save_checkpoint)
+                print("=" * 40)
+                print("epoch: ", e, "iter: ", i)
+                print(
+                    "  train: ",
+                    "loss:",
+                    round(float(train_loss.result()), 5),
+                    "accuracy:",
+                    round(float(train_accuracy.result()), 5),
+                    "sec passed:",
+                    round(time() - t, 5),
+                )
+                for j in range(num_heads):
                     print(
-                        "  train: ",
+                        "  val{}: ".format(str(j).zfill(2)),
                         "loss:",
-                        round(float(train_loss.result()), 5),
+                        round(float(val_loss[j].result()), 5),
                         "accuracy:",
-                        round(float(train_accuracy.result()), 5),
-                        "sec passed:",
-                        round(time() - t, 5),
+                        round(float(val_accuracy[j].result()), 5),
                     )
-                    print(
-                        "  val: ",
-                        "loss:",
-                        round(float(val_loss.result()), 5),
-                        "accuracy:",
-                        round(float(val_accuracy.result()), 5),
-                    )
-                    t = time()
-                    train_loss.reset_states()
-                    train_accuracy.reset_states()
-                    val_loss.reset_states()
-                    val_accuracy.reset_states()
+                    val_loss[j].reset_states()
+                    val_accuracy[j].reset_states()
+                train_loss.reset_states()
+                train_accuracy.reset_states()
+                t = time()
 
 
 def vis(test_dir, load_checkpoint, save_image, num_samples=-1, use_pca=True):
@@ -222,7 +232,7 @@ def transfer(
 ):
     load_checkpoint = os.path.join(load_checkpoint_dir, "model")
     if load_heads:
-        heads_checkpoints = [x[:-6] for x in glob(load_checkpoint + "_head_*")]
+        heads_checkpoints = [x[:-6] for x in glob(load_checkpoint + "_head_*.index")]
     else:
         heads_checkpoints = []
     print(len(heads_checkpoints), " heads found")
@@ -238,7 +248,7 @@ def transfer(
         .take(max_samples)
         .cache()
         .batch(step)
-        .prefetch(2)
+        .prefetch(5)
     )
     # dummmy traverse to enable cache
     for _ in trainset:
@@ -254,7 +264,7 @@ def transfer(
         )
         .cache()
         .batch(10000)
-        .prefetch(2)
+        .prefetch(5)
     )
     val_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name="val_accuracy")
     optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
@@ -266,23 +276,29 @@ def transfer(
             with tf.device("/GPU:0"):
                 feature = model(state, training=False)
                 pred, new_label, new_weights = embedding_to_onehot(
-                    feature, agent_id, label, weight, idx + 1
+                    feature, agent_id, label, weight, num_heads + 1
                 )
-                val_accuracy(new_label, pred)
+                val_accuracy(new_label[idx], pred[idx])
         return float(val_accuracy.result())
 
     model.load_weights(load_checkpoint)
     model.trainable = False
     num_heads = len(heads_checkpoints)
     if num_heads > 0:
-        for i, h in enumerate(heads_checkpoints):
+        for i, h in enumerate(sorted(heads_checkpoints)):
             heads[i].load_weights(h)
         # pick best exisiting head
         accuracy = []
         for i in tqdm(list(range(num_heads))):
-            accuracy.append(eval(num_heads - 1))
+            accuracy.append(eval(i))
         best_id = max(range(num_heads), key=lambda x: accuracy[x])
+        print(
+            "using existing head {} with {} accuracy".format(best_id, accuracy[best_id])
+        )
+        pprint(accuracy)
         heads[0] = heads[best_id]
+    else:
+        best_id = 0
     with open(save_result, "wb") as fout:
         for i, _ in enumerate(tqdm(trainset)):
             for state, label, weight in trainset.take(i).repeat(epoch):
@@ -292,7 +308,7 @@ def transfer(
                         pred, new_label, new_weights = embedding_to_onehot(
                             feature, tf.zeros(label.shape), label, weight, 1
                         )
-                        loss = loss_object(new_label, pred)
+                        loss = loss_object(new_label[0], pred[0])
                     gradients = tape.gradient(loss, heads[0].trainable_variables)
                     optimizer.apply_gradients(
                         zip(gradients, heads[0].trainable_variables)

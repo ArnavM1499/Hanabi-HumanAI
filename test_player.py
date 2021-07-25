@@ -5,6 +5,7 @@ from multiprocessing import Pool
 import os
 from pprint import pprint
 import random
+import sys
 import time
 from hanabi import Game
 from Agents.player import Player
@@ -139,6 +140,8 @@ def record_game(
 def test_player(
     player="00001", player2=None, iters=5000, print_details=False, key=None, key2=None
 ):
+    stdout = sys.stdout
+    sys.stdout = open(os.devnull, "w")
     p = Pool(min(16, iters))
     res = p.starmap_async(
         run_single,
@@ -151,6 +154,7 @@ def test_player(
     results = [list(x) for x in zip(*res.get())]  # [[scores], [hints], [hits], [turns]
     results[0].sort()
     time.sleep(5)  # wait for async file writes
+    sys.stdout = stdout
     avg = sum(results[0]) / iters
     smin = results[0][0]
     smax = results[0][-1]
@@ -182,15 +186,21 @@ def test_player(
 
 def sequential_test(player, player2=None, iters=5000, seed=0, save_pkl_dir=None):
     random.seed(seed)
+    iters = int(iters)
     if isinstance(save_pkl_dir, str):
         print("saving into ", os.path.abspath(save_pkl_dir))
         if not os.path.isdir(save_pkl_dir):
             os.makedirs(save_pkl_dir)
+        save_file = os.path.join(
+            save_pkl_dir, "{}_{}_{}.pkl".format(player, player2, seed)
+        )
+        if os.path.isfile(save_file):
+            # remove previous data
+            f = open(save_file, "w")
+            f.close()
         for i in range(iters):
             run_single(
-                os.path.join(
-                    save_pkl_dir, "{}_{}_{}.pkl".format(player, player2, seed)
-                ),
+                save_file,
                 player,
                 player2,
                 clean=False,
