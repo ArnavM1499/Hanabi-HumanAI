@@ -2,25 +2,30 @@ import tensorflow as tf
 
 
 def NaiveFC(
-    num_output=16, num_layers=4, num_units=256, activation="sigmoid", last="", dropout=0
+    num_output=16,
+    num_layers=4,
+    num_units=256,
+    activation="sigmoid",
+    last="",
+    dropout=0,
+    num_input=20,
 ):
 
     if isinstance(num_units, int):
         num_units = [num_units for _ in range(num_layers)]
-    assert isinstance(num_units, list)
+    assert isinstance(num_units, list), "expected type list, got {}".format(
+        type(num_units)
+    )
 
-    with tf.device("/GPU:0"):
-        layers = [tf.keras.layers.Dense(u, activation=activation) for u in num_units]
-        # if dropout > :
-        #     layers = sum([[L, tf.keras.layers.Dropout(dropout)] for L in layers], [])
-        layers.append(tf.keras.layers.Dense(num_output, activation=None))
-        if last == "L2":
-            layers.append(
-                tf.keras.layers.Lambda(lambda x: tf.math.l2_normalize(x, axis=1))
-            )
-        elif last == "softmax":
-            layers.append(tf.keras.layers.Softmax())
-        return tf.keras.Sequential(layers)
+    # layers = [tf.keras.layers.InputLayer(input_shape=(num_input,))]
+    layers = []
+    layers.extend([tf.keras.layers.Dense(u, activation=activation) for u in num_units])
+    layers.append(tf.keras.layers.Dense(num_output, activation=None))
+    if last == "L2":
+        layers.append(tf.keras.layers.Lambda(lambda x: tf.math.l2_normalize(x, axis=1)))
+    elif last == "softmax":
+        layers.append(tf.keras.layers.Softmax())
+    return tf.keras.Sequential(layers)
 
 
 class ResFC(tf.keras.Model):

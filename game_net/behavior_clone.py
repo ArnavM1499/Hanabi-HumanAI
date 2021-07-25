@@ -4,14 +4,15 @@ import tensorflow as tf
 
 import common_game_functions as cgf
 from Agents.player import Action
-from game_net.settings import model, classification_head
+from game_net.naiveFC import NaiveFC
+from game_net.settings import model_config, classification_head_config
 
 MODEL_DIR = "models"
 
 
 class BehaviorCloneBase:
     def __init__(self):
-        self.model = model
+        self.model = NaiveFC(**model_config)
         self.current_dir = os.path.dirname(os.path.realpath(__file__))
         self.model.load_weights(os.path.join(self.current_dir, MODEL_DIR, "model"))
         self.heads = {}
@@ -24,7 +25,7 @@ class BehaviorCloneBase:
     ) -> Action:
         if agent_id not in self.heads.keys():
             try:
-                self.heads[agent_id] = deepcopy(classification_head)
+                self.heads[agent_id] = NaiveFC(**classification_head_config)
                 self.heads[agent_id].load_weights(
                     os.path.join(self.current_dir, MODEL_DIR, "model_head_" + agent_id)
                 )
@@ -88,7 +89,7 @@ class BehaviorCloneBase:
         if copy_from_id in self.heads.keys():
             self.heads[new_id] = deepcopy(self.heads[copy_from_id])
         else:
-            self.heads[new_id] = deepcopy(classification_head)
+            self.heads[new_id] = NaiveFC(**classification_head_config)
 
 
 BehaviorClone = BehaviorCloneBase()

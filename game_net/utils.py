@@ -94,15 +94,21 @@ def merge_np(dataset_root, agent_name, train_split=0.7):
     print("loading all data into memory")
     for i in tqdm(range(20)):
         all_data.append([])
-        with open(
-            os.path.join(dataset_root, agent_name, "{}.npy".format(str(i).zfill(2))),
-            "rb",
-        ) as fin:
-            while True:
-                try:
-                    all_data[-1].append(np.load(fin))
-                except ValueError:
-                    break
+        try:
+            with open(
+                os.path.join(
+                    dataset_root, agent_name, "{}.npy".format(str(i).zfill(2))
+                ),
+                "rb",
+            ) as fin:
+                while True:
+                    try:
+                        all_data[-1].append(np.load(fin))
+                    except ValueError:
+                        break
+        except FileNotFoundError:
+            print("WARNING: action {} not found!".format(i))
+            continue
 
     print("split train & val")
     trains = []
@@ -153,7 +159,7 @@ def draw_transfer_curve(np_file, save_image, title=""):
     plt.savefig(save_image, dpi=1000)
 
 
-def publish_models(model_dir, output_dir, train_dir):
+def publish_models(model_dir, output_dir, val_dir):
     def _copy(file_name, new_name=None):
         if not new_name:
             new_name = file_name
@@ -171,7 +177,7 @@ def publish_models(model_dir, output_dir, train_dir):
         raise FileNotFoundError
     else:
         _copy("model")
-    for i, name in enumerate(sorted(glob(os.path.join(train_dir, "*.npy")))):
+    for i, name in enumerate(sorted(glob(os.path.join(val_dir, "*.npy")))):
         _copy(
             "model_head_" + str(i).zfill(3), "model_head_" + os.path.basename(name)[:5]
         )
