@@ -5,16 +5,15 @@ import tensorflow_addons as tfa
 from time import time
 
 from dataset import DatasetGenerator_cached, DatasetGenerator2
-from settings import model, classification_head, plain_head
+from naiveFC import NaiveFC
+from settings import model_config, classification_head_config, plain_head_config
 
 NUM_AGENTS = 1
 
-# model = NaiveFC(20, num_units=[600, 400, 200], activation="relu")
-# head = NaiveFC(20, num_units=[20, 20], activation="relu")
-# transfer_head = NaiveFC(20, num_units=[20, 20], activation="relu", last="softmax")
 optimizer = tf.keras.optimizers.Adam(learning_rate=0.002, beta_1=0.995, beta_2=0.9999)
-head = plain_head
-transfer_head = classification_head
+model = NaiveFC(**model_config)
+head = NaiveFC(**plain_head_config)
+transfer_head = NaiveFC(**classification_head_config)
 
 
 @tf.function
