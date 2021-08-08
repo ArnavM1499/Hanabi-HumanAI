@@ -21,6 +21,10 @@ COLORNAMES = ["green", "yellow", "white", "blue", "red"]
 COUNTS = [3, 2, 2, 2, 1]
 
 
+class StartOfGame(Exception):
+    pass
+
+
 def f(something):
     if type(something) == list:
         return map(f, something)
@@ -196,6 +200,8 @@ def encode_state(
 def decode_state(state):
     # convert hand, hint, hit, last action to one hot
     # player {0, 1}, action [0-19], game state
+    if state == []:
+        raise StartOfGame
     expanded = []
     hand = [0] * 25
     for i in range(9):  # board (5) + first four cards

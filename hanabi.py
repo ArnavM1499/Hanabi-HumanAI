@@ -39,6 +39,7 @@ class Game(object):
         elif data_file.endswith(".pkl"):
             self.data_format = "pkl"
             self.data_file = open(data_file, "ab+")
+            pickle.dump([], self.data_file)
         else:
             print("Unsupported data file format!")
             raise NotImplementedError

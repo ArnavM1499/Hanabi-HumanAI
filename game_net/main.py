@@ -22,14 +22,12 @@ heads = []
 dummy_head = NaiveFC(**classification_head_config)
 # initialize weights
 _ = dummy_head.layers[0].get_weights()
-for i in range(20):
+for i in range(10):
     new_head = tf.keras.models.clone_model(dummy_head)
     heads.append(new_head)
 with tf.device("/GPU:0"):
     loss_object = tf.keras.losses.SparseCategoricalCrossentropy()
-    optimizer = tf.keras.optimizers.Adam(
-        learning_rate=0.008, beta_1=0.95, beta_2=0.9999
-    )
+    optimizer = tf.keras.optimizers.Adam(learning_rate=0.005, beta_1=0.9, beta_2=0.999)
 
 
 @tf.function
@@ -316,6 +314,7 @@ def transfer(
             np.save(fout, np.array([i * step, eval(0)], dtype=np.float32))
             if i % 20 == 0 and save_head != "":
                 heads[0].save_weights(save_head)
+    print("transfered accuracy:", eval(0))
 
 
 if __name__ == "__main__":

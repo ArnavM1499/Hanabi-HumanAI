@@ -4,46 +4,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pickle
-from random import shuffle
+from random import shuffle, random
 from shutil import copyfile
 from tqdm import tqdm
-from common_game_functions import decode_state
-
-
-def pkl_to_txt(dataset_dir, *paths):
-    name2id = {}
-    cnt = 0
-    for path in tqdm(paths):
-        if not os.path.isfile(path):
-            print(path, "Not Found!")
-            continue
-        (p1, p2, _) = tuple(os.path.basename(path).split("_"))
-        if p1 not in name2id.keys():
-            name2id[p1] = cnt
-            cnt += 1
-        if p2 not in name2id.keys():
-            name2id[p2] = cnt
-            cnt += 1
-        player = [p1, p2]
-        with open(path, "rb") as f:
-            while True:
-                try:
-                    p, a, state = decode_state(pickle.load(f))
-                except EOFError:
-                    break
-                if len(state) == 558:
-                    encodings = [0] * 18
-                    for i, s in enumerate(state):
-                        encodings[i // 31] *= 3
-                        encodings[i // 31] += s
-                    with open(
-                        os.path.join(dataset_dir, "{}.txt".format(player[p])), "a+"
-                    ) as fout:
-                        fout.write(str(name2id[player[p]]) + " ")
-                        fout.write(str(a) + " ")
-                        for encoding in encodings:
-                            fout.write(str(encoding) + " ")
-                        fout.write("\n")
+from common_game_functions import decode_state, StartOfGame
 
 
 def pkl_to_np(dataset_dir, *paths, rename=False):
@@ -77,6 +41,8 @@ def pkl_to_np(dataset_dir, *paths, rename=False):
                     p, a, s = decode_state(pickle.load(f))
                 except EOFError:
                     break
+                except StartOfGame:
+                    continue
                 subdir = os.path.join(dataset_dir, name2id[player[p]])
                 if not os.path.isdir(subdir):
                     os.makedirs(subdir)
@@ -86,6 +52,91 @@ def pkl_to_np(dataset_dir, *paths, rename=False):
                         fout,
                         np.array(s, dtype=np.int8),
                     )
+
+
+def pkl_to_lstm_np(dataset_dir, *paths, rename=False, train_split=0.7):
+    name2id = {}
+    cnt = 0
+    if not os.path.isdir(dataset_dir):
+        os.makedirs(dataset_dir)
+    if len(paths) == 1 and os.path.isdir(paths[0]):
+        paths = glob(os.path.join(paths[0], "*.pkl"))
+    for path in tqdm(paths):
+        if not os.path.isfile(path):
+            print(path, "Not Found!")
+            continue
+        (p1, p2, _) = tuple(os.path.basename(path).split("_"))
+        if p1 not in name2id.keys():
+            if rename:
+                name2id[p1] = str(cnt).zfill(5)
+                cnt += 1
+            else:
+                name2id[p1] = p1
+        if p2 not in name2id.keys():
+            if rename:
+                name2id[p2] = str(cnt).zfill(5)
+                cnt += 1
+            else:
+                name2id[p2] = p2
+        game_states = [[], []]
+        game_actions = [[], []]
+        with open(path, "rb") as f:
+            if pickle.load(f) != []:
+                print(path, ": bad format")
+            else:
+                while True:
+                    try:
+                        p, a, s = decode_state(pickle.load(f))
+                    except EOFError:
+                        break
+                    except StartOfGame:
+                        p1_output_path_all = os.path.join(
+                            dataset_dir, name2id[p1] + "_all.npy"
+                        )
+                        p2_output_path_all = os.path.join(
+                            dataset_dir, name2id[p2] + "_all.npy"
+                        )
+                        p1_output_path_train = os.path.join(
+                            dataset_dir, name2id[p2] + "_train.npy"
+                        )
+                        p2_output_path_train = os.path.join(
+                            dataset_dir, name2id[p2] + "_train.npy"
+                        )
+                        p1_output_path_val = os.path.join(
+                            dataset_dir, name2id[p2] + "_val.npy"
+                        )
+                        p2_output_path_val = os.path.join(
+                            dataset_dir, name2id[p2] + "_val.npy"
+                        )
+                        game_states = [np.array(x, dtype=np.int8) for x in game_states]
+                        game_actions = [
+                            np.array(x, dtype=np.int8) for x in game_actions
+                        ]
+                        with open(p1_output_path_all, "ab+") as fout:
+                            np.save(fout, game_states[0])
+                            np.save(fout, game_actions[0])
+                        with open(p2_output_path_all, "ab+") as fout:
+                            np.save(fout, game_states[1])
+                            np.save(fout, game_actions[1])
+                        if random() < train_split:
+                            with open(p1_output_path_train, "ab+") as fout:
+                                np.save(fout, game_states[0])
+                                np.save(fout, game_actions[0])
+                            with open(p2_output_path_train, "ab+") as fout:
+                                np.save(fout, game_states[1])
+                                np.save(fout, game_actions[1])
+                        else:
+                            with open(p1_output_path_val, "ab+") as fout:
+                                np.save(fout, game_states[0])
+                                np.save(fout, game_actions[0])
+                            with open(p2_output_path_val, "ab+") as fout:
+                                np.save(fout, game_states[1])
+                                np.save(fout, game_actions[1])
+                        game_states = [[], []]
+                        game_actions = [[], []]
+
+                    game_states[p].append(s)
+                    game_actions[p].append(a)
 
 
 def merge_np(dataset_root, agent_name, train_split=0.7):
