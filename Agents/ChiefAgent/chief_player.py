@@ -180,6 +180,7 @@ class ChiefPlayer(Player):
 		modified_game_state = deepcopy(self.game_state_before_move)
 		modified_game_state.hands = [None if a == [] else [] for a in self.game_state_before_move.hands]
 		modified_game_state.hands[self.pnr] = None
+		modified_game_state.current_player = self.partner_nr
 		modified_game_state.hinted_indices = []
 		modified_game_state.card_changed = None
 		VA = []
@@ -269,19 +270,15 @@ class ChiefPlayer(Player):
 
 	def action_to_key(self, action):
 		if action.type == PLAY:
-			i = 0
 			j = action.cnr
 		elif action.type == DISCARD:
-			i = 1
 			j = action.cnr
 		elif action.type == HINT_NUMBER:
-			i = 2
 			j = action.num - 1
 		else:
-			i = 3
 			j = action.col
 
-		return i*5 + j
+		return action.type*5 + j
 
 	def sample_hash(self, sample):
 		temp = sample.hand
@@ -335,10 +332,8 @@ class ChiefPlayer(Player):
 			actionvalues = BehaviorClone.predict(agent_id, game_state, base_player_model)
 			values = np.ones(20)
 
-			for action in actionvalues:
-				values[self.action_to_key(action)] = actionvalues[action]
-
-			probs = self.makeprobs(value)
+			actionvalues = list(actionvalues.values())[0].numpy()
+			probs.append(self.makeprob(actionvalues)[action_idx])
 
 		return np.array(probs)
 

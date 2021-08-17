@@ -40,7 +40,6 @@ class BehaviorCloneBase:
         features = self.model(game_net_input, training=False)
         pred = self.heads[agent_id](features, training=False)
         action = int(tf.math.argmax(pred, axis=1).numpy())
-        print(pred)
         ret = dict()
 
         for i, p in enumerate(pred):

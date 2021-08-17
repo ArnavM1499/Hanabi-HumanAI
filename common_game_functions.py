@@ -165,6 +165,7 @@ def encode_state(
     state.extend([(col * 5 + num - 1) for col, num in sorted(board)])
     for (col, num) in partner_hand:
         state.append(col * 5 + num - 1)
+
     state.extend([25] * (5 - len(partner_hand)))
     checkpoint(len(state) == 10)
     knowledges = []

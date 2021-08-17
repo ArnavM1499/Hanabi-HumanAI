@@ -64,33 +64,3 @@ with open(pickle_file_name, 'rb') as f:
 
 		row = try_pickle(f)
 
-
-
-# C = [c.values[0].tolist() for c in C[1:]]
-
-# for idx, name in enumerate(["Hardcode", "Value", "Experimental"]):
-# 	plt.plot([a[idx] for a in C], label=name)
-
-# plt.legend()
-# plt.show()
-
-
-A = [a.values[0].tolist() for a in A[1:]]
-B = [b.values[0].tolist() for b in B[1:]]
-
-
-# for idx, name in enumerate(["Hardcode", "Value"]):
-# 	plt.plot([a[idx] for a in A], label=name)
-
-# plt.legend()
-# plt.title("Trying to recognize" + type(P2).__name__ + "- bayesian w/ boltzmann")
-# plt.savefig("chiefplots/highboltzmann/bayesian_" + type(P2).__name__)
-
-valueplayerlist = new_chief.player_pool.copies()[:-1]
-
-for idx, name in enumerate(["Value-hint_weight=" + str(v.hint_weight) for v in valueplayerlist] + ["Hardcode"]):
-	plt.plot([b[idx] for b in A], label=name)
-
-plt.legend()
-plt.title("Trying to recognize Value-hint_weight=" + str(P2.hint_weight) + " - bayesian w/ boltzmann")
-plt.show()
