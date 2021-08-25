@@ -1,8 +1,7 @@
 from copy import deepcopy
-import pickle
 import random
 
-global HINT_COLOR, HINT_NUMBER, PLAY, DISCARD, CANDISCARD, GREEN, YELLOW, WHITE, BLUE, RED, ALL_COLORS, COLORNAMES, COUNTS
+global HINT_COLOR, HINT_NUMBER, PLAY, DISCARD, CANDISCARD, GREEN, YELLOW, WHITE, BLUE, RED, ALL_COLORS, COLORNAMES, COUNTS  # noqa E501
 
 HINT_COLOR = 0
 HINT_NUMBER = 1
@@ -164,9 +163,10 @@ def encode_state(
     last_action,
     action,
     pnr,
+    extras=[],
 ):
     state = []
-    state.extend([(col * 5 + num - 1) for col, num in sorted(board)])
+    state.extend([(col * 6 + num - 1) for col, num in sorted(board)])
     for (col, num) in partner_hand:
         state.append(col * 5 + num - 1)
     state.extend([25] * (5 - len(partner_hand)))
@@ -186,6 +186,9 @@ def encode_state(
         trash_reformat[col][num - 1] += 1
     state.extend(sum(trash_reformat, []))
     checkpoint(len(state) == 285)
+    state.extend(
+        [3 * x for x in extras]
+    )  # 3 is a magic number, extras should be normalized to 0-1
     state.append(3 - hits)
     state.append(hints)
     if last_action:
@@ -203,8 +206,13 @@ def decode_state(state):
     if state == []:
         raise StartOfGame
     expanded = []
+    hand = [0] * 30
+    for i in range(5):  # board (5)
+        h = hand.copy()
+        h[state[i]] = 1
+        expanded.extend(h)
     hand = [0] * 25
-    for i in range(9):  # board (5) + first four cards
+    for i in range(4):  # first four cards
         h = hand.copy()
         h[state[i]] = 1
         expanded.extend(h)
