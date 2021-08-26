@@ -166,7 +166,7 @@ def encode_state(
     extras=[],
 ):
     state = []
-    state.extend([(col * 6 + num - 1) for col, num in sorted(board)])
+    state.extend([(col * 6 + num) for col, num in sorted(board)])
     for (col, num) in partner_hand:
         state.append(col * 5 + num - 1)
     state.extend([25] * (5 - len(partner_hand)))
@@ -212,7 +212,7 @@ def decode_state(state):
         h[state[i]] = 1
         expanded.extend(h)
     hand = [0] * 25
-    for i in range(4):  # first four cards
+    for i in range(5, 9):  # first four cards
         h = hand.copy()
         h[state[i]] = 1
         expanded.extend(h)
