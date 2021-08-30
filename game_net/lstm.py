@@ -5,15 +5,15 @@ from tqdm import tqdm
 
 torch.multiprocessing.set_sharing_strategy("file_system")
 
-GAME_STATE_LENGTH = 558
+GAME_STATE_LENGTH = 583 + 20  # base + extended (discardable / playable)
 
-DATA_ALL = "../log/features0722/lstm/10005_all.npy"
+DATA_ALL = "../log/features0825/lstm_extended/00005_all.npy"
 DATA_TRAIN = DATA_ALL.replace("_all", "_train")
 DATA_VAL = DATA_ALL.replace("_all", "_val")
 MODEL_PATH = "../log/model_lstm.pth"
 
-BATCH_SIZE = 256
-EPOCH = 200
+BATCH_SIZE = 512
+EPOCH = 100
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 LOGGER = SummaryWriter()
@@ -165,8 +165,3 @@ def train():
 
 
 train()
-
-
-import pdb  # noqa E402
-
-pdb.set_trace()

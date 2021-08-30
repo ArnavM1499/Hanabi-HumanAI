@@ -217,7 +217,7 @@ def decode_state(state):
         h[state[i]] = 1
         expanded.extend(h)
     hand.append(0)  # include empty card
-    hand[state[4]] = 1
+    hand[state[10]] = 1
     expanded.extend(hand)
     expanded.extend(state[10:-5])
     hits, hints, last_action, action, pnr = state[-5:]
