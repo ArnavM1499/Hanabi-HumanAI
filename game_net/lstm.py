@@ -1,3 +1,4 @@
+from fire import Fire
 import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
@@ -13,7 +14,7 @@ DATA_VAL = DATA_ALL.replace("_all", "_val")
 MODEL_PATH = "../log/model_lstm.pth"
 
 BATCH_SIZE = 512
-EPOCH = 100
+EPOCH = 36
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 LOGGER = SummaryWriter()
@@ -108,12 +109,6 @@ loss_fn = torch.nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
 
-trainset = torch.utils.data.DataLoader(
-    PickleDataset(DATA_TRAIN),
-    batch_size=BATCH_SIZE,
-    shuffle=True,
-    collate_fn=pack_games,
-)
 valset = torch.utils.data.DataLoader(
     PickleDataset(DATA_VAL),
     batch_size=BATCH_SIZE,
@@ -146,6 +141,12 @@ def val(log_iter=0):
 
 
 def train():
+    trainset = torch.utils.data.DataLoader(
+        PickleDataset(DATA_TRAIN),
+        batch_size=BATCH_SIZE,
+        shuffle=True,
+        collate_fn=pack_games,
+    )
     size = len(trainset)
     for e in range(EPOCH):
         val(e * size)
@@ -164,4 +165,33 @@ def train():
         torch.save(model.state_dict(), MODEL_PATH)
 
 
-train()
+def eval(log_iter=0):
+    model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE))
+    model.eval()
+    corrects = [0] * 20
+    totals = [0] * 20
+    with torch.no_grad():
+        for i, (states, actions, lengths) in enumerate(tqdm(valset)):
+            for label in range(20):
+                states, actions = states.to(DEVICE), actions.to(DEVICE)
+                pred = model(states, lengths)
+                mask = actions.data == label
+                masked_pred = pred.data[mask, :]
+                masked_label = torch.masked_select(actions.data, mask)
+                corrects[label] += (
+                    (masked_pred.argmax(1) == masked_label)
+                    .type(torch.float)
+                    .sum()
+                    .item()
+                )
+                totals[label] += masked_label.shape[0]
+    print("Accuracy:")
+    print("Hint Color: {:.4f}".format(sum(corrects[:5]) / sum(totals[:5])))
+    print("Hint Number: {:.4f}".format(sum(corrects[5:10]) / sum(totals[5:10])))
+    print("Hint Overall: {:.4f}".format(sum(corrects[:10]) / sum(totals[:10])))
+    print("Play: {:.4f}".format(sum(corrects[10:15]) / sum(totals[10:15])))
+    print("Discard: {:.4f}".format(sum(corrects[15:20]) / sum(totals[15:20])))
+
+
+if __name__ == "__main__":
+    Fire()
