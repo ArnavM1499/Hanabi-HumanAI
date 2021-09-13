@@ -234,5 +234,30 @@ def publish_models(model_dir, output_dir, val_dir):
         )
 
 
+def draw_confusion(matrix_np, output_image):
+    label_names = (
+        ["HC-" + str(i) for i in range(1, 6)]
+        + ["HN-" + str(i) for i in range(1, 6)]
+        + ["P-" + str(i) for i in range(1, 6)]
+        + ["D-" + str(i) for i in range(1, 6)]
+    )
+    matrix = np.load(matrix_np)
+    (n, _) = matrix.shape
+    fig, ax = plt.subplots(figsize=(20, 20))
+    ax.imshow(matrix, cmap=plt.cm.Greens)
+    ax.set_xticks(range(n))
+    ax.set_yticks(range(n))
+    ax.set_xticklabels(label_names)
+    ax.set_yticklabels(label_names)
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
+    for i in range(n):
+        for j in range(n):
+            ax.text(j, i, str(matrix[i, j]), ha="center", va="center")
+    ax.set_xlabel("predicted")
+    ax.set_ylabel("ground truth")
+    fig.tight_layout()
+    plt.savefig(output_image)
+
+
 if __name__ == "__main__":
     Fire()

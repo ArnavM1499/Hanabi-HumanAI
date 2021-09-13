@@ -1,23 +1,28 @@
-from fire import Fire
 import numpy as np
+import sys
 import torch
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 torch.multiprocessing.set_sharing_strategy("file_system")
+print(sys.argv)
+
+
+AGENT = sys.argv[1]
 
 GAME_STATE_LENGTH = 583 + 20  # base + extended (discardable / playable)
 
-DATA_ALL = "../log/features0825/lstm_extended/00005_all.npy"
+DATA_ALL = "../log/features0825/lstm_extended/{}_all.npy".format(AGENT)
 DATA_TRAIN = DATA_ALL.replace("_all", "_train")
 DATA_VAL = DATA_ALL.replace("_all", "_val")
-MODEL_PATH = "../log/model_lstm.pth"
+MODEL_PATH = "../log/model_lstm_{}.pth".format(AGENT)
+WRITER_PATH = "runs/{}".format(AGENT)
 
 BATCH_SIZE = 512
-EPOCH = 36
+EPOCH = 40
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-LOGGER = SummaryWriter()
+LOGGER = SummaryWriter(WRITER_PATH)
 
 
 class PickleDataset(torch.utils.data.Dataset):
@@ -165,11 +170,12 @@ def train():
         torch.save(model.state_dict(), MODEL_PATH)
 
 
-def eval(log_iter=0):
+def eval(save_matrix=""):
     model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE))
     model.eval()
     corrects = [0] * 20
     totals = [0] * 20
+    matrix = [[0 for i in range(20)] for j in range(20)]
     with torch.no_grad():
         for i, (states, actions, lengths) in enumerate(tqdm(valset)):
             for label in range(20):
@@ -178,20 +184,32 @@ def eval(log_iter=0):
                 mask = actions.data == label
                 masked_pred = pred.data[mask, :]
                 masked_label = torch.masked_select(actions.data, mask)
-                corrects[label] += (
-                    (masked_pred.argmax(1) == masked_label)
-                    .type(torch.float)
-                    .sum()
-                    .item()
-                )
-                totals[label] += masked_label.shape[0]
+                if int(masked_label.shape[0]) > 0:
+                    corrects[label] += (
+                        (masked_pred.argmax(1) == masked_label)
+                        .type(torch.float)
+                        .sum()
+                        .item()
+                    )
+                    totals[label] += masked_label.shape[0]
+                    for p in range(20):
+                        matrix[label][p] += (
+                            (masked_pred.argmax(1) == p).type(torch.float).sum().item()
+                        )
+    if save_matrix.endswith(".npy"):
+        np.save(save_matrix, np.array(matrix, dtype=np.int32))
     print("Accuracy:")
-    print("Hint Color: {:.4f}".format(sum(corrects[:5]) / sum(totals[:5])))
-    print("Hint Number: {:.4f}".format(sum(corrects[5:10]) / sum(totals[5:10])))
-    print("Hint Overall: {:.4f}".format(sum(corrects[:10]) / sum(totals[:10])))
-    print("Play: {:.4f}".format(sum(corrects[10:15]) / sum(totals[10:15])))
-    print("Discard: {:.4f}".format(sum(corrects[15:20]) / sum(totals[15:20])))
+    print("  Hint Color: {:.4f}".format(sum(corrects[:5]) / sum(totals[:5])))
+    print("  Hint Number: {:.4f}".format(sum(corrects[5:10]) / sum(totals[5:10])))
+    print("  Hint Overall: {:.4f}".format(sum(corrects[:10]) / sum(totals[:10])))
+    print("  Play: {:.4f}".format(sum(corrects[10:15]) / sum(totals[10:15])))
+    print("  Discard: {:.4f}".format(sum(corrects[15:20]) / sum(totals[15:20])))
 
 
 if __name__ == "__main__":
-    Fire()
+    if sys.argv[2] == "train":
+        train()
+    elif sys.argv[2] == "eval":
+        eval(sys.argv[3] if len(sys.argv) > 2 else "")
+    else:
+        raise NotImplementedError
