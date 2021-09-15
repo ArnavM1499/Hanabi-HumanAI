@@ -1,6 +1,7 @@
 from copy import deepcopy
 import os
 import tensorflow as tf
+import numpy as np
 
 import common_game_functions as cgf
 from Agents.player import Action

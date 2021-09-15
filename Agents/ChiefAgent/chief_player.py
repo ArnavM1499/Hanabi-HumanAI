@@ -125,7 +125,7 @@ class ChiefPlayer(Player):
 				for a in modified_game_state.valid_actions:
 					a.pnr = self.pnr
 
-				modified_game_state.hands = [self.new_sample(player_model.get_knowledge()).hand if a == [] else [] for a in game_state.hands]
+				modified_game_state.hands = [self.new_sample_original(player_model.get_knowledge()) if a == [] else [] for a in game_state.hands]
 				partners_hints = deepcopy(self.hints_to_partner)
 				modified_player_model = BasePlayerModel(self.partner_nr, game_state.all_knowledge[self.partner_nr], self.hints_to_partner, player_model.get_actions())
 				agent.inform(action, self.pnr, modified_game_state, modified_player_model)
@@ -231,9 +231,9 @@ class ChiefPlayer(Player):
 
 		for agent in self.player_pool.get_agents():
 			game_state_input = deepcopy(modified_game_state2)
-			game_state_input.hands = [self.new_sample(player_model.get_knowledge()).hand if a == [] else [] for a in game_state.hands]
+			game_state_input.hands = [self.new_sample_original(player_model.get_knowledge()) if a == [] else [] for a in game_state.hands]
 			prev_game = deepcopy(modified_game_state)
-			prev_game.hands = [self.new_sample(player_model.get_knowledge()).hand if a == None else [] for a in modified_game_state.hands]
+			prev_game.hands = [self.new_sample_original(player_model.get_knowledge()) if a == None else [] for a in modified_game_state.hands]
 			d = agent.get_action(prev_game, modified_player_model)
 			agent.inform(action, player, game_state_input, modified_player_model2)
 
@@ -276,8 +276,8 @@ class ChiefPlayer(Player):
 		modified_game_state.card_changed = None
 		VA = []
 
-		for a in game_state.valid_actions:
-			if a.type in [PLAY, DISCARD] and a.cnr >= len(game_state.all_knowledge[self.partner_nr]):
+		for a in modified_game_state.valid_actions:
+			if a.type in [PLAY, DISCARD] and a.cnr >= len(modified_game_state.all_knowledge[self.partner_nr]):
 				continue
 			else:
 				VA.append(a)
@@ -304,23 +304,39 @@ class ChiefPlayer(Player):
 					game_state_ref, base_player_model_ref = modified_game_state, modified_player_model
 				else:
 					game_state_ref, base_player_model_ref = self.move_tracking_table.iloc[idx]["observable game state"]
+				
 				game_state = deepcopy(game_state_ref)
 				base_player_model = deepcopy(base_player_model_ref)
 
 				for i in range(len(game_state.hands)):
 					if game_state.hands[i] is None:
-						game_state.hands[i] = self.gen_hand(samp_values, idx)
+						if idx == len(self.move_tracking_table):
+							game_state.hands[i] = self.new_sample_original(base_player_model.get_knowledge())
+
+							for cid in self.card_ids:
+								if cid in self.total_card_knowledge:
+									game_state.hands[i][self.card_ids[cid]] = new_samp.card_vals[cid]
+						else:
+							game_state.hands[i] = self.gen_hand(new_samp.card_vals, idx)
 
 				game_states.append(game_state)
 				base_player_models.append(base_player_model)
 
 			probs = np.zeros(20)
 			agent_ids = sorted(self.player_pool.get_player_dict().keys())
-			agent_weights = self.move_tracking_table.iloc[-1]["agent distribution"]
 
-			for i, agent_id in enumerate(agent_ids.values()):
-				bc_output = BehaviorClone.predict(agent_id, game_states, base_player_models)
-				actionvalues = list(bc_output.values())[0].numpy()
+			if len(self.move_tracking_table) > 0:
+				agent_weights = self.move_tracking_table.iloc[-1]["agent distribution"]
+			else:
+				agent_weights = np.ones(len(agent_ids))
+
+			for i, agent_id in enumerate(agent_ids):
+				bc_output = BehaviorClone.sequential_predict(agent_id, game_states, base_player_models)
+				actionvalues = np.zeros(20)
+
+				for action in bc_output:
+					actionvalues[self.action_to_key(action)] = bc_output[action].numpy()
+				
 				probs += self.makeprob(actionvalues)*agent_weights[i]
 
 			prediction_vector += self.makeprob(probs)
@@ -385,6 +401,16 @@ class ChiefPlayer(Player):
 		temp = sample.card_vals
 		return str(temp)
 
+	def new_sample_original(self, new_knowledge):
+		hand = []
+
+		for card in new_knowledge:
+			card_idx = self.weighted_sample(CardChoices, self.makeprob(card)) # https://stackoverflow.com/questions/3679694/a-weighted-version-of-random-choice
+			card_val = (card_idx//5, card_idx%5 + 1)
+			hand.append(card_val)
+
+		return hand
+
 	def new_sample(self, new_knowledge):
 		output_dict = dict()
 
@@ -436,9 +462,13 @@ class ChiefPlayer(Player):
 		probs = []
 		agent_ids = sorted(self.player_pool.get_player_dict().keys())
 
-		for agent_id in agent_ids.values():
-			bc_output = BehaviorClone.predict(agent_id, game_states, base_player_models)
-			actionvalues = list(bc_output.values())[0].numpy()
+		for agent_id in agent_ids:
+			bc_output = BehaviorClone.sequential_predict(agent_id, game_states, base_player_models)
+			actionvalues = np.zeros(20)
+
+			for action in bc_output:
+				actionvalues[self.action_to_key(action)] = bc_output[action].numpy()
+
 			probs.append(self.makeprob(actionvalues)[action_idx])
 
 		return np.array(probs)
@@ -468,7 +498,7 @@ class ChiefPlayer(Player):
 			if h in stored_samples:
 				new_conditional = stored_samples[h]
 			else:
-				new_conditional = self.agent_probs(new_samp.hand, move_idx)
+				new_conditional = self.agent_probs(new_samp.card_vals, move_idx)
 				stored_samples[h] = new_conditional
 
 			new_samp.conditional_probs = new_conditional
