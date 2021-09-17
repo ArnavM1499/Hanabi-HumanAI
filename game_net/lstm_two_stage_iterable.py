@@ -40,12 +40,13 @@ class PickleIterable(torch.utils.data.IterableDataset):
                     buffer_cat = []
                     for idx in action_label:
                         idx = int(idx)
-                        if idx < 10:  # hint color / number
-                            buffer_cat.append(0)
-                        elif idx < 15:  # play
-                            buffer_cat.append(1)
-                        else:  # discard
-                            buffer_cat.append(2)
+                        #if idx < 10:  # hint color / number
+                        #    buffer_cat.append(0)
+                        #elif idx < 15:  # play
+                        #    buffer_cat.append(1)
+                        #else:  # discard
+                        #    buffer_cat.append(2)
+                        buffer_cat.append(idx // 5)
                     action_cats.append(torch.tensor(buffer_cat))
                     action_hints.append(action_label)
                     action_cards.append(torch.clamp(action_label, max=4))
@@ -137,16 +138,25 @@ class FullNet(torch.nn.Module):
             lstm_hidden_units,
             lstm_num_layers,
             output_fc_units,
-            3,  # num output
+            4,  # num output
             drop_out,
             drop_out_rate,
         )
-        self.net_hint = SingleNet(
+        self.net_hint_color = SingleNet(
             input_fc_units,
             lstm_hidden_units,
             lstm_num_layers,
             output_fc_units,
-            10,
+            5,
+            drop_out,
+            drop_out_rate,
+        )
+        self.net_hint_number = SingleNet(
+            input_fc_units,
+            lstm_hidden_units,
+            lstm_num_layers,
+            output_fc_units,
+            5,
             drop_out,
             drop_out_rate,
         )
@@ -168,7 +178,7 @@ class FullNet(torch.nn.Module):
             drop_out,
             drop_out_rate,
         )
-        self.nets = [self.net_first, self.net_hint, self.net_play, self.net_discard]
+        self.nets = [self.net_first, self.net_hint_color, self.net_hint_number, self.net_play, self.net_discard]
 
     def forward(self, padded, lengths):
         return tuple(net(padded, lengths) for net in self.nets)
@@ -194,11 +204,13 @@ valset = torch.utils.data.DataLoader(
 def val(log_iter=0):
     losses = []
     correct_cat = 0
-    correct_hint = 0
+    correct_hint_color = 0
+    correct_hint_number = 0
     correct_play = 0
     correct_discard = 0
     total_cat = 0
-    total_hint = 0
+    total_hint_color = 0
+    total_hint_number = 0
     total_play = 0
     total_discard = 0
     model.eval()
@@ -215,21 +227,25 @@ def val(log_iter=0):
                 action_hints.to(DEVICE),
                 action_cards.to(DEVICE),
             )
-            mask_hint = action_cats.data == 0
-            mask_play = action_cats.data == 1
-            mask_discard = action_cats.data == 2
-            (pred_cat, pred_hint, pred_play, pred_discard) = model(states, lengths)
-            masked_label_hint = torch.masked_select(action_hints.data, mask_hint)
+            mask_hint_color = action_cats.data == 0
+            mask_hint_number = action_cats.data == 1
+            mask_play = action_cats.data == 2
+            mask_discard = action_cats.data == 3
+            (pred_cat, pred_hint_color, pred_hint_number, pred_play, pred_discard) = model(states, lengths)
+            masked_label_hint_color = torch.masked_select(action_hints.data, mask_hint_color)
+            masked_label_hint_number = torch.masked_select(action_hints.data, mask_hint_number)
             masked_label_play = torch.masked_select(action_cards.data, mask_play)
             masked_label_discard = torch.masked_select(action_cards.data, mask_discard)
-            masked_pred_hint = pred_hint.data[mask_hint, :]
+            masked_pred_hint_color = pred_hint_color.data[mask_hint_color, :]
+            masked_pred_hint_number = pred_hint_number.data[mask_hint_number, :]
             masked_pred_play = pred_play.data[mask_play, :]
             masked_pred_discard = pred_discard.data[mask_discard, :]
             loss = 0
-            loss += loss_fn(pred_cat.data, action_cats.data).item()
-            loss += loss_fn(masked_pred_hint, masked_label_hint).item()
-            loss += loss_fn(masked_pred_play, masked_label_play).item()
-            loss += loss_fn(masked_pred_discard, masked_label_discard).item()
+            loss += loss_fn(pred_cat.data, action_cats.data)
+            loss += loss_fn(masked_pred_hint_color, masked_label_hint_color)
+            loss += loss_fn(masked_pred_hint_number, masked_label_hint_number)
+            loss += loss_fn(masked_pred_play, masked_label_play)
+            loss += loss_fn(masked_pred_discard, masked_label_discard)
             losses.append(loss)
             correct_cat += (
                 (pred_cat.data.argmax(1) == action_cats.data)
@@ -237,11 +253,17 @@ def val(log_iter=0):
                 .sum()
                 .item()
             )
-            correct_hint += (
-                (masked_pred_hint.data.argmax(1) == masked_label_hint.data)
+            correct_hint_color += (
+                (masked_pred_hint_color.data.argmax(1) == masked_label_hint_color.data)
                 .type(torch.float)
                 .sum()
                 .item()
+            )
+            correct_hint_number += (
+                (masked_pred_hint_color.data.argmax(1) == masked_label_hint_color.data)
+                    .type(torch.float)
+                    .sum()
+                    .item()
             )
             correct_play += (
                 (masked_pred_play.data.argmax(1) == masked_label_play.data)
@@ -256,27 +278,31 @@ def val(log_iter=0):
                 .item()
             )
             total_cat += action_cats.data.shape[0]
-            total_hint += masked_label_hint.data.shape[0]
+            total_hint_color += masked_label_hint_color.data.shape[0]
+            total_hint_number += masked_label_hint_number.data.shape[0]
             total_play += masked_label_play.data.shape[0]
             total_discard += masked_label_discard.data.shape[0]
     print("sizeof: " + str(asdf))
     loss = round(sum(losses) / len(losses), 5)
     acc_cat = correct_cat / total_cat
-    acc_hint = correct_hint / total_hint
+    acc_hint_color = correct_hint_color / total_hint_color
+    acc_hint_number = correct_hint_number / total_hint_number
     acc_play = correct_play / total_play
     acc_discard = correct_discard / total_discard
     print(
-        "  val loss: {:.4f} category: {:.4f} hint: {:.4f} play: {:.4f} discard: {:.4f}".format(  # noqa E501
+        "  val loss: {:.4f} category: {:.4f} hint color: {:.4f} hint number: {:.4f} play: {:.4f} discard: {:.4f}".format(  # noqa E501
             loss,
             acc_cat,
-            acc_hint,
+            acc_hint_color,
+            acc_hint_number,
             acc_play,
             acc_discard,
         )
     )
     LOGGER.add_scalar("Loss/Val", loss, log_iter)
     LOGGER.add_scalar("Category Accuracy/Val", acc_cat, log_iter)
-    LOGGER.add_scalar("Hint Accuracy/Val", acc_hint, log_iter)
+    LOGGER.add_scalar("Hint Color Accuracy/Val", acc_hint_color, log_iter)
+    LOGGER.add_scalar("Hint Number Accuracy/Val", acc_hint_number, log_iter)
     LOGGER.add_scalar("Play Accuracy/Val", acc_play, log_iter)
     LOGGER.add_scalar("Discard Accuracy/Val", acc_discard, log_iter)
     model.train()
@@ -295,29 +321,38 @@ def train():
                 action_hints.to(DEVICE),
                 action_cards.to(DEVICE),
             )
-            mask_hint = action_cats.data == 0
-            mask_play = action_cats.data == 1
-            mask_discard = action_cats.data == 2
-            (pred_cat, pred_hint, pred_play, pred_discard) = model(states, lengths)
-            masked_label_hint = torch.masked_select(action_hints.data, mask_hint)
+            mask_hint_color = action_cats.data == 0
+            mask_hint_number = action_cats.data == 1
+            mask_play = action_cats.data == 2
+            mask_discard = action_cats.data == 3
+            (pred_cat, pred_hint_color, pred_hint_number, pred_play, pred_discard) = model(states, lengths)
+            masked_label_hint_color = torch.masked_select(action_hints.data, mask_hint_color)
+            masked_label_hint_number = torch.masked_select(action_hints.data, mask_hint_number)
             masked_label_play = torch.masked_select(action_cards.data, mask_play)
             masked_label_discard = torch.masked_select(action_cards.data, mask_discard)
-            masked_pred_hint = pred_hint.data[mask_hint, :]
+            masked_pred_hint_color = pred_hint_color.data[mask_hint_color, :]
+            masked_pred_hint_number = pred_hint_number.data[mask_hint_number, :]
             masked_pred_play = pred_play.data[mask_play, :]
             masked_pred_discard = pred_discard.data[mask_discard, :]
             loss = 0
             loss += loss_fn(pred_cat.data, action_cats.data)
-            loss += loss_fn(masked_pred_hint, masked_label_hint)
+            loss += loss_fn(masked_pred_hint_color, masked_label_hint_color)
+            loss += loss_fn(masked_pred_hint_number, masked_label_hint_number)
             loss += loss_fn(masked_pred_play, masked_label_play)
             loss += loss_fn(masked_pred_discard, masked_label_discard)
 
             acc_cat = (
                 (pred_cat.data.argmax(1) == action_cats.data).type(torch.float).mean()
             )
-            acc_hint = (
-                (masked_pred_hint.data.argmax(1) == masked_label_hint.data)
+            acc_hint_color = (
+                (masked_pred_hint_color.data.argmax(1) == masked_label_hint_color.data)
                 .type(torch.float)
                 .mean()
+            )
+            acc_hint_number = (
+                (masked_pred_hint_number.data.argmax(1) == masked_label_hint_number.data)
+                    .type(torch.float)
+                    .mean()
             )
             acc_play = (
                 (masked_pred_play.data.argmax(1) == masked_label_play.data)
@@ -331,7 +366,8 @@ def train():
             )
             LOGGER.add_scalar("Loss/Train", loss.item(), e * size + i)
             LOGGER.add_scalar("Category Accuracy/Train", acc_cat.item(), e * size + i)
-            LOGGER.add_scalar("Hint Accuracy/Train", acc_hint.item(), e * size + i)
+            LOGGER.add_scalar("Hint Color Accuracy/Train", acc_hint_color.item(), e * size + i)
+            LOGGER.add_scalar("Hint Number Accuracy/Train", acc_hint_number.item(), e * size + i)
             LOGGER.add_scalar("Play Accuracy/Train", acc_play.item(), e * size + i)
             LOGGER.add_scalar(
                 "Discard Accuracy/Train", acc_discard.item(), e * size + i
