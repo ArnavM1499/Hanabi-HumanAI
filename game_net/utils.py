@@ -242,9 +242,11 @@ def draw_confusion(matrix_np, output_image):
         + ["D-" + str(i) for i in range(1, 6)]
     )
     matrix = np.load(matrix_np)
+    sums = matrix.sum(axis=1)
+    heat = matrix / sums[:, np.newaxis]
     (n, _) = matrix.shape
     fig, ax = plt.subplots(figsize=(20, 20))
-    ax.imshow(matrix, cmap=plt.cm.Greens)
+    ax.imshow(heat, cmap=plt.cm.Greens)
     ax.set_xticks(range(n))
     ax.set_yticks(range(n))
     ax.set_xticklabels(label_names)
