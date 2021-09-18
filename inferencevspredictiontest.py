@@ -12,22 +12,22 @@ new_chief = ChiefPlayer("chief", 0, "Agents/configs/players.json")
 
 file_name = "blank.csv"
 pickle_file_name = "chief_testing"
-pickle_file = open(pickle_file_name, "wb")
+# pickle_file = open(pickle_file_name, "wb")
 
 id_string = "10004"
 pool_index = 8
 
-with open("Agents/configs/players.json", "r") as f:
-    json_vals = json.load(f)
+# with open("Agents/configs/players.json", "r") as f:
+#     json_vals = json.load(f)
 
-for i in range(1):
-	P1 = new_chief.player_pool.from_dict("P1", 0, json_vals[id_string])
-	P2 = new_chief.player_pool.from_dict("P2", 1, json_vals[id_string])
-	pickle.dump(["NEW"], pickle_file)
-	G = hanabi.Game([P1, P2], file_name, pickle_file)
-	Result = G.run(100)
+# for i in range(1):
+# 	P1 = new_chief.player_pool.from_dict("P1", 0, json_vals[id_string])
+# 	P2 = new_chief.player_pool.from_dict("P2", 1, json_vals[id_string])
+# 	pickle.dump(["NEW"], pickle_file)
+# 	G = hanabi.Game([P1, P2], file_name, pickle_file)
+# 	Result = G.run(100)
 
-pickle_file.close()
+# pickle_file.close()
 
 def try_pickle(file):
 	try:
@@ -90,6 +90,8 @@ for d in DATA:
 	plt.figure(idx)
 	if d == "prediction accuracy":
 		plt.plot(DATA[d], 'bo')
+	# elif d == "inference confidence of source agent":
+	# 	plt.plot([np.mean(DATA[d][i:i+5]) for i in range(len(DATA[d]) - 5)])
 	else:
 		plt.plot(DATA[d])
 	idx += 1
