@@ -1,6 +1,7 @@
 from copy import deepcopy
 import os
 import tensorflow as tf
+import numpy as np
 
 import common_game_functions as cgf
 from Agents.player import Action
@@ -40,7 +41,48 @@ class BehaviorCloneBase:
         features = self.model(game_net_input, training=False)
         pred = self.heads[agent_id](features, training=False)
         action = int(tf.math.argmax(pred, axis=1).numpy())
-        return Action.from_encoded(action, pnr=current_player)
+        ret = dict()
+
+        for i, p in enumerate(pred):
+            ret[Action.from_encoded(i, pnr=current_player)] = p
+
+        return ret
+
+    def sequential_predict(
+        self,
+        agent_id,
+        game_states,
+        player_models,
+    ) -> Action:
+        if agent_id not in self.heads.keys():
+            try:
+                self.heads[agent_id] = NaiveFC(**classification_head_config)
+                self.heads[agent_id].load_weights(
+                    os.path.join(self.current_dir, MODEL_DIR, "model_head_" + agent_id)
+                )
+            except:  # noqa E722
+                raise FileNotFoundError
+        
+        state_list = []
+
+        for game_state, player_model in zip(game_states, player_models):
+            current_player, encoded_state = self._convert_game_state(
+                game_state, player_model
+            )
+            state_list.append(encoded_state)
+
+        game_net_input = (
+            tf.constant(np.array(state_list), dtype=tf.float32) * 0.333
+        )  # with rough normalization
+        features = self.model(game_net_input, training=False)
+        pred = self.heads[agent_id](features, training=False)[-1]
+        # action = int(tf.math.argmax(pred, axis=1).numpy()[-1])
+        ret = dict()
+
+        for i, p in enumerate(pred):
+            ret[Action.from_encoded(i, pnr=current_player)] = p
+
+        return ret
 
     def __contains__(self, agent_id):
         return os.path.isfile(

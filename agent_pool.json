@@ -14,25 +14,25 @@
 	"00003" : {
 		"player_class" : "ValuePlayer",
 		"get_action_values" : true,
-		"hint_weight" : 50
+		"hint_weight" : 25
 	},
 
 	"00004" : {
 		"player_class" : "ValuePlayer",
 		"get_action_values" : true,
-		"hint_weight" : 100
+		"hint_weight" : 50
 	},
 
 	"00005" : {
 		"player_class" : "ValuePlayer",
 		"get_action_values" : true,
-		"hint_weight" : 1000
+		"hint_weight" : 80
 	},
 
 	"00006" : {
 		"player_class" : "ValuePlayer",
 		"get_action_values" : true,
-		"hint_weight" : 2000
+		"hint_weight" : 120
 	},
 
 	"00007" : {
