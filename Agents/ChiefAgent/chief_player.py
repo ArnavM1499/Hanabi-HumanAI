@@ -10,7 +10,7 @@ from copy import deepcopy
 from scipy.stats import entropy
 
 STARTING_COLUMNS_MOVETRACKING = {"move_idx":[], "move": [], "observable game state":[], "card ids":[], "hand knowledge":[], "agent distribution":[], "conditional probabilities":[], "MLE probabilities":[], "generated samples":[], "agent state copies":[]}
-NUM_SAMPLES = 10
+NUM_SAMPLES = 50
 BOLTZMANN_CONSTANT = 4
 
 CardChoices = []
@@ -45,7 +45,6 @@ class ChiefPlayer(Player):
 		self.card_ids = dict()
 		self.new_card_id = 0
 		self.move_idx = 0
-		self.prev_knowledge = dict()
 		self.total_card_knowledge = dict()
 		self.drawn_dict = dict()
 		self.hints_to_partner = []
@@ -63,7 +62,6 @@ class ChiefPlayer(Player):
 			for i, k in enumerate(player_model.knowledge):
 				self.card_ids[self.new_card_id] = i
 				self.drawn_dict[self.new_card_id] = self.move_idx
-				self.prev_knowledge[self.new_card_id] = k
 				self.total_card_knowledge[self.new_card_id] = k
 				self.new_card_id += 1
 
@@ -80,11 +78,9 @@ class ChiefPlayer(Player):
 				else:
 					self.played_or_discarded_card = [cid, [], self.drawn_dict[cid]] # will fill in knowledge during inform
 					del self.drawn_dict[cid]
-					del self.prev_knowledge[cid]
 
 			new_card_ids[self.new_card_id] = len(player_model.knowledge) - 1
 			self.drawn_dict[self.new_card_id] = None
-			self.prev_knowledge[self.new_card_id] = None
 			self.new_card_id += 1
 			self.card_ids = new_card_ids
 		else:
@@ -136,7 +132,6 @@ class ChiefPlayer(Player):
 			for i, k in enumerate(player_model.knowledge):
 				self.card_ids[self.new_card_id] = i
 				self.drawn_dict[self.new_card_id] = self.move_idx
-				self.prev_knowledge[self.new_card_id] = k
 				self.total_card_knowledge[self.new_card_id] = k
 				self.new_card_id += 1
 
@@ -154,8 +149,8 @@ class ChiefPlayer(Player):
 
 			if self.drawn_dict[c] == None:
 				self.drawn_dict[c] = self.move_idx
-				self.prev_knowledge[c] = new_k
-			elif new_k != self.prev_knowledge[c]:
+				self.total_card_knowledge[c] = new_k
+			elif new_k != self.total_card_knowledge[c]:
 				changed_cards.append((c, new_k))
 				drawn_move.append(self.drawn_dict[c])
 
@@ -247,16 +242,18 @@ class ChiefPlayer(Player):
 		sample_conditionals = [sample.conditional_probs for sample in self.move_tracking_table.loc[self.move_idx, "generated samples"]]
 		new_conditional = np.mean(np.array(sample_conditionals), axis=0)
 		self.move_tracking_table.at[self.move_idx, "conditional probabilities"] = new_conditional
+		print("NEW CONDITIONAL:", np.vectorize(lambda a: round(a,2))(new_conditional))
 		
 		# get prior using the average conditional and previous prior if available
 		if self.move_idx == 0:
-			self.move_tracking_table.at[self.move_idx,"agent distribution"] = new_conditional
+			self.move_tracking_table.at[self.move_idx,"agent distribution"] = self.makeprob(new_conditional)
 			self.move_tracking_table.at[self.move_idx,"MLE probabilities"] = new_conditional
 		else:
 			prev_row = self.move_tracking_table.loc[self.move_idx - 1]
 			prior = prev_row["agent distribution"]
 			prior2 = prev_row["MLE probabilities"]
 			updated_prior = new_conditional*prior
+			print(np.vectorize(lambda a: round(a,2))(updated_prior), np.vectorize(lambda a: round(a,2))([prior]))
 			self.move_tracking_table.at[self.move_idx,"agent distribution"] = self.makeprob(updated_prior)
 			self.move_tracking_table.at[self.move_idx,"MLE probabilities"] = (new_conditional + prior2*self.move_idx)/(self.move_idx + 1)
 
@@ -523,8 +520,12 @@ class ChiefPlayer(Player):
 
 			# compute new average conditional probabilities
 			sample_conditionals = [sample.conditional_probs for sample in self.move_tracking_table.loc[table_idx]["generated samples"]]
+			
+			# print(np.vectorize(lambda a: round(a,2))(sample_conditionals))
+
 			new_conditional = np.mean(np.array(sample_conditionals), axis=0)
 			self.move_tracking_table.at[table_idx,"conditional probabilities"] = new_conditional
+			print("NEW CONDITIONAL for MOVE", table_idx, ":", np.vectorize(lambda a: round(a,2))(new_conditional))
 
 
 			# get prior distribution
@@ -542,5 +543,6 @@ class ChiefPlayer(Player):
 			# update current agent distribution using updated conditional and previous prior
 			new_prior_pre = new_conditional * prev_prior
 			new_prior = self.makeprob(new_prior_pre)
+			print(np.vectorize(lambda a: round(a,3))(new_prior))
 			self.move_tracking_table.at[table_idx,"agent distribution"] = new_prior
 			self.move_tracking_table.at[table_idx,"MLE probabilities"] = (new_conditional + prev_prior2*table_idx)/(table_idx + 1)

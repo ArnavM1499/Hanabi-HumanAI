@@ -71,6 +71,7 @@ with open(pickle_file_name, 'rb') as f:
 				DATA["prediction accuracy"].append(int(prediction == new_chief.action_to_key(action)))
 
 			if len(new_chief.move_tracking_table) > 0:
+				print(new_chief.move_tracking_table.iloc[-1]["agent distribution"][pool_index])
 				DATA["inference confidence of source agent"].append(new_chief.move_tracking_table.iloc[-1]["agent distribution"][pool_index])
 
 			if new_chief.entropy_of_pool() >= 0:
@@ -83,18 +84,3 @@ with open(pickle_file_name, 'rb') as f:
 			new_chief.inform(action, curr_player, game_state, player_model)
 
 		row = try_pickle(f)
-
-idx = 1
-
-for d in DATA:
-	plt.figure(idx)
-	if d == "prediction accuracy":
-		plt.plot(DATA[d], 'bo')
-	# elif d == "inference confidence of source agent":
-	# 	plt.plot([np.mean(DATA[d][i:i+5]) for i in range(len(DATA[d]) - 5)])
-	else:
-		plt.plot(DATA[d])
-	idx += 1
-	plt.title(d)
-
-plt.show()
