@@ -444,7 +444,7 @@ class ChiefPlayer(Player):
 		game_states = []
 		base_player_models = []
 
-		for idx in range(len(self.move_tracking_table)):
+		for idx in range(move_idx+1):
 			game_state_ref, base_player_model_ref = self.move_tracking_table.iloc[idx]["observable game state"]
 			game_state = deepcopy(game_state_ref)
 			base_player_model = deepcopy(base_player_model_ref)
@@ -463,7 +463,7 @@ class ChiefPlayer(Player):
 			bc_output = BehaviorClone.sequential_predict(agent_id, game_states, base_player_models)
 			actionvalues = np.zeros(20)
 
-			for action in bc_output:
+			for action in bc_output:				
 				actionvalues[self.action_to_key(action)] = bc_output[action].numpy()
 
 			probs.append(self.makeprob(actionvalues)[action_idx])

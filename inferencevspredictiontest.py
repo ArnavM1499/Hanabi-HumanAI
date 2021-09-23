@@ -17,8 +17,8 @@ pickle_file_name = "chief_testing"
 id_string = "10004"
 pool_index = 8
 
-# with open("Agents/configs/players.json", "r") as f:
-#     json_vals = json.load(f)
+with open("Agents/configs/players.json", "r") as f:
+    json_vals = json.load(f)
 
 # for i in range(1):
 # 	P1 = new_chief.player_pool.from_dict("P1", 0, json_vals[id_string])
@@ -41,6 +41,7 @@ def decode_action(a):
 
 	return TYPE[a//5] + "->" + str(LAMBDAS[a//5](a))
 
+P2 = new_chief.player_pool.from_dict("P2", 1, json_vals[id_string])
 
 DATA = {"prediction accuracy":[], "inference confidence of source agent":[], "entropy of knowledge":[], "entropy of pool":[]}
 
@@ -48,13 +49,20 @@ with open(pickle_file_name, 'rb') as f:
 	row = try_pickle(f)
 
 	while(row != None):
+		if row[0] == "Action" and row[1].get_current_player() == 1:
+			game_state = row[1]
+			player_model = row[2]
+
+			print("\n\n\nAction replay", P2.get_action(game_state,player_model))
+
+
 		if row[0] == "Action" and row[1].get_current_player() == 0:
 			game_state = row[1]
 			player_model = row[2]
 			action = row[3]
 
 			new_chief.get_action(game_state, player_model, action_default=action)
-			# print("chief does", action)
+			print("chief does", action)
 
 		elif row[0] == "Inform" and row[4] == 0:
 			game_state = row[1]
@@ -64,7 +72,6 @@ with open(pickle_file_name, 'rb') as f:
 
 			if curr_player != new_chief.pnr:
 				prediction = new_chief.get_prediction()
-				print()
 				print()
 				print("Chief predicts", prediction, "which is", decode_action(prediction))
 				print("Action was", new_chief.action_to_key(action), "which is", decode_action(new_chief.action_to_key(action)))
@@ -84,3 +91,16 @@ with open(pickle_file_name, 'rb') as f:
 			new_chief.inform(action, curr_player, game_state, player_model)
 
 		row = try_pickle(f)
+
+idx = 1
+
+for d in DATA:
+	plt.figure(idx)
+	if d == "prediction accuracy":
+		plt.plot(DATA[d], 'bo')
+	else:
+		plt.plot(DATA[d])
+	idx += 1
+	plt.title(d)
+
+plt.show()
