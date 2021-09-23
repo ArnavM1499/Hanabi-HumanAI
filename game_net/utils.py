@@ -7,6 +7,9 @@ import pickle
 from random import shuffle, random
 from shutil import copyfile
 from tqdm import tqdm
+import sys
+
+sys.path.append(r"C:\Users\Jeremy\Documents\CMU\Hanabi-HumanAI")
 from common_game_functions import decode_state, StartOfGame
 
 

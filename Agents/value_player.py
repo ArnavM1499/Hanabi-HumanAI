@@ -92,7 +92,7 @@ class ValuePlayer(Player):
         self.partner_knowledge_index = 0.0
 
         # whether we return a dictionary of all actions/values, or just the best action
-        self.get_action_values = False
+        self.get_action_values = True
 
         # parameters and default values below
         self.hint_weight = 1000.0
@@ -323,7 +323,7 @@ class ValuePlayer(Player):
             if self.get_action_values:
                 value_dict[action] = value
         if self.get_action_values:
-            return value_dict
+            return best_action, value_dict
         return best_action
 
     def inform(self, action, player, new_state, new_model):

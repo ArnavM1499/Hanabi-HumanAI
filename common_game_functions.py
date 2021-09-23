@@ -152,6 +152,12 @@ def checkpoint(passed):
         pdb.set_trace()
 
 
+def encode_action_values(value_dict):
+    values = [0] * 20
+    for action, value in value_dict:
+        values[action.encode()] = value
+    return values
+
 def encode_state(
     partner_hand,
     partner_knowledge,
@@ -162,6 +168,7 @@ def encode_state(
     hints,
     last_action,
     action,
+    action_values,
     pnr,
     extras=[],
 ):
@@ -189,6 +196,7 @@ def encode_state(
     state.extend(
         [3 * x for x in extras]
     )  # 3 is a magic number, extras should be normalized to 0-1
+    state.extend(encode_action_values(action_values))
     state.append(3 - hits)
     state.append(hints)
     if last_action:
@@ -219,7 +227,8 @@ def decode_state(state):
     hand.append(0)  # include empty card
     hand[state[10]] = 1
     expanded.extend(hand)
-    expanded.extend(state[10:-5])
+    expanded.extend(state[10:-25])
+    action_values = state[-25:-5]
     hits, hints, last_action, action, pnr = state[-5:]
     expanded.append(hits % 2)
     expanded.append(hits // 2)
@@ -229,4 +238,4 @@ def decode_state(state):
     action_one_hot = [0] * 21  # include empty last_action
     action_one_hot[last_action] = 1
     expanded.extend(action_one_hot)
-    return pnr, action, expanded
+    return pnr, action, action_values, expanded
