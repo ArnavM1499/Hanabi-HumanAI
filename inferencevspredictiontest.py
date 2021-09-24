@@ -15,6 +15,7 @@ pickle_file_name = "chief_testing"
 pickle_file = open(pickle_file_name, "wb")
 
 id_string = "10004"
+pool_index = 8
 
 with open("Agents/configs/players.json", "r") as f:
     json_vals = json.load(f)
@@ -34,25 +35,26 @@ def try_pickle(file):
 	except:
 		return None
 
-B = []
-A = []
-C = []
+def decode_action(a):
+	TYPE = ["Hint color", "Hint number", "Play", "Discard"]
+	LAMBDAS = [(lambda a : a%5), (lambda a : a%5 + 1), (lambda a: a%5), (lambda a:a%5)]
 
-DATA = {"prediction accuracy":[], "inference confidence":[], "entropy of knowledge":[], "entropy of pool":[]}
+	return TYPE[a//5] + "->" + str(LAMBDAS[a//5](a))
+
+
+DATA = {"prediction accuracy":[], "inference confidence of source agent":[], "entropy of knowledge":[], "entropy of pool":[]}
 
 with open(pickle_file_name, 'rb') as f:
 	row = try_pickle(f)
 
 	while(row != None):
-		# print(new_chief.player_pool.get_names()
-
 		if row[0] == "Action" and row[1].get_current_player() == 0:
 			game_state = row[1]
 			player_model = row[2]
 			action = row[3]
 
 			new_chief.get_action(game_state, player_model, action_default=action)
-			print("chief does", action)
+			# print("chief does", action)
 
 		elif row[0] == "Inform" and row[4] == 0:
 			game_state = row[1]
@@ -62,40 +64,35 @@ with open(pickle_file_name, 'rb') as f:
 
 			if curr_player != new_chief.pnr:
 				prediction = new_chief.get_prediction()
+				print()
+				print()
+				print("Chief predicts", prediction, "which is", decode_action(prediction))
+				print("Action was", new_chief.action_to_key(action), "which is", decode_action(new_chief.action_to_key(action)))
+				DATA["prediction accuracy"].append(int(prediction == new_chief.action_to_key(action)))
 
-			print("player",curr_player,"does",action)
+			if len(new_chief.move_tracking_table) > 0:
+				DATA["inference confidence of source agent"].append(new_chief.move_tracking_table.iloc[-1]["agent distribution"][pool_index])
+
+			if new_chief.entropy_of_pool() >= 0:
+				DATA["entropy of knowledge"].append(new_chief.entropy_of_knowledge())
+			
+			if new_chief.entropy_of_pool() >= 0:
+				DATA["entropy of pool"].append(new_chief.entropy_of_pool())
+
+			# print("player",curr_player,"does",action)
 			new_chief.inform(action, curr_player, game_state, player_model)
-
-			
-
-
-
-
-
-
-			# print(sorted(new_chief.player_pool.get_player_dict().keys()))
-			# print(new_chief.move_tracking_table.loc[:,("agent distribution")].map(lambda L: [round(l,2) for l in L]))
-			# print(new_chief.entropy_of_knowledge(), new_chief.entropy_of_knowledge(5))
-			# print(new_chief.entropy_of_pool(), new_chief.entropy_of_pool(5))
-			
-			if (curr_player == 1):
-				A.append(new_chief.move_tracking_table.tail(1)["agent distribution"])
-				B.append(new_chief.move_tracking_table.tail(1)["MLE probabilities"])
-				C.append(new_chief.move_tracking_table.tail(1)["conditional probabilities"])
-
 
 		row = try_pickle(f)
 
-for i, a in enumerate(sorted(new_chief.player_pool.get_player_dict().keys())):
-	print(i, a, A)
-	L = []
+idx = 1
 
-	for item in A:
-		L.append(item.tolist()[0][i])
+for d in DATA:
+	plt.figure(idx)
+	if d == "prediction accuracy":
+		plt.plot(DATA[d], 'bo')
+	else:
+		plt.plot(DATA[d])
+	idx += 1
+	plt.title(d)
 
-	plt.plot(L, label=a)
-
-plt.title("Agents playing: parameter id" + id_string)
-
-plt.legend(title="Behavior Clones of each parameter id")
 plt.show()
