@@ -234,26 +234,73 @@ def publish_models(model_dir, output_dir, val_dir):
         )
 
 
-def draw_confusion(matrix_np, output_image):
-    label_names = (
-        ["HC-" + str(i) for i in range(1, 6)]
-        + ["HN-" + str(i) for i in range(1, 6)]
-        + ["P-" + str(i) for i in range(1, 6)]
-        + ["D-" + str(i) for i in range(1, 6)]
-    )
+def draw_confusion(matrix_np, output_image, num_entries=20):
     matrix = np.load(matrix_np)
+    (n, _) = matrix.shape
+    if num_entries == 20:
+        assert n == 20
+        label_names = (
+            ["HC-" + str(i) for i in range(1, 6)]
+            + ["HN-" + str(i) for i in range(1, 6)]
+            + ["P-" + str(i) for i in range(1, 6)]
+            + ["D-" + str(i) for i in range(1, 6)]
+        )
+    elif num_entries == 4:
+        label_names = ["HC", "HN", "P", "D"]
+        if n == 20:
+            matrix = np.array(
+                [
+                    [matrix[x : x + 5, y : y + 5].sum() for y in range(0, 20, 5)]
+                    for x in range(0, 20, 5)
+                ]
+            )
+        else:
+            assert n == 4
+    elif num_entries == 3:
+        if n == 20:
+            matrix = np.array(
+                [
+                    [
+                        matrix[:10, :10].sum(),
+                        matrix[:10, 10:15].sum(),
+                        matrix[:10, 15:].sum(),
+                    ],
+                    [
+                        matrix[10:15, :10].sum(),
+                        matrix[10:15, 10:15].sum(),
+                        matrix[10:15, 15:].sum(),
+                    ],
+                    [
+                        matrix[15:, :10].sum(),
+                        matrix[15:, 10:15].sum(),
+                        matrix[15:, 15:].sum(),
+                    ],
+                ]
+            )
+        elif n == 4:
+            matrix = np.array(
+                [
+                    [matrix[:2, :2].sum(), matrix[:2, 2].sum(), matrix[:2, 3].sum()],
+                    [matrix[2, :2].sum(), matrix[2, 2], matrix[2, 3]],
+                    [matrix[3, :2].sum(), matrix[3, 2], matrix[3, 3]],
+                ]
+            )
+        else:
+            assert n == 3
+        label_names = ["Hint", "Play", "Discard"]
+    else:
+        raise NotImplementedError
     sums = matrix.sum(axis=1)
     heat = matrix / sums[:, np.newaxis]
-    (n, _) = matrix.shape
-    fig, ax = plt.subplots(figsize=(20, 20))
+    fig, ax = plt.subplots(figsize=(num_entries, num_entries))
     ax.imshow(heat, cmap=plt.cm.Greens)
-    ax.set_xticks(range(n))
-    ax.set_yticks(range(n))
+    ax.set_xticks(range(num_entries))
+    ax.set_yticks(range(num_entries))
     ax.set_xticklabels(label_names)
     ax.set_yticklabels(label_names)
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
-    for i in range(n):
-        for j in range(n):
+    for i in range(num_entries):
+        for j in range(num_entries):
             ax.text(j, i, str(matrix[i, j]), ha="center", va="center")
     ax.set_xlabel("predicted")
     ax.set_ylabel("ground truth")

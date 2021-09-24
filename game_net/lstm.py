@@ -15,7 +15,7 @@ GAME_STATE_LENGTH = 583 + 20  # base + extended (discardable / playable)
 DATA_ALL = "../log/features0825/lstm_extended/{}_all.npy".format(AGENT)
 DATA_TRAIN = DATA_ALL.replace("_all", "_train")
 DATA_VAL = DATA_ALL.replace("_all", "_val")
-MODEL_PATH = "../log/model_lstm_{}.pth".format(AGENT)
+MODEL_PATH = "../log/model_lstm_512/model_lstm_{}.pth".format(AGENT)
 WRITER_PATH = "runs/{}".format(AGENT)
 
 BATCH_SIZE = 512
@@ -108,7 +108,8 @@ class Net(torch.nn.Module):
         return packed_output
 
 
-model = Net([512], 512, 2, [], drop_out=True).to(DEVICE)
+num_units = 512
+model = Net([num_units], num_units, 2, [], drop_out=True).to(DEVICE)
 # model = Net([512], 512, 2, []).to(DEVICE)
 loss_fn = torch.nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
@@ -210,6 +211,6 @@ if __name__ == "__main__":
     if sys.argv[2] == "train":
         train()
     elif sys.argv[2] == "eval":
-        eval(sys.argv[3] if len(sys.argv) > 2 else "")
+        eval(sys.argv[3] if len(sys.argv) > 3 else "")
     else:
         raise NotImplementedError
