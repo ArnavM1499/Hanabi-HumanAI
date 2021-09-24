@@ -1,52 +1,28 @@
-from copy import deepcopy
-import os
-import tensorflow as tf
 import numpy as np
-
+import os
+import torch
 import common_game_functions as cgf
+
+from lstm_net import LSTMNet, default_config
 from Agents.player import Action
-from game_net.naiveFC import NaiveFC
-from game_net.settings import model_config, classification_head_config
 
 MODEL_DIR = "models"
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 class BehaviorCloneBase:
     def __init__(self):
-        self.model = NaiveFC(**model_config)
-        self.current_dir = os.path.dirname(os.path.realpath(__file__))
-        self.model.load_weights(os.path.join(self.current_dir, MODEL_DIR, "model"))
-        self.heads = {}
+        self.models = {}
 
-    def predict(
-        self,
-        agent_id: str,
-        game_state: cgf.GameState,
-        player_model: cgf.BasePlayerModel,
-    ) -> Action:
-        if agent_id not in self.heads.keys():
-            try:
-                self.heads[agent_id] = NaiveFC(**classification_head_config)
-                self.heads[agent_id].load_weights(
-                    os.path.join(self.current_dir, MODEL_DIR, "model_head_" + agent_id)
-                )
-            except:  # noqa E722
-                raise FileNotFoundError
-        current_player, encoded_state = self._convert_game_state(
-            game_state, player_model
+    def _load_model(self, agent_id):
+        model = LSTMNet(**default_config)
+        model.load_state_dict(
+            torch.load(
+                os.path.join(MODEL_DIR, "model_lstm_{}.pth".format(agent_id)),
+                map_location=DEVICE,
+            )
         )
-        game_net_input = (
-            tf.constant([encoded_state], dtype=tf.float32) * 0.333
-        )  # with rough normalization
-        features = self.model(game_net_input, training=False)
-        pred = self.heads[agent_id](features, training=False)
-        action = int(tf.math.argmax(pred, axis=1).numpy())
-        ret = dict()
-
-        for i, p in enumerate(pred):
-            ret[Action.from_encoded(i, pnr=current_player)] = p
-
-        return ret
+        self.models[agent_id] = model
 
     def sequential_predict(
         self,
@@ -54,15 +30,12 @@ class BehaviorCloneBase:
         game_states,
         player_models,
     ) -> Action:
-        if agent_id not in self.heads.keys():
+        if agent_id not in self.models.keys():
             try:
-                self.heads[agent_id] = NaiveFC(**classification_head_config)
-                self.heads[agent_id].load_weights(
-                    os.path.join(self.current_dir, MODEL_DIR, "model_head_" + agent_id)
-                )
+                self._load_model(agent_id)
             except:  # noqa E722
                 raise FileNotFoundError
-        
+
         state_list = []
 
         for game_state, player_model in zip(game_states, player_models):
@@ -72,10 +45,9 @@ class BehaviorCloneBase:
             state_list.append(encoded_state)
 
         game_net_input = (
-            tf.constant(np.array(state_list), dtype=tf.float32) * 0.333
+            torch.tensor(np.array(state_list), dtype=torch.float32) * 0.333
         )  # with rough normalization
-        features = self.model(game_net_input, training=False)
-        pred = self.heads[agent_id](features, training=False)[-1]
+        pred = self.models[agent_id](game_net_input, training=False)[-1]
         # action = int(tf.math.argmax(pred, axis=1).numpy()[-1])
         ret = dict()
 
@@ -83,19 +55,6 @@ class BehaviorCloneBase:
             ret[Action.from_encoded(i, pnr=current_player)] = p
 
         return ret
-
-    def __contains__(self, agent_id):
-        return os.path.isfile(
-            os.path.join(
-                self.current_dir, MODEL_DIR, "model_head_" + agent_id + ".index"
-            )
-        ) and os.path.isfile(
-            os.path.join(
-                self.current_dir,
-                MODEL_DIR,
-                "model_head_" + agent_id + ".data-00000-of-00001",
-            )
-        )
 
     def _convert_game_state(
         self, game_state: cgf.GameState, player_model: cgf.BasePlayerModel
@@ -120,12 +79,6 @@ class BehaviorCloneBase:
         )
         pnr, _, encoded_state = cgf.decode_state(encoded)
         return current_player, encoded_state
-
-    def create_new_head(self, new_id: str, copy_from_id=""):
-        if copy_from_id in self.heads.keys():
-            self.heads[new_id] = deepcopy(self.heads[copy_from_id])
-        else:
-            self.heads[new_id] = NaiveFC(**classification_head_config)
 
 
 BehaviorClone = BehaviorCloneBase()

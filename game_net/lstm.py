@@ -3,6 +3,7 @@ import sys
 import torch
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
+from lstm_net import LSTMNet
 
 torch.multiprocessing.set_sharing_strategy("file_system")
 print(sys.argv)
@@ -58,59 +59,8 @@ def pack_games(games):
     return (padded_states, packed_actions, [x[-1] for x in games])
 
 
-class Net(torch.nn.Module):
-    def __init__(
-        self,
-        input_fc_units,
-        lstm_hidden_units,
-        lstm_num_layers,
-        output_fc_units,
-        drop_out=False,
-        drop_out_rate=0.5,
-    ):
-        super().__init__()
-        self.input_fc = []
-        for in_dim, out_dim in zip(
-            [GAME_STATE_LENGTH] + input_fc_units, input_fc_units
-        ):
-            self.input_fc.append(torch.nn.Linear(in_dim, out_dim))
-            self.input_fc.append(torch.nn.ReLU())
-            if drop_out:
-                self.input_fc.append(torch.nn.Dropout(drop_out_rate))
-        self.input_fc = torch.nn.Sequential(*self.input_fc)
-        self.lstm = torch.nn.LSTM(
-            GAME_STATE_LENGTH if input_fc_units == [] else input_fc_units[-1],
-            lstm_hidden_units,
-            lstm_num_layers,
-        )
-        self.output_fc = []
-        for in_dim, out_dim in zip(
-            [lstm_hidden_units] + output_fc_units, output_fc_units
-        ):
-            self.output_fc.append(torch.nn.Linear(in_dim, out_dim))
-            self.output_fc.append(torch.nn.ReLU())
-            if drop_out:
-                self.output_fc.append(torch.nn.Dropout(drop_out_rate))
-        if output_fc_units == []:
-            self.output_fc.append(torch.nn.Linear(lstm_hidden_units, 20))
-        else:
-            self.output_fc.append(torch.nn.Linear(output_fc_units[-1], 20))
-        # self.output_fc.append(torch.nn.Softmax())
-        self.output_fc = torch.nn.Sequential(*self.output_fc)
-
-    def forward(self, padded, lengths):
-        padded_output = self.input_fc(padded)
-        packed_output = torch.nn.utils.rnn.pack_padded_sequence(padded_output, lengths)
-        packed_output, _ = self.lstm(packed_output)
-        padded_output, _ = torch.nn.utils.rnn.pad_packed_sequence(packed_output)
-        padded_output = self.output_fc(padded_output)
-        packed_output = torch.nn.utils.rnn.pack_padded_sequence(padded_output, lengths)
-        return packed_output
-
-
 num_units = 512
-model = Net([num_units], num_units, 2, [], drop_out=True).to(DEVICE)
-# model = Net([512], 512, 2, []).to(DEVICE)
+model = LSTMNet([num_units], num_units, 2, [], drop_out=True).to(DEVICE)
 loss_fn = torch.nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
