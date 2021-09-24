@@ -43,7 +43,7 @@ class PickleDataset(torch.utils.data.Dataset):
                             buffer_cat.append(2)
                     self.action_cats.append(torch.tensor(buffer_cat))
                     self.action_hints.append(action_label)
-                    self.action_cards.append(torch.clamp(action_label, max=4))
+                    self.action_cards.append(torch.fmod(action_label, 5))
                 except ValueError:
                     break
         assert len(self.states) == len(self.action_cats)
