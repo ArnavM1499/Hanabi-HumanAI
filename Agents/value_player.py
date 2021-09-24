@@ -244,42 +244,42 @@ class ValuePlayer(Player):
 
         target = get_multi_target(action, self.partner_hand, self.partner_weighted_knowledge,
                                   self.state.get_board(), self.play_threshold, self.hint_direction)
-        copy_weights = copy.deepcopy(self.partner_weights)
-        new_partner_weights = update_weights(copy_weights, self.hint_weight, self.state.get_board(), target)
-        copy_knowledge = copy.deepcopy(self.partner_knowledge)
-
-        # update knowledge ourselves as part of simulation
-        if action.type == HINT_COLOR:
-            for i in range(len(copy_knowledge)):
-                if self.partner_hand[i][0] == action.col:
-                    for j in range(0, 5):
-                        if j != action.col:
-                            copy_knowledge[i][j] = [0, 0, 0, 0, 0]
-                else:
-                    copy_knowledge[i][action.col] = [0, 0, 0, 0, 0]
-        elif action.type == HINT_NUMBER:
-            for i in range(len(copy_knowledge)):
-                if self.partner_hand[i][1] == action.num:
-                    for j in range(0, 5):  # number of colors
-                        for k in range(0, 5):
-                            if k != action.num - 1:
-                                copy_knowledge[i][j][k] = 0
-                else:
-                    for j in range(0, 5):
-                        copy_knowledge[i][j][action.num - 1] = 0
-
-        new_weighted_knowledge = weight_knowledge(copy_knowledge, new_partner_weights)
-        # print(action)
-        return self.partner_knowledge_index - self._eval_partner_knowledge(new_weighted_knowledge)
-        #if target == -1:
-        #    return 0.25
-        #if target_possible(action, target, self.partner_weighted_knowledge, self.state.get_board()):
-        #    if card_playable(self.partner_hand[target], self.state.get_board()):
-        #        # TODO: differentiate between valid hints
-        #        return 0.8
-        #    else:
-        #        return 0.1
-        #return 0.25
+        #copy_weights = copy.deepcopy(self.partner_weights)
+        #new_partner_weights = update_weights(copy_weights, self.hint_weight, self.state.get_board(), target)
+        #copy_knowledge = copy.deepcopy(self.partner_knowledge)
+#
+        ## update knowledge ourselves as part of simulation
+        #if action.type == HINT_COLOR:
+        #    for i in range(len(copy_knowledge)):
+        #        if self.partner_hand[i][0] == action.col:
+        #            for j in range(0, 5):
+        #                if j != action.col:
+        #                    copy_knowledge[i][j] = [0, 0, 0, 0, 0]
+        #        else:
+        #            copy_knowledge[i][action.col] = [0, 0, 0, 0, 0]
+        #elif action.type == HINT_NUMBER:
+        #    for i in range(len(copy_knowledge)):
+        #        if self.partner_hand[i][1] == action.num:
+        #            for j in range(0, 5):  # number of colors
+        #                for k in range(0, 5):
+        #                    if k != action.num - 1:
+        #                        copy_knowledge[i][j][k] = 0
+        #        else:
+        #            for j in range(0, 5):
+        #                copy_knowledge[i][j][action.num - 1] = 0
+#
+        #new_weighted_knowledge = weight_knowledge(copy_knowledge, new_partner_weights)
+        ## print(action)
+        #return self.partner_knowledge_index - self._eval_partner_knowledge(new_weighted_knowledge)
+        if target == -1:
+            return 0.25
+        if target_possible(action, target, self.partner_weighted_knowledge, self.state.get_board()):
+            if card_playable(self.partner_hand[target], self.state.get_board()):
+                # TODO: differentiate between valid hints
+                return 0.8
+            else:
+                return 0.1
+        return 0.25
 
     def eval_action(self, action):
         if action.type == PLAY:

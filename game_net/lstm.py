@@ -8,7 +8,7 @@ torch.multiprocessing.set_sharing_strategy("file_system")
 
 GAME_STATE_LENGTH = 583 + 20  # base + extended (discardable / playable)
 
-DATA_ALL = "../log/features0825/lstm_extended/00005_all.npy"
+DATA_ALL = "../simpledata/00005_all.npy"
 DATA_TRAIN = DATA_ALL.replace("_all", "_train")
 DATA_VAL = DATA_ALL.replace("_all", "_val")
 MODEL_PATH = "../log/model_lstm.pth"

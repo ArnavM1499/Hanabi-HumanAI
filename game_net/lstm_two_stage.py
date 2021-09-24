@@ -5,15 +5,15 @@ from tqdm import tqdm
 
 torch.multiprocessing.set_sharing_strategy("file_system")
 
-GAME_STATE_LENGTH = 583 + 20
+GAME_STATE_LENGTH = 583
 
-DATA_ALL = "../Data/00005_parsed0_all.npy"
+DATA_ALL = "../simpledata/00005_all.npy"
 DATA_TRAIN = DATA_ALL.replace("_all", "_train")
 DATA_VAL = DATA_ALL.replace("_all", "_val")
 MODEL_PATH = "../model/model_lstm_two_stage.pth"
 
 BATCH_SIZE = 600
-EPOCH = 100
+EPOCH = 20
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 LOGGER = SummaryWriter()
@@ -123,6 +123,8 @@ class SingleNet(torch.nn.Module):
         self.output_fc = torch.nn.Sequential(*self.output_fc)
 
     def forward(self, padded, lengths):
+        print("padded: " + str(len(padded)))
+        print(padded)
         padded_output = self.input_fc(padded)
         packed_output = torch.nn.utils.rnn.pack_padded_sequence(padded_output, lengths)
         packed_output, _ = self.lstm(packed_output)
@@ -192,15 +194,15 @@ optimizer = torch.optim.Adam(model.parameters(), lr=0.0003)
 
 trainset = torch.utils.data.DataLoader(
     PickleDataset(DATA_TRAIN),
-    batch_size=BATCH_SIZE,
-    shuffle=True,
-    collate_fn=pack_games,
+    #batch_size=BATCH_SIZE,
+    #shuffle=True,
+    #collate_fn=pack_games,
 )
 valset = torch.utils.data.DataLoader(
     PickleDataset(DATA_VAL),
-    batch_size=BATCH_SIZE,
-    shuffle=False,
-    collate_fn=pack_games,
+    #batch_size=BATCH_SIZE,
+    #shuffle=False,
+    #collate_fn=pack_games,
 )
 
 
@@ -231,6 +233,8 @@ def val(log_iter=0):
             mask_hint = action_cats.data == 0
             mask_play = action_cats.data == 1
             mask_discard = action_cats.data == 2
+            print(len(states))
+            print(len(lengths))
             (pred_cat, pred_hint, pred_play, pred_discard) = model(states, lengths)
             masked_label_hint = torch.masked_select(action_hints.data, mask_hint)
             masked_label_play = torch.masked_select(action_cards.data, mask_play)
