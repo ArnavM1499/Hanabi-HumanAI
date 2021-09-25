@@ -5,7 +5,7 @@ GAME_STATE_LENGTH = 583 + 20  # base + extended (discardable / playable)
 default_config = {
     "input_fc_units": [512],
     "lstm_hidden_units": 512,
-    "lastm_num_layers": 2,
+    "lstm_num_layers": 2,
     "output_fc_units": [],
     "drop_out": True,
 }
