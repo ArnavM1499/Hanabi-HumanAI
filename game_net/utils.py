@@ -122,29 +122,29 @@ def pkl_to_lstm_np(dataset_dir, *paths, rename=False, train_split=0.7):
                         with open(p1_output_path_all, "ab+") as fout:
                             np.save(fout, game_states[0])
                             np.save(fout, game_actions[0])
-                            #np.save(fout, game_action_values[0])
+                            np.save(fout, game_action_values[0])
                         with open(p2_output_path_all, "ab+") as fout:
                             np.save(fout, game_states[1])
                             np.save(fout, game_actions[1])
-                            #np.save(fout, game_action_values[1])
+                            np.save(fout, game_action_values[1])
                         if random() < train_split:
                             with open(p1_output_path_train, "ab+") as fout:
                                 np.save(fout, game_states[0])
                                 np.save(fout, game_actions[0])
-                                #np.save(fout, game_action_values[0])
+                                np.save(fout, game_action_values[0])
                             with open(p2_output_path_train, "ab+") as fout:
                                 np.save(fout, game_states[1])
                                 np.save(fout, game_actions[1])
-                                #np.save(fout, game_action_values[1])
+                                np.save(fout, game_action_values[1])
                         else:
                             with open(p1_output_path_val, "ab+") as fout:
                                 np.save(fout, game_states[0])
                                 np.save(fout, game_actions[0])
-                                #np.save(fout, game_action_values[0])
+                                np.save(fout, game_action_values[0])
                             with open(p2_output_path_val, "ab+") as fout:
                                 np.save(fout, game_states[1])
                                 np.save(fout, game_actions[1])
-                                #np.save(fout, game_action_values[1])
+                                np.save(fout, game_action_values[1])
                         game_states = [[], []]
                         game_actions = [[], []]
                         game_action_values = [[], []]

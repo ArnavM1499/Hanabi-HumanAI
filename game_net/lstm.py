@@ -6,12 +6,12 @@ from tqdm import tqdm
 
 torch.multiprocessing.set_sharing_strategy("file_system")
 
-GAME_STATE_LENGTH = 583 + 20  # base + extended (discardable / playable)
+GAME_STATE_LENGTH = 583  # base + extended (discardable / playable)
 
 DATA_ALL = "../simpledata/00005_all.npy"
 DATA_TRAIN = DATA_ALL.replace("_all", "_train")
 DATA_VAL = DATA_ALL.replace("_all", "_val")
-MODEL_PATH = "../log/model_lstm.pth"
+MODEL_PATH = "../model/model_lstm_two_stage.pth"
 
 BATCH_SIZE = 512
 EPOCH = 36
@@ -24,6 +24,7 @@ class PickleDataset(torch.utils.data.Dataset):
     def __init__(self, dataset_file):
         self.states = []
         self.actions = []
+        self.action_dict = []
         with open(dataset_file, "rb") as fin:
             while True:
                 try:
@@ -31,6 +32,7 @@ class PickleDataset(torch.utils.data.Dataset):
                         torch.from_numpy(np.load(fin) * 0.333).type(torch.float32)
                     )
                     self.actions.append(torch.from_numpy(np.load(fin)))
+                    self.action_dict.append(torch.from_numpy(np.load(fin) * 0.5).type(torch.float32))
                 except ValueError:
                     break
         assert len(self.states) == len(self.actions)
@@ -41,7 +43,7 @@ class PickleDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         return (
             self.states[idx],
-            self.actions[idx].type(torch.long),
+            self.action_dict[idx],
             torch.tensor(self.actions[idx].size()[0]),
         )
 
@@ -105,15 +107,15 @@ class Net(torch.nn.Module):
 
 model = Net([512], 512, 2, [], drop_out=True).to(DEVICE)
 # model = Net([512], 512, 2, []).to(DEVICE)
-loss_fn = torch.nn.CrossEntropyLoss()
+loss_fn = torch.nn.MSELoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
 
 valset = torch.utils.data.DataLoader(
     PickleDataset(DATA_VAL),
     batch_size=BATCH_SIZE,
-    shuffle=False,
-    collate_fn=pack_games,
+    shuffle=True,
+    collate_fn=pack_games
 )
 
 
@@ -123,20 +125,19 @@ def val(log_iter=0):
     total = 0
     model.eval()
     with torch.no_grad():
-        for i, (states, actions, lengths) in enumerate(tqdm(valset)):
-            states, actions = states.to(DEVICE), actions.to(DEVICE)
+        for i, (states, action_values, lengths) in enumerate(tqdm(valset)):
+            states, action_values = states.to(DEVICE), action_values.to(DEVICE)
             pred = model(states, lengths)
-            loss = loss_fn(pred.data, actions.data)
+            loss = loss_fn(pred.data, action_values.data)
             losses.append(loss.item())
-            correct += (
-                (pred.data.argmax(1) == actions.data).type(torch.float).sum().item()
-            )
-            total += actions.data.shape[0]
+            # correct += (
+            #     (pred.data.argmax(1) == actions.data).type(torch.float).sum().item()
+            # )
+            # total += actions.data.shape[0]
     loss = round(sum(losses) / len(losses), 5)
-    accuracy = round(correct / total, 5)
-    print("  val loss: ", loss, " accuracy: ", accuracy)
+    # accuracy = round(correct / total, 5)
+    print(" val loss: ", loss)
     LOGGER.add_scalar("Loss/Val", loss, log_iter)
-    LOGGER.add_scalar("Accuracy/Val", accuracy, log_iter)
     model.train()
 
 
@@ -145,20 +146,18 @@ def train():
         PickleDataset(DATA_TRAIN),
         batch_size=BATCH_SIZE,
         shuffle=True,
-        collate_fn=pack_games,
+        collate_fn=pack_games
     )
     size = len(trainset)
     for e in range(EPOCH):
         val(e * size)
-        for i, (states, actions, lengths) in enumerate(
+        for i, (states, action_values, lengths) in enumerate(
             tqdm(trainset, desc="epoch: {}".format(e))
         ):
-            states, actions = states.to(DEVICE), actions.to(DEVICE)
+            states, action_values = states.to(DEVICE), action_values.to(DEVICE)
             pred = model(states, lengths)
-            loss = loss_fn(pred.data, actions.data)
-            accuracy = (pred.data.argmax(1) == actions.data).type(torch.float).mean()
+            loss = loss_fn(pred.data, action_values.data)
             LOGGER.add_scalar("Loss/Train", loss.item(), e * size + i)
-            LOGGER.add_scalar("Accuracy/Train", accuracy.item(), e * size + i)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
