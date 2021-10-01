@@ -311,11 +311,13 @@ class ValuePlayer(Player):
         best_action = None
         # all values are in [0, 1], so this is lower than all possible values
         max_value = -1.0
+        min_value = 100.0
         # print(self.name)
         # print(self.hint_risk_weight)
         for action in self.state.get_valid_actions():
             # print(action)
             value = self.eval_action(action)
+            min_value = min(min_value, value)
             # print(value)
             if value > max_value:
                 best_action = action
@@ -323,6 +325,8 @@ class ValuePlayer(Player):
             if self.get_action_values:
                 value_dict[action] = value
         if self.get_action_values:
+            for key in value_dict.keys():
+                value_dict[key] = (value_dict[key] - min_value) / (max_value - min_value + 0.0000001)
             return best_action, value_dict
         return best_action
 

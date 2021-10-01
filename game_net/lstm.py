@@ -32,7 +32,7 @@ class PickleDataset(torch.utils.data.Dataset):
                         torch.from_numpy(np.load(fin) * 0.333).type(torch.float32)
                     )
                     self.actions.append(torch.from_numpy(np.load(fin)))
-                    self.action_dict.append(torch.from_numpy(np.load(fin) * 0.5).type(torch.float32))
+                    self.action_dict.append(torch.from_numpy(np.load(fin)).type(torch.float32))
                 except ValueError:
                     break
         assert len(self.states) == len(self.actions)
@@ -130,14 +130,16 @@ def val(log_iter=0):
             pred = model(states, lengths)
             loss = loss_fn(pred.data, action_values.data)
             losses.append(loss.item())
-            # correct += (
-            #     (pred.data.argmax(1) == actions.data).type(torch.float).sum().item()
-            # )
-            # total += actions.data.shape[0]
+            correct += (
+                (pred.data.argmax(1) == action_values.data.argmax(1)).type(torch.float).sum().item()
+            )
+            total += action_values.data.shape[0]
     loss = round(sum(losses) / len(losses), 5)
-    # accuracy = round(correct / total, 5)
+    accuracy = round(correct / total, 5)
+    print(" accuracy: ", accuracy)
     print(" val loss: ", loss)
     LOGGER.add_scalar("Loss/Val", loss, log_iter)
+    LOGGER.add_scalar("Accuracy", accuracy, log_iter)
     model.train()
 
 
