@@ -7,6 +7,7 @@ from pprint import pprint
 import random
 import sys
 import time
+import threading
 from hanabi import Game
 from Agents.player import Player
 from Agents.ChiefAgent.player_pool import PlayerPool
@@ -184,7 +185,7 @@ def test_player(
     return iters, avg, smin, smax, smid, smod, hints, hits, turns
 
 
-def sequential_test(player, player2=None, iters=5000, seed=0, save_pkl_dir=None):
+def sequential_test(player, player2=None, iters=2000, seed=0, save_pkl_dir=None):
     random.seed(seed)
     iters = int(iters)
     if isinstance(save_pkl_dir, str):
@@ -208,6 +209,20 @@ def sequential_test(player, player2=None, iters=5000, seed=0, save_pkl_dir=None)
     else:
         for i in range(iters):
             run_single("sink_{}.csv".format(i), player, player2, clean=True)
+
+
+def generate_data(player, save_pkl_dir, iters=100, threads=8):
+    tds = []
+    for i in range(threads):
+        thread = threading.Thread(target=sequential_test, args=(player, player, iters / threads, i, save_pkl_dir))
+        tds.append(thread)
+
+    for thr in tds:
+        thr.start()
+
+    for thr in tds:
+        thr.join()
+
 
 
 def parameter_search(
