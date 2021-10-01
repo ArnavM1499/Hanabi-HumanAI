@@ -154,9 +154,10 @@ def checkpoint(passed):
 
 def encode_action_values(value_dict):
     values = [0] * 20
-    for action, value in value_dict:
-        values[action.encode()] = value
+    for action in value_dict.keys():
+        values[action.encode()] = value_dict[action]
     return values
+
 
 def encode_state(
     partner_hand,

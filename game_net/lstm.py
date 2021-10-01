@@ -6,9 +6,9 @@ from tqdm import tqdm
 
 torch.multiprocessing.set_sharing_strategy("file_system")
 
-GAME_STATE_LENGTH = 583  # base + extended (discardable / playable)
+GAME_STATE_LENGTH = 603  # base + extended (discardable / playable)
 
-DATA_ALL = "../simpledata/00005_all.npy"
+DATA_ALL = "../valuedata/00005_all.npy"
 DATA_TRAIN = DATA_ALL.replace("_all", "_train")
 DATA_VAL = DATA_ALL.replace("_all", "_val")
 MODEL_PATH = "../model/model_lstm_two_stage.pth"
