@@ -93,7 +93,7 @@ def slot_discardable_pct(slot, board, trash=None):
             total_combos += slot[col][num]
             if card_discardable((col, num + 1), board, trash):
                 discardable_combos += slot[col][num]
-    
+
     if total_combos < 1:
         return 0
 

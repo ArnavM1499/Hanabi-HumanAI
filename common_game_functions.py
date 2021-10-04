@@ -1,8 +1,7 @@
 from copy import deepcopy
-import pickle
 import random
 
-global HINT_COLOR, HINT_NUMBER, PLAY, DISCARD, CANDISCARD, GREEN, YELLOW, WHITE, BLUE, RED, ALL_COLORS, COLORNAMES, COUNTS
+global HINT_COLOR, HINT_NUMBER, PLAY, DISCARD, CANDISCARD, GREEN, YELLOW, WHITE, BLUE, RED, ALL_COLORS, COLORNAMES, COUNTS  # noqa E501
 
 HINT_COLOR = 0
 HINT_NUMBER = 1
@@ -19,6 +18,10 @@ ALL_COLORS = [GREEN, YELLOW, WHITE, BLUE, RED]
 COLORNAMES = ["green", "yellow", "white", "blue", "red"]
 
 COUNTS = [3, 2, 2, 2, 1]
+
+
+class StartOfGame(Exception):
+    pass
 
 
 def f(something):
@@ -160,12 +163,12 @@ def encode_state(
     last_action,
     action,
     pnr,
+    extras=[],
 ):
     state = []
-    state.extend([(col * 5 + num - 1) for col, num in sorted(board)])
+    state.extend([(col * 6 + num) for col, num in sorted(board)])
     for (col, num) in partner_hand:
         state.append(col * 5 + num - 1)
-
     state.extend([25] * (5 - len(partner_hand)))
     checkpoint(len(state) == 10)
     knowledges = []
@@ -183,6 +186,9 @@ def encode_state(
         trash_reformat[col][num - 1] += 1
     state.extend(sum(trash_reformat, []))
     checkpoint(len(state) == 285)
+    state.extend(
+        [3 * x for x in extras]
+    )  # 3 is a magic number, extras should be normalized to 0-1
     state.append(3 - hits)
     state.append(hints)
     if last_action:
@@ -197,14 +203,21 @@ def encode_state(
 def decode_state(state):
     # convert hand, hint, hit, last action to one hot
     # player {0, 1}, action [0-19], game state
+    if state == []:
+        raise StartOfGame
     expanded = []
+    hand = [0] * 30
+    for i in range(5):  # board (5)
+        h = hand.copy()
+        h[state[i]] = 1
+        expanded.extend(h)
     hand = [0] * 25
-    for i in range(9):  # board (5) + first four cards
+    for i in range(5, 9):  # first four cards
         h = hand.copy()
         h[state[i]] = 1
         expanded.extend(h)
     hand.append(0)  # include empty card
-    hand[state[4]] = 1
+    hand[state[10]] = 1
     expanded.extend(hand)
     expanded.extend(state[10:-5])
     hits, hints, last_action, action, pnr = state[-5:]

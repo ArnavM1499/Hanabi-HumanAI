@@ -1,6 +1,7 @@
 import csv
 import pickle
 from common_game_functions import *
+from Agents.common_player_functions import *
 from Agents.player import Action
 
 
@@ -39,6 +40,7 @@ class Game(object):
         elif data_file.endswith(".pkl"):
             self.data_format = "pkl"
             self.data_file = open(data_file, "ab+")
+            pickle.dump([], self.data_file)
         else:
             print("Unsupported data file format!")
             raise NotImplementedError
@@ -316,8 +318,25 @@ class Game(object):
                     last_action = self.action_log[partner_nr][-1]
                 except IndexError:
                     last_action = None
+                extra = []
+                for k in self.knowledge[partner_nr]:
+                    extra.append(slot_playable_pct(k, self.board))
+                while len(extra) < 5:
+                    extra.append(0)
+                for k in self.knowledge[self.current_player]:
+                    extra.append(slot_playable_pct(k, self.board))
+                while len(extra) < 10:
+                    extra.append(0)
+                for k in self.knowledge[partner_nr]:
+                    extra.append(slot_discardable_pct(k, self.board, self.trash))
+                while len(extra) < 15:
+                    extra.append(0)
+                for k in self.knowledge[self.current_player]:
+                    extra.append(slot_discardable_pct(k, self.board, self.trash))
+                while len(extra) < 20:
+                    extra.append(0)
                 pickle.dump(
-                    encode_state(
+                    encode_state(  # noqa F405
                         self.hands[partner_nr],
                         self.knowledge[partner_nr],
                         self.knowledge[self.current_player],
@@ -328,6 +347,7 @@ class Game(object):
                         last_action,
                         action,
                         self.current_player,
+                        extra,
                     ),
                     self.data_file,
                 )

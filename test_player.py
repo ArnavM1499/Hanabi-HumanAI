@@ -138,20 +138,35 @@ def record_game(
 
 
 def test_player(
-    player="00001", player2=None, iters=5000, print_details=False, key=None, key2=None
+    player="00001",
+    player2=None,
+    iters=5000,
+    print_details=False,
+    key=None,
+    key2=None,
+    single_thread=False,
 ):
     stdout = sys.stdout
     sys.stdout = open(os.devnull, "w")
-    p = Pool(min(16, iters))
-    res = p.starmap_async(
-        run_single,
-        [
-            ("sink_{}.csv".format(i), player, player2, key, key2, True)
+    if single_thread:
+        res = [
+            list(run_single("sink_{}.csv".format(i), player, player2, key, key2, True))
             for i in range(iters)
-        ],
-    )
-    p.close()
-    results = [list(x) for x in zip(*res.get())]  # [[scores], [hints], [hits], [turns]
+        ]
+        results = [list(x) for x in zip(*res)]
+    else:
+        p = Pool(min(16, iters))
+        res = p.starmap_async(
+            run_single,
+            [
+                ("sink_{}.csv".format(i), player, player2, key, key2, True)
+                for i in range(iters)
+            ],
+        )
+        p.close()
+        results = [
+            list(x) for x in zip(*res.get())
+        ]  # [[scores], [hints], [hits], [turns]
     results[0].sort()
     time.sleep(5)  # wait for async file writes
     sys.stdout = stdout
