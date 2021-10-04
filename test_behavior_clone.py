@@ -11,25 +11,27 @@ from tqdm import tqdm
 
 from hanabi import Game
 from Agents.ChiefAgent.player_pool import PlayerPool
-from game_net.behavior_clone import BehaviorClone
+from Agents.behavior_clone_player import BehaviorPlayer
 
 PLAYER_POOL1 = PlayerPool("Alice", 0, "Agents/configs/players.json")
 PLAYER_POOL2 = PlayerPool("Bob", 1, "Agents/configs/players.json")
 
 
 class TestbedGame(Game):
-    def __init__(self, behavior_funcs, *args, **kwargs):
+    def __init__(self, behavior_players, *args, **kwargs):
         super(TestbedGame, self).__init__(*args, **kwargs)
-        self.behavior_funcs = behavior_funcs
+        self.behavior_players = behavior_players
 
         # format: [[(actual, predicted), ...], ...]
-        self.behavior_results = [[] for _ in self.behavior_funcs]
+        self.behavior_results = [[] for _ in self.behavior_players]
 
     def single_turn(self):
         game_state = self._make_game_state(self.current_player)
         player_model = self._make_player_model(self.current_player)
         action = self.players[self.current_player].get_action(game_state, player_model)
-        pred = self.behavior_funcs[self.current_player](game_state, player_model)
+        pred = self.behavior_players[self.current_player].get_action(
+            game_state, player_model
+        )
         self.behavior_results[self.current_player].append((action, pred))
         self.external_turn(action)
 
@@ -38,8 +40,8 @@ def test_single(player1_id, player2_id):
     try:
         TBG = TestbedGame(
             [
-                lambda s, m: BehaviorClone.predict(player1_id, s, m),
-                lambda s, m: BehaviorClone.predict(player2_id, s, m),
+                BehaviorPlayer(0, "Alice", agent_id=player1_id),
+                BehaviorPlayer(1, "Bob", agent_id=player1_id),
             ],
             [
                 deepcopy(PLAYER_POOL1.player_dict[player1_id]),
@@ -60,24 +62,29 @@ def test_all(*agent_ids, output_json="", iters=20, seed=0, threads=16):
     random.seed(seed)
     profile = {}
     if len(agent_ids) == 0:
-        agent_ids = sorted(PLAYER_POOL1.player_dict.keys())
+        agent_ids = [x for x in sorted(PLAYER_POOL1.player_dict.keys()) if x[1] != "9"]
     else:
         agent_ids = [str(x) for x in agent_ids]
-    agent_ids = [x for x in agent_ids if x in BehaviorClone]
     if len(agent_ids) == 0:
         print("no cloned agents found, nothing to do")
         return
     results = []
     stdout = sys.stdout
     sys.stdout = open(os.devnull, "w")
-    p = Pool(threads)
-    for ids in product(agent_ids, agent_ids):
-        for i in range(iters):
-            results.append(p.apply_async(test_single, ids))
-    p.close()
-    p.join()
+    if threads == 1:
+        for ids in product(agent_ids, agent_ids):
+            for i in range(iters):
+                results.append(test_single(*ids))
+    else:
+        p = Pool(threads)
+        for ids in product(agent_ids, agent_ids):
+            for i in range(iters):
+                results.append(p.apply_async(test_single, ids))
+        p.close()
+        p.join()
+        results = [x.get for x in results]
     for res in tqdm(results):
-        for agent_id, result in res.get().items():
+        for agent_id, result in res.items():
             if agent_id not in profile.keys():
                 profile[agent_id] = []
             profile[agent_id].extend(
