@@ -225,7 +225,7 @@ def sequential_test(player, player2=None, iters=2000, seed=0, save_pkl_dir=None,
             run_single("sink_{}.csv".format(i), player, player2, clean=True, print_data=False)
 
 
-def generate_data(player, save_pkl_dir, iters=100, threads=8):
+def generate_data(player, save_pkl_dir, iters=20000, threads=16):
     tds = []
     for i in range(threads):
         thread = threading.Thread(target=sequential_test, args=(player, player, iters / threads, i, save_pkl_dir, i))
