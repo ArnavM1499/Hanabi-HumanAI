@@ -169,7 +169,7 @@ def encode_state(
     hints,
     last_action,
     action,
-    action_values,
+    partner_knowledge_model,
     pnr,
     extras=[],
 ):
@@ -186,18 +186,20 @@ def encode_state(
     knowledges.extend(self_knowledge)
     if len(self_knowledge) < 5:
         knowledges.append([[0, 0, 0, 0, 0] for _ in range(5)])
+    knowledges.extend(partner_knowledge_model)
+    if len(partner_knowledge_model) < 5:
+        knowledges.append([[0, 0, 0, 0, 0] for _ in range(5)])
     for knowledge in knowledges:
         state.extend(sum(knowledge, []))
-    checkpoint(len(state) == 260)
+    checkpoint(len(state) == 385)
     trash_reformat = [[0] * 5 for _ in range(5)]
     for (col, num) in trash:
         trash_reformat[col][num - 1] += 1
     state.extend(sum(trash_reformat, []))
-    checkpoint(len(state) == 285)
+    checkpoint(len(state) == 410)
     state.extend(
         [3 * x for x in extras]
     )  # 3 is a magic number, extras should be normalized to 0-1
-    state.extend(encode_action_values(action_values))
     state.append(3 - hits)
     state.append(hints)
     if last_action:
@@ -228,8 +230,8 @@ def decode_state(state):
     hand.append(0)  # include empty card
     hand[state[10]] = 1
     expanded.extend(hand)
-    expanded.extend(state[10:-25])
-    action_values = state[-25:-5]
+    expanded.extend(state[10:-5])
+    # action_values = state[-25:-5]
     hits, hints, last_action, action, pnr = state[-5:]
     expanded.append(hits % 2)
     expanded.append(hits // 2)
@@ -239,4 +241,4 @@ def decode_state(state):
     action_one_hot = [0] * 21  # include empty last_action
     action_one_hot[last_action] = 1
     expanded.extend(action_one_hot)
-    return pnr, action, action_values, expanded
+    return pnr, action, expanded

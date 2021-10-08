@@ -289,16 +289,16 @@ class Game(object):
     def single_turn(self):
         game_state = self._make_game_state(self.current_player)
         player_model = self._make_player_model(self.current_player)
-        action, action_values = self.players[self.current_player].get_action(game_state, player_model)
+        action, partner_knowledge_model = self.players[self.current_player].get_action(game_state, player_model)
 
         # Data collection
         if self.pickle_file:
             pickle.dump(["Action", game_state, player_model, action], self.pickle_file)
 
         # Process action
-        self.external_turn(action, action_values)
+        self.external_turn(action, partner_knowledge_model)
 
-    def external_turn(self, action, action_values=None):
+    def external_turn(self, action, partner_knowledge_model=None):
         if not self.done():
             if not self.deck:
                 self.extra_turns += 1
@@ -351,7 +351,7 @@ class Game(object):
                         self.hints,
                         last_action,
                         action,
-                        action_values,
+                        partner_knowledge_model,
                         self.current_player,
                         extra,
                     ),

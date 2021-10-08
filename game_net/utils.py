@@ -83,14 +83,14 @@ def pkl_to_lstm_np(dataset_dir, *paths, rename=False, train_split=0.7):
                 name2id[p2] = p2
         game_states = [[], []]
         game_actions = [[], []]
-        game_action_values = [[], []]
+        # game_action_values = [[], []]
         with open(path, "rb") as f:
             if pickle.load(f) != []:
                 print(path, ": bad format")
             else:
                 while True:
                     try:
-                        p, a, av, s = decode_state(pickle.load(f))
+                        p, a, s = decode_state(pickle.load(f))
                     except EOFError:
                         break
                     except StartOfGame:
@@ -116,42 +116,42 @@ def pkl_to_lstm_np(dataset_dir, *paths, rename=False, train_split=0.7):
                         game_actions = [
                             np.array(x, dtype=np.int8) for x in game_actions
                         ]
-                        game_action_values = [
-                            np.array(x, dtype=np.float16) for x in game_action_values
-                        ]
+                        # game_action_values = [
+                        #     np.array(x, dtype=np.float16) for x in game_action_values
+                        # ]
                         with open(p1_output_path_all, "ab+") as fout:
                             np.save(fout, game_states[0])
                             np.save(fout, game_actions[0])
-                            np.save(fout, game_action_values[0])
+                            # np.save(fout, game_action_values[0])
                         with open(p2_output_path_all, "ab+") as fout:
                             np.save(fout, game_states[1])
                             np.save(fout, game_actions[1])
-                            np.save(fout, game_action_values[1])
+                            # np.save(fout, game_action_values[1])
                         if random() < train_split:
                             with open(p1_output_path_train, "ab+") as fout:
                                 np.save(fout, game_states[0])
                                 np.save(fout, game_actions[0])
-                                np.save(fout, game_action_values[0])
+                                # np.save(fout, game_action_values[0])
                             with open(p2_output_path_train, "ab+") as fout:
                                 np.save(fout, game_states[1])
                                 np.save(fout, game_actions[1])
-                                np.save(fout, game_action_values[1])
+                                # np.save(fout, game_action_values[1])
                         else:
                             with open(p1_output_path_val, "ab+") as fout:
                                 np.save(fout, game_states[0])
                                 np.save(fout, game_actions[0])
-                                np.save(fout, game_action_values[0])
+                                # np.save(fout, game_action_values[0])
                             with open(p2_output_path_val, "ab+") as fout:
                                 np.save(fout, game_states[1])
                                 np.save(fout, game_actions[1])
-                                np.save(fout, game_action_values[1])
+                                # np.save(fout, game_action_values[1])
                         game_states = [[], []]
                         game_actions = [[], []]
-                        game_action_values = [[], []]
+                        # game_action_values = [[], []]
 
                     game_states[p].append(s)
                     game_actions[p].append(a)
-                    game_action_values[p].append(av)
+                    # game_action_values[p].append(av)
 
 
 def merge_np(dataset_root, agent_name, train_split=0.7):

@@ -6,17 +6,18 @@ from tqdm import tqdm
 
 torch.multiprocessing.set_sharing_strategy("file_system")
 
-GAME_STATE_LENGTH = 603  # base + extended (discardable / playable)
+GAME_STATE_LENGTH = 728  # base + extended (discardable / playable)
 
-DATA_ALL = "../valuedata/00005_all.npy"
+DATA_ALL = "../expdata2/00001_all.npy"
 DATA_TRAIN = DATA_ALL.replace("_all", "_train")
 DATA_VAL = DATA_ALL.replace("_all", "_val")
 MODEL_PATH = "../model/model_lstm_two_stage.pth"
 
 BATCH_SIZE = 512
-EPOCH = 36
+EPOCH = 100
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# DEVICE = torch.device("cpu")
 LOGGER = SummaryWriter()
 
 
@@ -24,15 +25,19 @@ class PickleDataset(torch.utils.data.Dataset):
     def __init__(self, dataset_file):
         self.states = []
         self.actions = []
-        self.action_dict = []
+        # self.action_dict = []
         with open(dataset_file, "rb") as fin:
             while True:
                 try:
                     self.states.append(
                         torch.from_numpy(np.load(fin) * 0.333).type(torch.float32)
                     )
-                    self.actions.append(torch.from_numpy(np.load(fin)))
-                    self.action_dict.append(torch.from_numpy(np.load(fin)).type(torch.float32))
+                    # for vals in self.states[-1]:
+                    #     for val2 in vals:
+                    #         assert 0 <= val2 <= 1
+                    self.actions.append(torch.from_numpy(np.load(fin)).type(torch.long))
+                    assert len(self.actions[-1]) == len(self.states[-1])
+                    # self.action_dict.append(torch.from_numpy(np.load(fin)).type(torch.float32))
                 except ValueError:
                     break
         assert len(self.states) == len(self.actions)
@@ -43,7 +48,7 @@ class PickleDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         return (
             self.states[idx],
-            self.action_dict[idx],
+            self.actions[idx],
             torch.tensor(self.actions[idx].size()[0]),
         )
 
@@ -107,7 +112,7 @@ class Net(torch.nn.Module):
 
 model = Net([512], 512, 2, [], drop_out=True).to(DEVICE)
 # model = Net([512], 512, 2, []).to(DEVICE)
-loss_fn = torch.nn.MSELoss()
+loss_fn = torch.nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
 
@@ -131,7 +136,7 @@ def val(log_iter=0):
             loss = loss_fn(pred.data, action_values.data)
             losses.append(loss.item())
             correct += (
-                (pred.data.argmax(1) == action_values.data.argmax(1)).type(torch.float).sum().item()
+                (pred.data.argmax(1) == action_values.data).type(torch.float).sum().item()
             )
             total += action_values.data.shape[0]
     loss = round(sum(losses) / len(losses), 5)
