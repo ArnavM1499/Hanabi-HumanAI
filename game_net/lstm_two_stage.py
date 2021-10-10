@@ -7,7 +7,7 @@ torch.multiprocessing.set_sharing_strategy("file_system")
 
 GAME_STATE_LENGTH = 728
 
-DATA_ALL = "../expdata2/00001_all.npy"
+DATA_ALL = "../expdata50k/00001_all.npy"
 DATA_TRAIN = DATA_ALL.replace("_all", "_train")
 DATA_VAL = DATA_ALL.replace("_all", "_val")
 MODEL_PATH = "../model/model_lstm_two_stage.pth"
