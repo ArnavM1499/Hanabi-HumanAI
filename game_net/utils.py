@@ -301,7 +301,13 @@ def draw_confusion(matrix_np, output_image, num_entries=20):
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
     for i in range(num_entries):
         for j in range(num_entries):
-            ax.text(j, i, str(matrix[i, j]), ha="center", va="center")
+            ax.text(
+                j,
+                i,
+                str(matrix[i, j]) + "\n(" + str(round(heat[i, j], 3)) + ")",
+                ha="center",
+                va="center",
+            )
     ax.set_xlabel("predicted")
     ax.set_ylabel("ground truth")
     fig.tight_layout()

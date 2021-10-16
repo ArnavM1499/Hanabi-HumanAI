@@ -4,7 +4,7 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 import os
-from lstm_net import LSTMNet
+from lstm_net import LSTMNetAugumented
 
 torch.multiprocessing.set_sharing_strategy("file_system")
 print(sys.argv)
@@ -19,18 +19,18 @@ DATA_ALL = "../log/features0825/lstm_extended/{}_all.npy".format(AGENT)
 DATA_ALL = "../log/jcdata/np1008/{}_all.npy".format(AGENT)
 DATA_TRAIN = DATA_ALL.replace("_all", "_train")
 DATA_VAL = DATA_ALL.replace("_all", "_val")
-MODEL_PATH = "../log/model_lstm_jc/model_lstm_{}-lr0.001.pth".format(AGENT)
+MODEL_PATH = "../log/model_lstm_jc/model_lstm_{}-lr0.001_augument.pth".format(AGENT)
 WRITER_PATH = "runs/{}".format(os.path.basename(MODEL_PATH))
 
 BATCH_SIZE = 1024
-EPOCH = 80
+EPOCH = 40
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 LOGGER = SummaryWriter(WRITER_PATH)
 
 
 class PickleDataset(torch.utils.data.Dataset):
-    def __init__(self, dataset_file):
+    def __init__(self, dataset_file, model=None):
         self.states = []
         self.actions = []
         with open(dataset_file, "rb") as fin:
@@ -39,10 +39,16 @@ class PickleDataset(torch.utils.data.Dataset):
                     self.states.append(
                         torch.from_numpy(np.load(fin) * 0.333).type(torch.float32)
                     )
-                    self.actions.append(torch.from_numpy(np.load(fin)))
+                    self.actions.append(torch.from_numpy(np.load(fin)).type(torch.long))
                 except ValueError:
                     break
-        assert len(self.states) == len(self.actions)
+        if model is not None:
+            self.mapping = [
+                (lambda x: x < 10, 20),
+                (lambda x: 10 <= x and x < 15, 21),
+                (lambda x: 15 <= x and x < 20, 22),
+            ]
+            self.update_labels(model)
         self.set_weights()
 
     def __len__(self):
@@ -51,7 +57,7 @@ class PickleDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         return (
             self.states[idx],
-            self.actions[idx].type(torch.long),
+            self.actions[idx],
             torch.tensor(self.actions[idx].size()[0]),
         )
 
@@ -63,8 +69,21 @@ class PickleDataset(torch.utils.data.Dataset):
         nonzero = len([v for v in count.values() if v != 0])
         total = sum(nonzero / x for x in count.values() if x != 0)
         self.weights = torch.tensor(
-            [1 if count[i] == 0 else total / count[i] for i in range(20)]
+            [1 if count[i] == 0 else total / count[i] for i in range(23)]
         )
+
+    def update_labels(self, model):
+        model.eval()
+        with torch.no_grad():
+            for i, (state, action) in enumerate(zip(tqdm(self.states), self.actions)):
+                (state, action, length) = pack_games(
+                    [[state, action, torch.tensor(action.size()[0])]]
+                )
+                pred = model(state.to(DEVICE), length).data.argmax(1).cpu()
+                for j, (p, l) in enumerate(zip(pred, self.actions[i])):
+                    for func, new_label in self.mapping:
+                        if func(l) and (not func(p)):
+                            self.actions[i][j] = new_label
 
 
 def pack_games(games):
@@ -75,7 +94,7 @@ def pack_games(games):
 
 
 num_units = 512
-model = LSTMNet([num_units], num_units, 2, [], drop_out=True).to(DEVICE)
+model = LSTMNetAugumented([num_units], num_units, 2, [], drop_out=True).to(DEVICE)
 loss_fn = torch.nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
@@ -142,6 +161,29 @@ def train():
             loss.backward()
             optimizer.step()
         torch.save(model.state_dict(), MODEL_PATH)
+    traindata = PickleDataset(DATA_TRAIN, model)
+    trainset = torch.utils.data.DataLoader(
+        traindata,
+        batch_size=BATCH_SIZE,
+        shuffle=True,
+        collate_fn=pack_games,
+    )
+    loss_fn = torch.nn.CrossEntropyLoss(weight=traindata.weights.to(DEVICE))
+    for e in range(EPOCH, 2 * EPOCH):
+        val(e * size, include_cat=True)
+        for i, (states, actions, lengths) in enumerate(
+            tqdm(trainset, desc="epoch: {}".format(e))
+        ):
+            states, actions = states.to(DEVICE), actions.to(DEVICE)
+            pred = model(states, lengths)
+            loss = loss_fn(pred.data, actions.data)
+            accuracy = (pred.data.argmax(1) == actions.data).type(torch.float).mean()
+            LOGGER.add_scalar("Loss/Train", loss.item(), e * size + i)
+            LOGGER.add_scalar("Accuracy/Train", accuracy.item(), e * size + i)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+        torch.save(model.state_dict(), MODEL_PATH)
 
 
 def eval_model(save_matrix="", cat3=False, load_model=True):
@@ -161,18 +203,19 @@ def eval_model(save_matrix="", cat3=False, load_model=True):
                 masked_label = torch.masked_select(actions.data, mask)
                 if int(masked_label.shape[0]) > 0:
                     if cat3:
+                        predicted = masked_pred.argmax(1).cpu()
                         if label < 10:
                             corrects[label] += (
-                                (masked_pred.argmax(1).cpu() < 10)
+                                np.logical_or(predicted < 10, predicted == 20)
                                 .type(torch.float)
                                 .sum()
                                 .item()
                             )
                         elif label < 15:
                             corrects[label] += (
-                                np.logical_and(
-                                    masked_pred.argmax(1).cpu() >= 10,
-                                    masked_pred.argmax(1).cpu() < 15,
+                                np.logical_or(
+                                    np.logical_and(predicted >= 10, predicted < 15),
+                                    predicted == 21,
                                 )
                                 .type(torch.float)
                                 .sum()
@@ -180,7 +223,10 @@ def eval_model(save_matrix="", cat3=False, load_model=True):
                             )
                         else:
                             corrects[label] += (
-                                (masked_pred.argmax(1).cpu() >= 15)
+                                np.logical_or(
+                                    np.logical_and(predicted >= 15, predicted < 20),
+                                    predicted == 22,
+                                )
                                 .type(torch.float)
                                 .sum()
                                 .item()
