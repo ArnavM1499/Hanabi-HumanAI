@@ -1,3 +1,4 @@
+from fire import Fire
 import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
@@ -5,23 +6,22 @@ from tqdm import tqdm
 
 torch.multiprocessing.set_sharing_strategy("file_system")
 
-GAME_STATE_LENGTH = 583 + 20
+GAME_STATE_LENGTH = 728
 
-DATA_ALL = "../Data/00005_all.npy"
+DATA_ALL = "../exp00001-200k/00001_all.npy"
 DATA_TRAIN = DATA_ALL.replace("_all", "_train")
 DATA_VAL = DATA_ALL.replace("_all", "_val")
-MODEL_PATH = "../model/model_lstm_two_stage.pth"
+MODEL_PATH = "../model/101521-singlestage-traininfo.pth"
 
 BATCH_SIZE = 600
-EPOCH = 25
+EPOCH = 100
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-#DEVICE = torch.device("cpu")
 LOGGER = SummaryWriter()
 
 
 class PickleIterable(torch.utils.data.IterableDataset):
-    def __init__(self, dataset_file, load_num=100):
+    def __init__(self, dataset_file, load_num=200):
         super(PickleIterable).__init__()
         self.load_num = load_num
         self.dataset_file = dataset_file
@@ -40,16 +40,15 @@ class PickleIterable(torch.utils.data.IterableDataset):
                     buffer_cat = []
                     for idx in action_label:
                         idx = int(idx)
-                        #if idx < 10:  # hint color / number
-                        #    buffer_cat.append(0)
-                        #elif idx < 15:  # play
-                        #    buffer_cat.append(1)
-                        #else:  # discard
-                        #    buffer_cat.append(2)
-                        buffer_cat.append(idx // 5)
+                        if idx < 10:  # hint color / number
+                            buffer_cat.append(0)
+                        elif idx < 15:  # play
+                            buffer_cat.append(1)
+                        else:  # discard
+                            buffer_cat.append(2)
                     action_cats.append(torch.tensor(buffer_cat))
                     action_hints.append(action_label)
-                    action_cards.append(torch.clamp(action_label, max=4))
+                    action_cards.append(torch.fmod(action_label, 5))
                 for i in range(self.load_num):
                     yield states[i], action_cats[i], action_hints[i], action_cards[i], torch.tensor(action_cats[i].size()[0])
         except ValueError:
@@ -138,25 +137,16 @@ class FullNet(torch.nn.Module):
             lstm_hidden_units,
             lstm_num_layers,
             output_fc_units,
-            4,  # num output
+            3,  # num output
             drop_out,
             drop_out_rate,
         )
-        self.net_hint_color = SingleNet(
+        self.net_hint = SingleNet(
             input_fc_units,
             lstm_hidden_units,
             lstm_num_layers,
             output_fc_units,
-            5,
-            drop_out,
-            drop_out_rate,
-        )
-        self.net_hint_number = SingleNet(
-            input_fc_units,
-            lstm_hidden_units,
-            lstm_num_layers,
-            output_fc_units,
-            5,
+            10,
             drop_out,
             drop_out_rate,
         )
@@ -178,7 +168,7 @@ class FullNet(torch.nn.Module):
             drop_out,
             drop_out_rate,
         )
-        self.nets = [self.net_first, self.net_hint_color, self.net_hint_number, self.net_play, self.net_discard]
+        self.nets = [self.net_first, self.net_hint, self.net_play, self.net_discard]
 
     def forward(self, padded, lengths):
         return tuple(net(padded, lengths) for net in self.nets)
@@ -203,14 +193,16 @@ valset = torch.utils.data.DataLoader(
 
 def val(log_iter=0):
     losses = []
+    cat_loss = 0
+    hint_loss = 0
+    play_loss = 0
+    disc_loss = 0
     correct_cat = 0
-    correct_hint_color = 0
-    correct_hint_number = 0
+    correct_hint = 0
     correct_play = 0
     correct_discard = 0
     total_cat = 0
-    total_hint_color = 0
-    total_hint_number = 0
+    total_hint = 0
     total_play = 0
     total_discard = 0
     model.eval()
@@ -227,25 +219,21 @@ def val(log_iter=0):
                 action_hints.to(DEVICE),
                 action_cards.to(DEVICE),
             )
-            mask_hint_color = action_cats.data == 0
-            mask_hint_number = action_cats.data == 1
-            mask_play = action_cats.data == 2
-            mask_discard = action_cats.data == 3
-            (pred_cat, pred_hint_color, pred_hint_number, pred_play, pred_discard) = model(states, lengths)
-            masked_label_hint_color = torch.masked_select(action_hints.data, mask_hint_color)
-            masked_label_hint_number = torch.masked_select(action_hints.data, mask_hint_number)
+            mask_hint = action_cats.data == 0
+            mask_play = action_cats.data == 1
+            mask_discard = action_cats.data == 2
+            (pred_cat, pred_hint, pred_play, pred_discard) = model(states, lengths)
+            masked_label_hint = torch.masked_select(action_hints.data, mask_hint)
             masked_label_play = torch.masked_select(action_cards.data, mask_play)
             masked_label_discard = torch.masked_select(action_cards.data, mask_discard)
-            masked_pred_hint_color = pred_hint_color.data[mask_hint_color, :]
-            masked_pred_hint_number = pred_hint_number.data[mask_hint_number, :]
+            masked_pred_hint = pred_hint.data[mask_hint, :]
             masked_pred_play = pred_play.data[mask_play, :]
             masked_pred_discard = pred_discard.data[mask_discard, :]
-            loss = 0
-            loss += loss_fn(pred_cat.data, action_cats.data)
-            loss += loss_fn(masked_pred_hint_color, masked_label_hint_color)
-            loss += loss_fn(masked_pred_hint_number, masked_label_hint_number)
-            loss += loss_fn(masked_pred_play, masked_label_play)
-            loss += loss_fn(masked_pred_discard, masked_label_discard)
+            cat_loss = loss_fn(pred_cat.data, action_cats.data).item()
+            hint_loss = loss_fn(masked_pred_hint, masked_label_hint).item()
+            play_loss = loss_fn(masked_pred_play, masked_label_play).item()
+            disc_loss = loss_fn(masked_pred_discard, masked_label_discard).item()
+            loss = cat_loss + hint_loss + play_loss + disc_loss
             losses.append(loss)
             correct_cat += (
                 (pred_cat.data.argmax(1) == action_cats.data)
@@ -253,17 +241,11 @@ def val(log_iter=0):
                 .sum()
                 .item()
             )
-            correct_hint_color += (
-                (masked_pred_hint_color.data.argmax(1) == masked_label_hint_color.data)
+            correct_hint += (
+                (masked_pred_hint.data.argmax(1) == masked_label_hint.data)
                 .type(torch.float)
                 .sum()
                 .item()
-            )
-            correct_hint_number += (
-                (masked_pred_hint_color.data.argmax(1) == masked_label_hint_color.data)
-                    .type(torch.float)
-                    .sum()
-                    .item()
             )
             correct_play += (
                 (masked_pred_play.data.argmax(1) == masked_label_play.data)
@@ -278,40 +260,44 @@ def val(log_iter=0):
                 .item()
             )
             total_cat += action_cats.data.shape[0]
-            total_hint_color += masked_label_hint_color.data.shape[0]
-            total_hint_number += masked_label_hint_number.data.shape[0]
+            total_hint += masked_label_hint.data.shape[0]
             total_play += masked_label_play.data.shape[0]
             total_discard += masked_label_discard.data.shape[0]
     print("sizeof: " + str(asdf))
     loss = round(sum(losses) / len(losses), 5)
+
     acc_cat = correct_cat / total_cat
-    acc_hint_color = correct_hint_color / total_hint_color
-    acc_hint_number = correct_hint_number / total_hint_number
+    acc_hint = correct_hint / total_hint
     acc_play = correct_play / total_play
     acc_discard = correct_discard / total_discard
     print(
-        "  val loss: {:.4f} category: {:.4f} hint color: {:.4f} hint number: {:.4f} play: {:.4f} discard: {:.4f}".format(  # noqa E501
-            loss,
+        "  cat loss: {:.4f} hint loss: {:.4f} play loss: {:.4f} disc loss: {:.4f} category: {:.4f} hint: {:.4f} play: {:.4f} discard: {:.4f}".format(  # noqa E501
+            cat_loss,
+            hint_loss,
+            play_loss,
+            disc_loss,
             acc_cat,
-            acc_hint_color,
-            acc_hint_number,
+            acc_hint,
             acc_play,
             acc_discard,
         )
     )
     LOGGER.add_scalar("Loss/Val", loss, log_iter)
+    LOGGER.add_scalar("Cat Loss/Val", cat_loss, log_iter)
+    LOGGER.add_scalar("Hint Loss/Val", hint_loss, log_iter)
+    LOGGER.add_scalar("Play Loss/Val", play_loss, log_iter)
+    LOGGER.add_scalar("Disc Loss/Val", disc_loss, log_iter)
     LOGGER.add_scalar("Category Accuracy/Val", acc_cat, log_iter)
-    LOGGER.add_scalar("Hint Color Accuracy/Val", acc_hint_color, log_iter)
-    LOGGER.add_scalar("Hint Number Accuracy/Val", acc_hint_number, log_iter)
+    LOGGER.add_scalar("Hint Accuracy/Val", acc_hint, log_iter)
     LOGGER.add_scalar("Play Accuracy/Val", acc_play, log_iter)
     LOGGER.add_scalar("Discard Accuracy/Val", acc_discard, log_iter)
     model.train()
 
 
 def train():
-    size = 0
+    size = 465
     for e in range(EPOCH):
-        val()
+        val(e * size)
         for i, (states, action_cats, action_hints, action_cards, lengths) in enumerate(
             tqdm(trainset, desc="epoch: {}".format(e))
         ):
@@ -321,38 +307,30 @@ def train():
                 action_hints.to(DEVICE),
                 action_cards.to(DEVICE),
             )
-            mask_hint_color = action_cats.data == 0
-            mask_hint_number = action_cats.data == 1
-            mask_play = action_cats.data == 2
-            mask_discard = action_cats.data == 3
-            (pred_cat, pred_hint_color, pred_hint_number, pred_play, pred_discard) = model(states, lengths)
-            masked_label_hint_color = torch.masked_select(action_hints.data, mask_hint_color)
-            masked_label_hint_number = torch.masked_select(action_hints.data, mask_hint_number)
+            mask_hint = action_cats.data == 0
+            mask_play = action_cats.data == 1
+            mask_discard = action_cats.data == 2
+            (pred_cat, pred_hint, pred_play, pred_discard) = model(states, lengths)
+            masked_label_hint = torch.masked_select(action_hints.data, mask_hint)
             masked_label_play = torch.masked_select(action_cards.data, mask_play)
             masked_label_discard = torch.masked_select(action_cards.data, mask_discard)
-            masked_pred_hint_color = pred_hint_color.data[mask_hint_color, :]
-            masked_pred_hint_number = pred_hint_number.data[mask_hint_number, :]
+            masked_pred_hint = pred_hint.data[mask_hint, :]
             masked_pred_play = pred_play.data[mask_play, :]
             masked_pred_discard = pred_discard.data[mask_discard, :]
             loss = 0
-            loss += loss_fn(pred_cat.data, action_cats.data)
-            loss += loss_fn(masked_pred_hint_color, masked_label_hint_color)
-            loss += loss_fn(masked_pred_hint_number, masked_label_hint_number)
-            loss += loss_fn(masked_pred_play, masked_label_play)
-            loss += loss_fn(masked_pred_discard, masked_label_discard)
+            cat_loss = loss_fn(pred_cat.data, action_cats.data)
+            hint_loss = loss_fn(masked_pred_hint, masked_label_hint)
+            play_loss = loss_fn(masked_pred_play, masked_label_play)
+            disc_loss = loss_fn(masked_pred_discard, masked_label_discard)
+            loss += cat_loss.item() + hint_loss.item() + play_loss.item() + disc_loss.item()
 
             acc_cat = (
                 (pred_cat.data.argmax(1) == action_cats.data).type(torch.float).mean()
             )
-            acc_hint_color = (
-                (masked_pred_hint_color.data.argmax(1) == masked_label_hint_color.data)
+            acc_hint = (
+                (masked_pred_hint.data.argmax(1) == masked_label_hint.data)
                 .type(torch.float)
                 .mean()
-            )
-            acc_hint_number = (
-                (masked_pred_hint_number.data.argmax(1) == masked_label_hint_number.data)
-                    .type(torch.float)
-                    .mean()
             )
             acc_play = (
                 (masked_pred_play.data.argmax(1) == masked_label_play.data)
@@ -364,17 +342,63 @@ def train():
                 .type(torch.float)
                 .mean()
             )
-            LOGGER.add_scalar("Loss/Train", loss.item(), e * size + i)
+            log_iter = e * size + i
+            LOGGER.add_scalar("Loss/Train", loss, e * size + i)
+            LOGGER.add_scalar("Cat Loss/Val", cat_loss.item(), log_iter)
+            LOGGER.add_scalar("Hint Loss/Val", hint_loss.item(), log_iter)
+            LOGGER.add_scalar("Play Loss/Val", play_loss.item(), log_iter)
+            LOGGER.add_scalar("Disc Loss/Val", disc_loss.item(), log_iter)
             LOGGER.add_scalar("Category Accuracy/Train", acc_cat.item(), e * size + i)
-            LOGGER.add_scalar("Hint Color Accuracy/Train", acc_hint_color.item(), e * size + i)
-            LOGGER.add_scalar("Hint Number Accuracy/Train", acc_hint_number.item(), e * size + i)
+            LOGGER.add_scalar("Hint Accuracy/Train", acc_hint.item(), e * size + i)
             LOGGER.add_scalar("Play Accuracy/Train", acc_play.item(), e * size + i)
             LOGGER.add_scalar(
                 "Discard Accuracy/Train", acc_discard.item(), e * size + i
             )
-            loss.backward()
+            cat_loss.backward()
+            hint_loss.backward()
+            play_loss.backward()
+            disc_loss.backward()
             optimizer.step()
         torch.save(model.state_dict(), MODEL_PATH)
 
 
-train()
+def eval(log_iter=0):
+    model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE))
+    model.eval()
+    cats_encode = [0] * 9
+    categories = [[0, 0, 0]] * 3
+    corrects = [0] * 20
+    totals = [0] * 20
+    with torch.no_grad():
+        for i, (states, action_cats, action_hints, action_cards, lengths) in enumerate(tqdm(valset)):
+            for label in range(20):
+                states, action_cats, action_hints, action_cards = (
+                    states.to(DEVICE),
+                    action_cats.to(DEVICE),
+                    action_hints.to(DEVICE),
+                    action_cards.to(DEVICE),
+                )
+                # pred = model(states, lengths)
+                mask_hint = action_cats.data == 0
+                mask_play = action_cats.data == 1
+                mask_discard = action_cats.data == 2
+                (pred_cat, pred_hint, pred_play, pred_discard) = model(states, lengths)
+                cats = (3 * action_cats.data.type(torch.long) + pred_cat.data.argmax(1).type(torch.long)).type(torch.int)
+                for j in range(9):
+                    cats_encode[j] = cats.count_nonzero(cats)
+                    cats = cats - 1
+
+    total_sum_cats = sum(cats_encode) / 8
+    for i in range(9):
+        cats_encode[i] = total_sum_cats - cats_encode[i]
+    print(cats_encode)
+    print("Accuracy:")
+    print("Hint Color: {:.4f}".format(sum(corrects[:5]) / sum(totals[:5])))
+    print("Hint Number: {:.4f}".format(sum(corrects[5:10]) / sum(totals[5:10])))
+    print("Hint Overall: {:.4f}".format(sum(corrects[:10]) / sum(totals[:10])))
+    print("Play: {:.4f}".format(sum(corrects[10:15]) / sum(totals[10:15])))
+    print("Discard: {:.4f}".format(sum(corrects[15:20]) / sum(totals[15:20])))
+
+
+if __name__ == "__main__":
+    Fire()
