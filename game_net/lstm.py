@@ -6,6 +6,7 @@ from tqdm import tqdm
 import os
 from lstm_net import LSTMNet
 
+torch.manual_seed(0)
 torch.multiprocessing.set_sharing_strategy("file_system")
 print(sys.argv)
 
@@ -22,7 +23,7 @@ DATA_VAL = DATA_ALL.replace("_all", "_val")
 MODEL_PATH = "../log/model_lstm_jc/model_lstm_{}-lr0.001.pth".format(AGENT)
 WRITER_PATH = "runs/{}".format(os.path.basename(MODEL_PATH))
 
-BATCH_SIZE = 1024
+BATCH_SIZE = 512
 EPOCH = 80
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -58,7 +59,7 @@ class PickleDataset(torch.utils.data.Dataset):
     def set_weights(self):
         count = {
             i: sum(x.to(torch.int32).tolist().count(i) for x in self.actions)
-            for i in range(23)
+            for i in range(20)
         }
         nonzero = len([v for v in count.values() if v != 0])
         total = sum(nonzero / x for x in count.values() if x != 0)
@@ -106,11 +107,11 @@ def val(log_iter=0, include_cat=False):
     loss = round(sum(losses) / len(losses), 5)
     accuracy = round(correct / total, 5)
     if include_cat:
-        hint, play, discard, accuracy = eval_model("", cat3=True, load_model=False)
+        hint, play, discard, cat_accuracy = eval_model("", cat3=True, load_model=False)
         LOGGER.add_scalar("Cat/Hint", hint, log_iter)
         LOGGER.add_scalar("Cat/Play", play, log_iter)
         LOGGER.add_scalar("Cat/Discard", discard, log_iter)
-        LOGGER.add_scalar("Cat/Accuracy", accuracy, log_iter)
+        LOGGER.add_scalar("Cat/Accuracy", cat_accuracy, log_iter)
     LOGGER.add_scalar("Loss/Val", loss, log_iter)
     LOGGER.add_scalar("Accuracy/Val", accuracy, log_iter)
     print("  val loss: ", loss, " accuracy: ", accuracy)
@@ -161,18 +162,19 @@ def eval_model(save_matrix="", cat3=False, load_model=True):
                 masked_label = torch.masked_select(actions.data, mask)
                 if int(masked_label.shape[0]) > 0:
                     if cat3:
+                        predicted = masked_pred.argmax(1).cpu()
                         if label < 10:
                             corrects[label] += (
-                                (masked_pred.argmax(1).cpu() < 10)
+                                np.logical_or(predicted < 10, predicted == 20)
                                 .type(torch.float)
                                 .sum()
                                 .item()
                             )
                         elif label < 15:
                             corrects[label] += (
-                                np.logical_and(
-                                    masked_pred.argmax(1).cpu() >= 10,
-                                    masked_pred.argmax(1).cpu() < 15,
+                                np.logical_or(
+                                    np.logical_and(predicted >= 10, predicted < 15),
+                                    predicted == 21,
                                 )
                                 .type(torch.float)
                                 .sum()
@@ -180,7 +182,10 @@ def eval_model(save_matrix="", cat3=False, load_model=True):
                             )
                         else:
                             corrects[label] += (
-                                (masked_pred.argmax(1).cpu() >= 15)
+                                np.logical_or(
+                                    np.logical_and(predicted >= 15, predicted < 20),
+                                    predicted == 22,
+                                )
                                 .type(torch.float)
                                 .sum()
                                 .item()

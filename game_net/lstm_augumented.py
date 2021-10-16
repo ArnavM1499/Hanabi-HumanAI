@@ -6,6 +6,7 @@ from tqdm import tqdm
 import os
 from lstm_net import LSTMNetAugumented
 
+torch.manual_seed(0)
 torch.multiprocessing.set_sharing_strategy("file_system")
 print(sys.argv)
 
@@ -22,7 +23,7 @@ DATA_VAL = DATA_ALL.replace("_all", "_val")
 MODEL_PATH = "../log/model_lstm_jc/model_lstm_{}-lr0.001_augument.pth".format(AGENT)
 WRITER_PATH = "runs/{}".format(os.path.basename(MODEL_PATH))
 
-BATCH_SIZE = 1024
+BATCH_SIZE = 512
 EPOCH = 40
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -125,11 +126,11 @@ def val(log_iter=0, include_cat=False):
     loss = round(sum(losses) / len(losses), 5)
     accuracy = round(correct / total, 5)
     if include_cat:
-        hint, play, discard, accuracy = eval_model("", cat3=True, load_model=False)
+        hint, play, discard, cat_accuracy = eval_model("", cat3=True, load_model=False)
         LOGGER.add_scalar("Cat/Hint", hint, log_iter)
         LOGGER.add_scalar("Cat/Play", play, log_iter)
         LOGGER.add_scalar("Cat/Discard", discard, log_iter)
-        LOGGER.add_scalar("Cat/Accuracy", accuracy, log_iter)
+        LOGGER.add_scalar("Cat/Accuracy", cat_accuracy, log_iter)
     LOGGER.add_scalar("Loss/Val", loss, log_iter)
     LOGGER.add_scalar("Accuracy/Val", accuracy, log_iter)
     print("  val loss: ", loss, " accuracy: ", accuracy)
