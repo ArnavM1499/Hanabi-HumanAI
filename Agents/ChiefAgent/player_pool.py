@@ -8,8 +8,11 @@ class PlayerPool:
     def __init__(self, name, pnr, json_file):
         with open(json_file, "r") as f:
             json_vals = json.load(f)
+
+        filtered_vals = {key: value for key, value in json_vals.items() if key[1] != '9'}
+
         self.player_dict = {
-            k: self.from_dict(name, pnr, v) for k, v in json_vals.items()
+            k: self.from_dict(name, pnr, v) for k, v in filtered_vals.items()
         }
         self.size = len(self.player_dict)
 

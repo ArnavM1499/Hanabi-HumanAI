@@ -10,7 +10,7 @@ from copy import deepcopy
 from scipy.stats import entropy
 
 STARTING_COLUMNS_MOVETRACKING = {"move_idx":[], "move": [], "observable game state":[], "card ids":[], "hand knowledge":[], "agent distribution":[], "conditional probabilities":[], "MLE probabilities":[], "generated samples":[], "agent state copies":[]}
-NUM_SAMPLES = 50
+NUM_SAMPLES = 20
 BOLTZMANN_CONSTANT = 4
 
 CardChoices = []
@@ -121,7 +121,7 @@ class ChiefPlayer(Player):
 				for a in modified_game_state.valid_actions:
 					a.pnr = self.pnr
 
-				modified_game_state.hands = [self.new_sample_original(player_model.get_knowledge()) if a == [] else [] for a in game_state.hands]
+				modified_game_state.hands = [self.new_sample_original(player_model.get_knowledge()) if a == [] else [] for a in modified_game_state.hands]
 				partners_hints = deepcopy(self.hints_to_partner)
 				modified_player_model = BasePlayerModel(self.partner_nr, game_state.all_knowledge[self.partner_nr], self.hints_to_partner, player_model.get_actions())
 				agent.inform(action, self.pnr, modified_game_state, modified_player_model)
@@ -188,7 +188,6 @@ class ChiefPlayer(Player):
 		## storing game state before move for get_action
 		modified_game_state = deepcopy(self.game_state_before_move)
 		modified_game_state.hands = [None if a == [] else [] for a in self.game_state_before_move.hands]
-		modified_game_state.hands[self.pnr] = None
 		modified_game_state.current_player = self.partner_nr
 		modified_game_state.hinted_indices = []
 		modified_game_state.card_changed = None
@@ -217,7 +216,8 @@ class ChiefPlayer(Player):
 
 		## Informing player pool of "their own" actions
 		modified_game_state2 = deepcopy(game_state) # https://stackoverflow.com/questions/48338847/how-to-copy-a-class-instance-in-python
-		
+		modified_game_state2.hands[self.pnr] = []
+
 		for a in modified_game_state2.valid_actions:
 			a.pnr = self.pnr
 
@@ -226,7 +226,7 @@ class ChiefPlayer(Player):
 
 		for agent in self.player_pool.get_agents():
 			game_state_input = deepcopy(modified_game_state2)
-			game_state_input.hands = [self.new_sample_original(player_model.get_knowledge()) if a == [] else [] for a in game_state.hands]
+			game_state_input.hands = [self.new_sample_original(player_model.get_knowledge()) if a == [] else [] for a in modified_game_state2.hands]
 			prev_game = deepcopy(modified_game_state)
 			prev_game.hands = [self.new_sample_original(player_model.get_knowledge()) if a == None else [] for a in modified_game_state.hands]
 			d = agent.get_action(prev_game, modified_player_model)
@@ -241,6 +241,13 @@ class ChiefPlayer(Player):
 		# generate average conditional
 		sample_conditionals = [sample.conditional_probs for sample in self.move_tracking_table.loc[self.move_idx, "generated samples"]]
 		new_conditional = np.mean(np.array(sample_conditionals), axis=0)
+
+		#### SCALING ####
+		pmax = np.max(new_conditional)
+
+		if pmax < 1/(2 * len(new_conditional)):
+			new_conditional = np.ones(len(new_conditional))
+		
 		self.move_tracking_table.at[self.move_idx, "conditional probabilities"] = new_conditional
 		print("NEW CONDITIONAL:", np.vectorize(lambda a: round(a,2))(new_conditional))
 		
@@ -267,7 +274,6 @@ class ChiefPlayer(Player):
 		##
 		modified_game_state = deepcopy(self.game_state_before_move)
 		modified_game_state.hands = [None if a == [] else [] for a in self.game_state_before_move.hands]
-		modified_game_state.hands[self.pnr] = None
 		modified_game_state.current_player = self.partner_nr
 		modified_game_state.hinted_indices = []
 		modified_game_state.card_changed = None
@@ -332,7 +338,7 @@ class ChiefPlayer(Player):
 				actionvalues = np.zeros(20)
 
 				for action in bc_output:
-					actionvalues[self.action_to_key(action)] = bc_output[action].numpy()
+					actionvalues[self.action_to_key(action)] = float(bc_output[action])
 				
 				probs += self.makeprob(actionvalues)*agent_weights[i]
 
@@ -451,6 +457,7 @@ class ChiefPlayer(Player):
 
 			for i in range(len(game_state.hands)):
 				if game_state.hands[i] is None:
+					# print("hello")
 					game_state.hands[i] = self.gen_hand(samp_values, idx)
 
 			game_states.append(game_state)
@@ -463,8 +470,8 @@ class ChiefPlayer(Player):
 			bc_output = BehaviorClone.sequential_predict(agent_id, game_states, base_player_models)
 			actionvalues = np.zeros(20)
 
-			for action in bc_output:				
-				actionvalues[self.action_to_key(action)] = bc_output[action].numpy()
+			for action in bc_output:
+				actionvalues[self.action_to_key(action)] = bc_output[action]
 
 			probs.append(self.makeprob(actionvalues)[action_idx])
 
@@ -520,10 +527,14 @@ class ChiefPlayer(Player):
 
 			# compute new average conditional probabilities
 			sample_conditionals = [sample.conditional_probs for sample in self.move_tracking_table.loc[table_idx]["generated samples"]]
-			
-			# print(np.vectorize(lambda a: round(a,2))(sample_conditionals))
-
 			new_conditional = np.mean(np.array(sample_conditionals), axis=0)
+
+			#### SCALING ####
+			pmax = np.max(new_conditional)
+
+			if pmax < 1/(2 * len(new_conditional)):
+				new_conditional = np.ones(len(new_conditional))
+
 			self.move_tracking_table.at[table_idx,"conditional probabilities"] = new_conditional
 			print("NEW CONDITIONAL for MOVE", table_idx, ":", np.vectorize(lambda a: round(a,2))(new_conditional))
 
