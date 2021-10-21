@@ -187,7 +187,7 @@ def test_player(
     return iters, avg, smin, smax, smid, smod, hints, hits, turns
 
 
-def sequential_test(player, player2=None, iters=2000, seed=0, save_pkl_dir=None, tid=0):
+def sequential_test(player, player2=None, iters=20, seed=0, save_pkl_dir=None, tid=0):
     random.seed(seed)
     iters = int(iters)
     if isinstance(save_pkl_dir, str):

@@ -92,7 +92,9 @@ class ValuePlayer(Player):
         self.partner_knowledge_index = 0.0
 
         # whether we return a dictionary of all actions/values, or just the best action
-        self.get_action_values = True
+        self.get_action_values = False
+        self.get_all_knowledge_weights = True
+        self.all_knowledge_weights = {}
 
         # parameters and default values below
         self.hint_weight = 1000.0
@@ -269,6 +271,19 @@ class ValuePlayer(Player):
                         copy_knowledge[i][j][action.num - 1] = 0
 
         new_weighted_knowledge = weight_knowledge(copy_knowledge, new_partner_weights)
+        new_weighted_knowledge2 = copy.deepcopy(new_weighted_knowledge)
+        max_knowledge = 0
+        for kn in new_weighted_knowledge2:
+            for val in kn:
+                for single in val:
+                    max_knowledge = max(max_knowledge, single)
+
+        for kn in new_weighted_knowledge2:
+            for val in kn:
+                for i in range(len(val)):
+                    val[i] /= max_knowledge
+        if self.get_all_knowledge_weights:
+            self.all_knowledge_weights[action] = new_weighted_knowledge2
         # print(action)
         return self.partner_knowledge_index - self._eval_partner_knowledge(new_weighted_knowledge)
         #if target == -1:
@@ -292,6 +307,8 @@ class ValuePlayer(Player):
         self.turn += 1
         # because of valid_action's implementation we need to update this here as well to get the correct legal moves
         self._update_info(game_state, player_model)
+        if self.get_all_knowledge_weights:
+            self.all_knowledge_weights = {}
 
         # print(self.name)
         # for hint in self.model.get_hints():
@@ -328,6 +345,8 @@ class ValuePlayer(Player):
             for key in value_dict.keys():
                 value_dict[key] = (value_dict[key] - min_value) / (max_value - min_value + 0.0000001)
             return best_action, value_dict
+        if self.get_all_knowledge_weights:
+            return best_action, self.all_knowledge_weights
         return best_action
 
     def inform(self, action, player, new_state, new_model):
