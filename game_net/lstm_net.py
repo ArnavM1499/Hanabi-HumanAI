@@ -9,6 +9,7 @@ default_config = {
     "lstm_num_layers": 2,
     "output_fc_units": [],
     "drop_out": True,
+    "layer_norm": False,
 }
 
 
@@ -19,6 +20,7 @@ class LSTMNet(torch.nn.Module):
         lstm_hidden_units,
         lstm_num_layers,
         output_fc_units,
+        layer_norm=False,
         drop_out=False,
         drop_out_rate=0.5,
     ):
@@ -29,6 +31,8 @@ class LSTMNet(torch.nn.Module):
         ):
             self.input_fc.append(torch.nn.Linear(in_dim, out_dim))
             self.input_fc.append(torch.nn.ReLU())
+            if layer_norm:
+                self.input_fc.append(torch.nn.LayerNorm((out_dim,)))
             if drop_out:
                 self.input_fc.append(torch.nn.Dropout(drop_out_rate))
         self.input_fc = torch.nn.Sequential(*self.input_fc)
@@ -43,6 +47,8 @@ class LSTMNet(torch.nn.Module):
         ):
             self.output_fc.append(torch.nn.Linear(in_dim, out_dim))
             self.output_fc.append(torch.nn.ReLU())
+            if layer_norm:
+                self.output_fc.append(torch.nn.LayerNorm((out_dim,)))
             if drop_out:
                 self.output_fc.append(torch.nn.Dropout(drop_out_rate))
         if output_fc_units == []:

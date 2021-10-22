@@ -20,7 +20,7 @@ DATA_ALL = "../log/features0825/lstm_extended/{}_all.npy".format(AGENT)
 DATA_ALL = "../log/jcdata/np1008/{}_all.npy".format(AGENT)
 DATA_TRAIN = DATA_ALL.replace("_all", "_train")
 DATA_VAL = DATA_ALL.replace("_all", "_val")
-MODEL_PATH = "../log/model_lstm_jc/model_lstm_{}-lr0.001.pth".format(AGENT)
+MODEL_PATH = "../log/model_lstm_jc/model_lstm_{}-lr0.001_LN.pth".format(AGENT)
 WRITER_PATH = "runs/{}".format(os.path.basename(MODEL_PATH))
 
 BATCH_SIZE = 512
@@ -76,7 +76,9 @@ def pack_games(games):
 
 
 num_units = 512
-model = LSTMNet([num_units], num_units, 2, [], drop_out=True).to(DEVICE)
+model = LSTMNet([num_units], num_units, 2, [], drop_out=True, layer_norm=True).to(
+    DEVICE
+)
 loss_fn = torch.nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
