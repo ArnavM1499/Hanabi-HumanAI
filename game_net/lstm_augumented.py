@@ -14,7 +14,7 @@ print(sys.argv)
 AGENT = sys.argv[1]
 
 GAME_STATE_LENGTH = 583 + 20  # base + extended (discardable / playable)
-GAME_STATE_LENGTH = 728
+GAME_STATE_LENGTH = 583 + 20 + 10 * 125
 
 DATA_ALL = "../log/features0825/lstm_extended/{}_all.npy".format(AGENT)
 DATA_ALL = "../log/jcdata/np1008/{}_all.npy".format(AGENT)

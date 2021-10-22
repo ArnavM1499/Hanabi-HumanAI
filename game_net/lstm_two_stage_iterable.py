@@ -1,3 +1,4 @@
+from fire import Fire
 import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
@@ -7,31 +8,35 @@ torch.multiprocessing.set_sharing_strategy("file_system")
 
 GAME_STATE_LENGTH = 728
 
-DATA_ALL = "../exp00001-50k/00001_all.npy"
+DATA_ALL = "../exp00001-200k/00001_all.npy"
 DATA_TRAIN = DATA_ALL.replace("_all", "_train")
 DATA_VAL = DATA_ALL.replace("_all", "_val")
 MODEL_PATH = "../model/101521-singlestage-traininfo.pth"
 
 BATCH_SIZE = 600
-EPOCH = 20
+EPOCH = 100
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 LOGGER = SummaryWriter()
 
 
-class PickleDataset(torch.utils.data.Dataset):
-    def __init__(self, dataset_file):
-        self.states = []
-        self.action_cats = []
-        self.action_hints = []
-        self.action_cards = []
-        with open(dataset_file, "rb") as fin:
+class PickleIterable(torch.utils.data.IterableDataset):
+    def __init__(self, dataset_file, load_num=200):
+        super(PickleIterable).__init__()
+        self.load_num = load_num
+        self.dataset_file = dataset_file
+        self.fin = open(dataset_file, "rb")
+
+    def __iter__(self):
+        try:
             while True:
-                try:
-                    self.states.append(
-                        torch.from_numpy(np.load(fin) * 0.333).type(torch.float32)
-                    )
-                    action_label = torch.from_numpy(np.load(fin)).type(torch.long)
+                states = []
+                action_cats = []
+                action_hints = []
+                action_cards = []
+                for i in range(self.load_num):
+                    states.append(torch.from_numpy(np.load(self.fin) * 0.333).type(torch.float32))
+                    action_label = torch.from_numpy(np.load(self.fin)).type(torch.long)
                     buffer_cat = []
                     for idx in action_label:
                         idx = int(idx)
@@ -41,30 +46,14 @@ class PickleDataset(torch.utils.data.Dataset):
                             buffer_cat.append(1)
                         else:  # discard
                             buffer_cat.append(2)
-                    self.action_cats.append(torch.tensor(buffer_cat))
-                    self.action_hints.append(action_label)
-                    self.action_cards.append(torch.fmod(action_label, 5))
-                except ValueError:
-                    break
-        assert len(self.states) == len(self.action_cats)
-        assert len(self.states) == len(self.action_hints)
-        assert len(self.states) == len(self.action_cards)
-        print("finished loading dataset: " + dataset_file)
-
-    def __len__(self):
-        return len(self.states)
-
-    def __getitem__(self, idx):
-        return (
-            self.states[idx],
-            self.action_cats[idx],
-            self.action_hints[idx],
-            self.action_cards[idx],
-            torch.tensor(self.action_cats[idx].size()[0]),
-        )
-
-    def _convert_action(self, action):
-        return
+                    action_cats.append(torch.tensor(buffer_cat))
+                    action_hints.append(action_label)
+                    action_cards.append(torch.fmod(action_label, 5))
+                for i in range(self.load_num):
+                    yield states[i], action_cats[i], action_hints[i], action_cards[i], torch.tensor(action_cats[i].size()[0])
+        except ValueError:
+            self.fin.close()
+            self.fin = open(self.dataset_file, "rb")
 
 
 def pack_games(games):
@@ -187,19 +176,17 @@ class FullNet(torch.nn.Module):
 
 model = FullNet([512], 512, 2, [], drop_out=True).to(DEVICE)
 loss_fn = torch.nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.0003)
 
 
 trainset = torch.utils.data.DataLoader(
-    PickleDataset(DATA_TRAIN),
+    PickleIterable(DATA_TRAIN),
     batch_size=BATCH_SIZE,
-    shuffle=True,
     collate_fn=pack_games,
 )
 valset = torch.utils.data.DataLoader(
-    PickleDataset(DATA_VAL),
+    PickleIterable(DATA_VAL),
     batch_size=BATCH_SIZE,
-    shuffle=False,
     collate_fn=pack_games,
 )
 
@@ -308,7 +295,7 @@ def val(log_iter=0):
 
 
 def train():
-    size = len(trainset)
+    size = 465
     for e in range(EPOCH):
         val(e * size)
         for i, (states, action_cats, action_hints, action_cards, lengths) in enumerate(
@@ -375,4 +362,43 @@ def train():
         torch.save(model.state_dict(), MODEL_PATH)
 
 
-train()
+def eval(log_iter=0):
+    model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE))
+    model.eval()
+    cats_encode = [0] * 9
+    categories = [[0, 0, 0]] * 3
+    corrects = [0] * 20
+    totals = [0] * 20
+    with torch.no_grad():
+        for i, (states, action_cats, action_hints, action_cards, lengths) in enumerate(tqdm(valset)):
+            for label in range(20):
+                states, action_cats, action_hints, action_cards = (
+                    states.to(DEVICE),
+                    action_cats.to(DEVICE),
+                    action_hints.to(DEVICE),
+                    action_cards.to(DEVICE),
+                )
+                # pred = model(states, lengths)
+                mask_hint = action_cats.data == 0
+                mask_play = action_cats.data == 1
+                mask_discard = action_cats.data == 2
+                (pred_cat, pred_hint, pred_play, pred_discard) = model(states, lengths)
+                cats = (3 * action_cats.data.type(torch.long) + pred_cat.data.argmax(1).type(torch.long)).type(torch.int)
+                for j in range(9):
+                    cats_encode[j] = cats.count_nonzero(cats)
+                    cats = cats - 1
+
+    total_sum_cats = sum(cats_encode) / 8
+    for i in range(9):
+        cats_encode[i] = total_sum_cats - cats_encode[i]
+    print(cats_encode)
+    print("Accuracy:")
+    print("Hint Color: {:.4f}".format(sum(corrects[:5]) / sum(totals[:5])))
+    print("Hint Number: {:.4f}".format(sum(corrects[5:10]) / sum(totals[5:10])))
+    print("Hint Overall: {:.4f}".format(sum(corrects[:10]) / sum(totals[:10])))
+    print("Play: {:.4f}".format(sum(corrects[10:15]) / sum(totals[10:15])))
+    print("Discard: {:.4f}".format(sum(corrects[15:20]) / sum(totals[15:20])))
+
+
+if __name__ == "__main__":
+    Fire()

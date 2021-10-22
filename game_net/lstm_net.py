@@ -1,7 +1,6 @@
 import torch
 
-GAME_STATE_LENGTH = 583 + 20  # base + extended (discardable / playable)
-GAME_STATE_LENGTH = 728
+GAME_STATE_LENGTH = 583 + 20 + 10 * 125
 
 default_config = {
     "input_fc_units": [512],

@@ -13,7 +13,6 @@ print(sys.argv)
 
 AGENT = sys.argv[1]
 
-GAME_STATE_LENGTH = 583 + 20  # base + extended (discardable / playable)
 GAME_STATE_LENGTH = 728
 
 DATA_ALL = "../log/features0825/lstm_extended/{}_all.npy".format(AGENT)
@@ -34,13 +33,19 @@ class PickleDataset(torch.utils.data.Dataset):
     def __init__(self, dataset_file):
         self.states = []
         self.actions = []
+        # self.action_dict = []
         with open(dataset_file, "rb") as fin:
             while True:
                 try:
                     self.states.append(
                         torch.from_numpy(np.load(fin) * 0.333).type(torch.float32)
                     )
-                    self.actions.append(torch.from_numpy(np.load(fin)))
+                    # for vals in self.states[-1]:
+                    #     for val2 in vals:
+                    #         assert 0 <= val2 <= 1
+                    self.actions.append(torch.from_numpy(np.load(fin)).type(torch.long))
+                    assert len(self.actions[-1]) == len(self.states[-1])
+                    # self.action_dict.append(torch.from_numpy(np.load(fin)).type(torch.float32))
                 except ValueError:
                     break
         assert len(self.states) == len(self.actions)
@@ -52,7 +57,7 @@ class PickleDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         return (
             self.states[idx],
-            self.actions[idx].type(torch.long),
+            self.actions[idx],
             torch.tensor(self.actions[idx].size()[0]),
         )
 
@@ -84,10 +89,7 @@ optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
 
 valset = torch.utils.data.DataLoader(
-    PickleDataset(DATA_VAL),
-    batch_size=BATCH_SIZE,
-    shuffle=False,
-    collate_fn=pack_games,
+    PickleDataset(DATA_VAL), batch_size=BATCH_SIZE, shuffle=True, collate_fn=pack_games
 )
 
 
@@ -97,15 +99,18 @@ def val(log_iter=0, include_cat=False):
     total = 0
     model.eval()
     with torch.no_grad():
-        for i, (states, actions, lengths) in enumerate(tqdm(valset)):
-            states, actions = states.to(DEVICE), actions.to(DEVICE)
+        for i, (states, action_values, lengths) in enumerate(tqdm(valset)):
+            states, action_values = states.to(DEVICE), action_values.to(DEVICE)
             pred = model(states, lengths)
-            loss = loss_fn(pred.data, actions.data)
+            loss = loss_fn(pred.data, action_values.data)
             losses.append(loss.item())
             correct += (
-                (pred.data.argmax(1) == actions.data).type(torch.float).sum().item()
+                (pred.data.argmax(1) == action_values.data)
+                .type(torch.float)
+                .sum()
+                .item()
             )
-            total += actions.data.shape[0]
+            total += action_values.data.shape[0]
     loss = round(sum(losses) / len(losses), 5)
     accuracy = round(correct / total, 5)
     if include_cat:
@@ -123,24 +128,19 @@ def val(log_iter=0, include_cat=False):
 def train():
     traindata = PickleDataset(DATA_TRAIN)
     trainset = torch.utils.data.DataLoader(
-        traindata,
-        batch_size=BATCH_SIZE,
-        shuffle=True,
-        collate_fn=pack_games,
+        traindata, batch_size=BATCH_SIZE, shuffle=True, collate_fn=pack_games
     )
     loss_fn = torch.nn.CrossEntropyLoss(weight=traindata.weights.to(DEVICE))
     size = len(trainset)
     for e in range(EPOCH):
         val(e * size, include_cat=True)
-        for i, (states, actions, lengths) in enumerate(
+        for i, (states, action_values, lengths) in enumerate(
             tqdm(trainset, desc="epoch: {}".format(e))
         ):
-            states, actions = states.to(DEVICE), actions.to(DEVICE)
+            states, action_values = states.to(DEVICE), action_values.to(DEVICE)
             pred = model(states, lengths)
-            loss = loss_fn(pred.data, actions.data)
-            accuracy = (pred.data.argmax(1) == actions.data).type(torch.float).mean()
+            loss = loss_fn(pred.data, action_values.data)
             LOGGER.add_scalar("Loss/Train", loss.item(), e * size + i)
-            LOGGER.add_scalar("Accuracy/Train", accuracy.item(), e * size + i)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
