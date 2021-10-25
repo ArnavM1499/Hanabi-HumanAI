@@ -4,7 +4,7 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 import os
-from lstm_net import LSTMNetAugumented
+from lstm_net import LSTMNet
 
 torch.manual_seed(0)
 torch.multiprocessing.set_sharing_strategy("file_system")
@@ -23,7 +23,7 @@ DATA_ALL = "../00005-allhintknowledges-100k/00005_all.npy"
 DATA_TRAIN = DATA_ALL.replace("_all", "_train")
 DATA_VAL = DATA_ALL.replace("_all", "_val")
 MODEL_PATH = "../log/model_lstm_jc/model_lstm_{}-lr0.001_augument.pth".format(AGENT)
-MODEL_PATH = "../model/102121-singlestage-trainhints.pth"
+MODEL_PATH = "../model/102221-singlestage-noaugment-trainhints.pth"
 WRITER_PATH = "runs/{}".format(os.path.basename(MODEL_PATH))
 
 BATCH_SIZE = 512
@@ -38,8 +38,7 @@ class PickleDataset(torch.utils.data.Dataset):
         self.states = []
         self.actions = []
         with open(dataset_file, "rb") as fin:
-            it = 0
-            while it < 50000:
+            while True:
                 try:
                     self.states.append(
                         torch.from_numpy(np.load(fin) * 0.333).type(torch.float32)
@@ -69,12 +68,12 @@ class PickleDataset(torch.utils.data.Dataset):
     def set_weights(self):
         count = {
             i: sum(x.to(torch.int32).tolist().count(i) for x in self.actions)
-            for i in range(23)
+            for i in range(20)
         }
         nonzero = len([v for v in count.values() if v != 0])
         total = sum(nonzero / x for x in count.values() if x != 0)
         self.weights = torch.tensor(
-            [1 if count[i] == 0 else total / count[i] for i in range(23)]
+            [1 if count[i] == 0 else total / count[i] for i in range(20)]
         )
 
     def update_labels(self, model):
@@ -99,7 +98,7 @@ def pack_games(games):
 
 
 num_units = 512
-model = LSTMNetAugumented([num_units], num_units, 2, [], drop_out=True).to(DEVICE)
+model = LSTMNet([num_units], num_units, 2, [], drop_out=True).to(DEVICE)
 loss_fn = torch.nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
@@ -151,7 +150,7 @@ def train():
     )
     loss_fn = torch.nn.CrossEntropyLoss(weight=traindata.weights.to(DEVICE))
     size = len(trainset)
-    for e in range(EPOCH):
+    for e in range(2 * EPOCH):
         val(e * size, include_cat=True)
         for i, (states, actions, lengths) in enumerate(
             tqdm(trainset, desc="epoch: {}".format(e))
@@ -166,29 +165,29 @@ def train():
             loss.backward()
             optimizer.step()
         torch.save(model.state_dict(), MODEL_PATH)
-    traindata = PickleDataset(DATA_TRAIN, model)
-    trainset = torch.utils.data.DataLoader(
-        traindata,
-        batch_size=BATCH_SIZE,
-        shuffle=True,
-        collate_fn=pack_games,
-    )
-    loss_fn = torch.nn.CrossEntropyLoss(weight=traindata.weights.to(DEVICE))
-    for e in range(EPOCH, 2 * EPOCH):
-        val(e * size, include_cat=True)
-        for i, (states, actions, lengths) in enumerate(
-            tqdm(trainset, desc="epoch: {}".format(e))
-        ):
-            states, actions = states.to(DEVICE), actions.to(DEVICE)
-            pred = model(states, lengths)
-            loss = loss_fn(pred.data, actions.data)
-            accuracy = (pred.data.argmax(1) == actions.data).type(torch.float).mean()
-            LOGGER.add_scalar("Loss/Train", loss.item(), e * size + i)
-            LOGGER.add_scalar("Accuracy/Train", accuracy.item(), e * size + i)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-        torch.save(model.state_dict(), MODEL_PATH)
+    # traindata = PickleDataset(DATA_TRAIN, model)
+    # trainset = torch.utils.data.DataLoader(
+    #     traindata,
+    #     batch_size=BATCH_SIZE,
+    #     shuffle=True,
+    #     collate_fn=pack_games,
+    # )
+    # loss_fn = torch.nn.CrossEntropyLoss(weight=traindata.weights.to(DEVICE))
+    # for e in range(EPOCH, 2 * EPOCH):
+    #     val(e * size, include_cat=True)
+    #     for i, (states, actions, lengths) in enumerate(
+    #         tqdm(trainset, desc="epoch: {}".format(e))
+    #     ):
+    #         states, actions = states.to(DEVICE), actions.to(DEVICE)
+    #         pred = model(states, lengths)
+    #         loss = loss_fn(pred.data, actions.data)
+    #         accuracy = (pred.data.argmax(1) == actions.data).type(torch.float).mean()
+    #         LOGGER.add_scalar("Loss/Train", loss.item(), e * size + i)
+    #         LOGGER.add_scalar("Accuracy/Train", accuracy.item(), e * size + i)
+    #         optimizer.zero_grad()
+    #         loss.backward()
+    #         optimizer.step()
+    #     torch.save(model.state_dict(), MODEL_PATH)
 
 
 def eval_model(save_matrix="", cat3=False, load_model=True):
