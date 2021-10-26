@@ -93,7 +93,7 @@ class ValuePlayer(Player):
 
         # whether we return a dictionary of all actions/values, or just the best action
         self.get_action_values = False
-        self.get_all_knowledge_weights = True
+        self.get_all_knowledge_weights = False
         self.all_knowledge_weights = {}
 
         # parameters and default values below

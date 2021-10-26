@@ -289,7 +289,11 @@ class Game(object):
     def single_turn(self):
         game_state = self._make_game_state(self.current_player)
         player_model = self._make_player_model(self.current_player)
-        action, partner_knowledge_model = self.players[self.current_player].get_action(game_state, player_model)
+        action = self.players[self.current_player].get_action(game_state, player_model)
+        partner_knowledge_model = {}
+        for possible_action in game_state.get_valid_actions():
+            if possible_action.type in [HINT_COLOR, HINT_NUMBER]:
+                partner_knowledge_model[possible_action] = apply_hint_to_knowledge(possible_action, self.hands, self.knowledge)
 
         # Data collection
         if self.pickle_file:
