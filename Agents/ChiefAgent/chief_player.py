@@ -557,3 +557,101 @@ class ChiefPlayer(Player):
 			print(np.vectorize(lambda a: round(a,3))(new_prior))
 			self.move_tracking_table.at[table_idx,"agent distribution"] = new_prior
 			self.move_tracking_table.at[table_idx,"MLE probabilities"] = (new_conditional + prev_prior2*table_idx)/(table_idx + 1)
+
+	def simulate_move(self, game_state, player_model, action, sampled_vals):
+	    hint_indices = []
+	    hint_lis = []
+
+	    if action.type == DISCARD:
+	        card_discarded = sampled_vals[action.cnr]
+	        game_state.trash.append(card_discarded)
+	        game_state.all_knowledge[game_state.current_player][action.cnr] = initial_knowledge()
+	        game_state.card_changed = card_discarded
+
+	    elif action.type == PLAY:
+	        card_played = sampled_vals[action.cnr]
+	        game_state.card_changed = card_played
+	        game_state.all_knowledge[game_state.current_player][action.cnr] = initial_knowledge()
+
+
+	        if card_playable(card_played, game_state.board):
+	            game_state.played.append(card_played)
+	            game_state.board[card_played.col] = (card_played.col, card_played.num)
+	        else:
+	            game_state.trash.append(card_played)
+	            game_state.hits -= 1
+
+	    elif action.type == HINT_NUMBER:
+	        game_state.num_hints -= 1
+	        hint_lis.append((game_state.current_player,action))
+
+	        slot_index = 0
+
+	        for (col, num), knowledge in zip(
+	                game_state.hands[action.pnr], game_state.all_knowledge[action.pnr]
+	            ):
+	            if num == action.num:
+	                hint_indices.append(slot_index)
+	                for k in game_state.all_knowledge:
+	                    for i in range(len(COUNTS)):
+	                        if i + 1 != num:
+	                            k[i] = 0
+	            else:
+	                for k in knowledge:
+	                    k[action.num - 1] = 0
+
+	            slot_index += 1
+	    else:
+	        game_state.num_hints -= 1
+	        hint_lis.append((game_state.current_player,action))
+
+	        slot_index = 0
+
+	        for (col, num), knowledge in zip(
+	                game_state.hands[action.pnr], game_state.all_knowledge[action.pnr]
+	            ):
+	            if col == action.col:
+	                hint_indices.append(slot_index)
+	                for i, k in enumerate(knowledge):
+	                    if i != col:
+	                        for i in range(len(k)):
+	                            k[i] = 0
+	            else:
+	                for i in range(len(knowledge[action.col])):
+	                    knowledge[action.col][i] = 0
+
+	            slot_index += 1
+
+	        
+	    
+
+	    player_model.actions[player_model.nr].append(action)
+	    player_model.knowledge = game_state.all_knowledge[1 - player_model.nr]
+	    player_model.nr = 1 - player_model.nr
+	    player_model.hints = self.hints_to_partner + hint_lis
+
+
+	    game_state.current_player += 1
+	    game_state.current_player %= len(game_state.hands)
+	    game_state.hinted_indices = hint_indices
+	    game_state.hands[player_model.nr] = []
+	    game_state.hands[1 - player_model.nr] = sampled_vals
+
+	    valid = []
+
+	    for i in range(len(self.hands[self.current_player])):
+	        valid.append(Action(PLAY, cnr=i))
+	        valid.append(Action(DISCARD, cnr=i))
+
+	    if self.hints > 0:
+	        for i, p in enumerate(self.players):
+	            if i != self.current_player:
+	                for col in set(map(lambda colnum: colnum[0], self.hands[i])):
+	                    valid.append(Action(HINT_COLOR, pnr=i, col=col))
+
+	                for num in set(map(lambda colnum: colnum[1], self.hands[i])):
+	                    valid.append(Action(HINT_NUMBER, pnr=i, num=num))
+
+	    game_state.valid_actions = valid
+
+	    return game_state, player_model

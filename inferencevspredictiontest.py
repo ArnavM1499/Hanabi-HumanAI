@@ -14,8 +14,8 @@ file_name = "blank.csv"
 pickle_file_name = "chief_testing"
 pickle_file = open(pickle_file_name, "wb")
 
-id_string = "10001"
-pool_index = 5
+id_string = "10005"
+pool_index = 9
 
 with open("Agents/configs/players.json", "r") as f:
     json_vals = json.load(f)
@@ -84,8 +84,9 @@ Confidences = np.transpose(np.array(DATA["inference confidences"]))
 for i in range(len(Confidences)):
 	plt.plot(Confidences[i], label=list(new_chief.player_pool.get_player_dict().keys())[i])
 
-plt.title("Inference confidence for each agent's clone - Source agent (not-clone) = " + id_string)
+plt.title("Inference confidences - Source agent (not-clone) = " + id_string)
 plt.legend()
+plt.savefig("chiefplots/cloneplots/" + str(id_string) + "-confidence")
 
 plt.figure(2)
 
@@ -130,19 +131,4 @@ plt.title("Prediction accuracies with type coloring")
 
 plt.legend(loc=(.1,.5))
 
-
-plt.show()
-
-
-# idx = 1
-
-# for d in DATA:
-# 	plt.figure(idx)
-# 	if d == "prediction accuracy":
-# 		plt.plot(DATA[d], 'bo')
-# 	else:
-# 		plt.plot(DATA[d])
-# 	idx += 1
-# 	plt.title(d)
-
-# plt.show()
+plt.savefig("chiefplots/cloneplots/" + str(id_string) + "-predictions")
