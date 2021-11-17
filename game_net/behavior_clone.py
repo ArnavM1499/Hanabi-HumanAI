@@ -27,22 +27,40 @@ class BehaviorCloneBase:
         )
         self.models[agent_id] = model
 
-    def predict(self, agent_id, game_state, player_model, return_dict=True):
+    def predict(
+        self,
+        agent_id,
+        game_state,
+        player_model,
+        partner_knowledge_model,
+        return_dict=True,
+    ):
         return self.sequential_predict(
-            agent_id, [game_state], [player_model], return_dict
+            agent_id,
+            [game_state],
+            [player_model],
+            [partner_knowledge_model],
+            return_dict,
         )
 
     def sequential_predict(
-        self, agent_id, game_states, player_models, return_dict=True
+        self,
+        agent_id,
+        game_states,
+        player_models,
+        partner_knowledge_models,
+        return_dict=True,
     ) -> Action:
         if agent_id not in self.models.keys():
             self._load_model(agent_id)
 
         state_list = []
 
-        for game_state, player_model in zip(game_states, player_models):
+        for game_state, player_model, partner_knowledge_model in zip(
+            game_states, player_models, partner_knowledge_models
+        ):
             current_player, encoded_state = self._convert_game_state(
-                game_state, player_model
+                game_state, player_model, partner_knowledge_model
             )
             state_list.append(encoded_state)
 
@@ -69,7 +87,10 @@ class BehaviorCloneBase:
             return max(ret.keys(), key=lambda x: ret[x])
 
     def _convert_game_state(
-        self, game_state: cgf.GameState, player_model: cgf.BasePlayerModel
+        self,
+        game_state: cgf.GameState,
+        player_model: cgf.BasePlayerModel,
+        partner_knowledge_model: dict,
     ) -> list:
         current_player = game_state.get_current_player()
         partner_player = 1 - current_player
@@ -107,6 +128,7 @@ class BehaviorCloneBase:
             game_state.get_num_hints(),
             last_action,
             Action(cgf.PLAY, cnr=0),
+            partner_knowledge_model,
             current_player,
             extra,
         )

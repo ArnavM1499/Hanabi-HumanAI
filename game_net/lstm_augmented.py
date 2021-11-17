@@ -16,12 +16,11 @@ AGENT = sys.argv[1]
 GAME_STATE_LENGTH = 583 + 20  # base + extended (discardable / playable)
 GAME_STATE_LENGTH = 583 + 20 + 10 * 125
 
-DATA_ALL = "../log/features0825/lstm_extended/{}_all.npy".format(AGENT)
-DATA_ALL = "../log/jcdata/np1008/{}_all.npy".format(AGENT)
+DATA_ALL = "../log/data1103/lstm/{}_all.npy".format(AGENT)
 DATA_TRAIN = DATA_ALL.replace("_all", "_train")
 DATA_VAL = DATA_ALL.replace("_all", "_val")
-MODEL_PATH = "../log/model_lstm_jc/model_lstm_{}-lr0.001_augument.pth".format(AGENT)
-WRITER_PATH = "runs/{}".format(os.path.basename(MODEL_PATH))
+MODEL_PATH = "../log/model_lstm_jc/model_lstm_extend_{}.pth".format(AGENT)
+WRITER_PATH = "runs/{}".format(os.path.basename(MODEL_PATH).replace(".pth", ""))
 
 BATCH_SIZE = 512
 EPOCH = 40

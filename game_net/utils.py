@@ -6,11 +6,11 @@ import os
 import pickle
 from random import shuffle, random
 from shutil import copyfile
-from tqdm import tqdm
 import sys
+from tqdm import tqdm
 
-sys.path.append(r"C:\Users\Jeremy\Documents\CMU\Hanabi-HumanAI")
-from common_game_functions import decode_state, StartOfGame
+sys.path.append(os.path.abspath(__file__).replace("/game_net/utils.py", ""))
+from common_game_functions import decode_state, StartOfGame  # noqa E402
 
 
 def pkl_to_np(dataset_dir, *paths, rename=False):
@@ -94,12 +94,12 @@ def pkl_to_lstm_np(dataset_dir, *paths, rename=False, train_split=0.7):
                     except EOFError:
                         break
                     except StartOfGame:
-                        p1_output_path_all = os.path.join(
-                            dataset_dir, name2id[p1] + "_all.npy"
-                        )
-                        p2_output_path_all = os.path.join(
-                            dataset_dir, name2id[p2] + "_all.npy"
-                        )
+                        # p1_output_path_all = os.path.join(
+                        #     dataset_dir, name2id[p1] + "_all.npy"
+                        # )
+                        # p2_output_path_all = os.path.join(
+                        #     dataset_dir, name2id[p2] + "_all.npy"
+                        # )
                         p1_output_path_train = os.path.join(
                             dataset_dir, name2id[p2] + "_train.npy"
                         )
@@ -126,7 +126,7 @@ def pkl_to_lstm_np(dataset_dir, *paths, rename=False, train_split=0.7):
                         # with open(p2_output_path_all, "ab+") as fout:
                         #     np.save(fout, game_states[1])
                         #     np.save(fout, game_actions[1])
-                            # np.save(fout, game_action_values[1])
+                        # np.save(fout, game_action_values[1])
                         if random() < train_split:
                             with open(p1_output_path_train, "ab+") as fout:
                                 np.save(fout, game_states[0])

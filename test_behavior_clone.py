@@ -28,9 +28,10 @@ class TestbedGame(Game):
     def single_turn(self):
         game_state = self._make_game_state(self.current_player)
         player_model = self._make_player_model(self.current_player)
+        partner_knowledge_model = self._make_partner_knowledge_model(game_state)
         action = self.players[self.current_player].get_action(game_state, player_model)
         pred = self.behavior_players[self.current_player].get_action(
-            game_state, player_model
+            game_state, player_model, partner_knowledge_model
         )
         self.behavior_results[self.current_player].append((action, pred))
         self.external_turn(action)
@@ -44,8 +45,8 @@ def test_single(player1_id, player2_id):
                 BehaviorPlayer(1, "Bob", agent_id=player1_id),
             ],
             [
-                deepcopy(PLAYER_POOL1.player_dict[player1_id]),
-                deepcopy(PLAYER_POOL2.player_dict[player2_id]),
+                deepcopy(PLAYER_POOL1.player_dict[str(player1_id)]),
+                deepcopy(PLAYER_POOL2.player_dict[str(player2_id)]),
             ],
             "dummy.csv",
         )

@@ -10,10 +10,17 @@ class BehaviorPlayer(Player):
         self.agent_id = kwargs["agent_id"]
         self.history_states = []
         self.history_models = []
+        self.history_partner_knowledge_model = []
+        self.is_behavior_clone = True
 
-    def get_action(self, game_state, player_model):
+    def get_action(self, game_state, player_model, partner_knowledge_model):
         self.history_states.append(game_state)
         self.history_models.append(player_model)
+        self.history_partner_knowledge_model.append(partner_knowledge_model)
         return BehaviorClone.sequential_predict(
-            self.agent_id, self.history_states, self.history_models, return_dict=False
+            self.agent_id,
+            self.history_states,
+            self.history_models,
+            self.history_partner_knowledge_model,
+            return_dict=False,
         )

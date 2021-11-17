@@ -15,7 +15,15 @@ def format_hand(hand):
 
 
 class Game(object):
-    def __init__(self, players, data_file, pickle_file=None, format=0, http_player=-1, print_game=True):
+    def __init__(
+        self,
+        players,
+        data_file,
+        pickle_file=None,
+        format=0,
+        http_player=-1,
+        print_game=True,
+    ):
         self.players = players
         self.hits = 3
         self.hints = 8
@@ -286,14 +294,29 @@ class Game(object):
     def score(self):
         return sum(map(lambda colnum: colnum[1], self.board))
 
-    def single_turn(self):
-        game_state = self._make_game_state(self.current_player)
-        player_model = self._make_player_model(self.current_player)
-        action = self.players[self.current_player].get_action(game_state, player_model)
+    def _make_partner_knowledge_model(self, game_state):
         partner_knowledge_model = {}
         for possible_action in game_state.get_valid_actions():
             if possible_action.type in [HINT_COLOR, HINT_NUMBER]:
-                partner_knowledge_model[possible_action] = apply_hint_to_knowledge(possible_action, self.hands, self.knowledge)
+                partner_knowledge_model[possible_action] = apply_hint_to_knowledge(
+                    possible_action, self.hands, self.knowledge
+                )
+        return partner_knowledge_model
+
+    def single_turn(self):
+        game_state = self._make_game_state(self.current_player)
+        player_model = self._make_player_model(self.current_player)
+        partner_knowledge_model = self._make_partner_knowledge_model(game_state)
+        if hasattr(self.players[self.current_player], "is_behavior_clone"):
+            action = self.players[self.current_player].get_action(
+                game_state, player_model, partner_knowledge_model
+            )
+        else:
+            action = self.players[self.current_player].get_action(
+                game_state, player_model
+            )
+        if isinstance(action, tuple):  # workaround for experimental player
+            action = action[0]
 
         # Data collection
         if self.pickle_file:
@@ -345,7 +368,7 @@ class Game(object):
                 while len(extra) < 20:
                     extra.append(0)
                 pickle.dump(
-                    encode_state(  # noqa F405
+                    encode_state(
                         self.hands[partner_nr],
                         self.knowledge[partner_nr],
                         self.knowledge[self.current_player],

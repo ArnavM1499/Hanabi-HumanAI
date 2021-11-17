@@ -25,7 +25,7 @@ def run_single(
     key=None,
     key2=None,
     clean=False,
-    print_data=True
+    print_data=True,
 ):
 
     if not player2:
@@ -219,39 +219,45 @@ def sequential_test(player, player2=None, iters=20, seed=0, save_pkl_dir=None, t
             f.close()
         if tid == 0:
             for i in tqdm(range(iters)):
-                run_single(
-                    save_file,
-                    player,
-                    player2,
-                    clean=False,
-                    print_data=False
-                )
+                run_single(save_file, player, player2, clean=False, print_data=False)
         else:
             for i in range(iters):
-                run_single(
-                    save_file,
-                    player,
-                    player2,
-                    clean=False,
-                    print_data=False
-                )
+                run_single(save_file, player, player2, clean=False, print_data=False)
     else:
         for i in tqdm(range(iters)):
-            run_single("sink_{}.csv".format(i), player, player2, clean=True, print_data=False)
+            run_single(
+                "sink_{}.csv".format(i), player, player2, clean=True, print_data=False
+            )
 
 
-def generate_data(player, save_pkl_dir, iters=20000, threads=16):
-    tds = []
-    for i in range(threads):
-        thread = threading.Thread(target=sequential_test, args=(player, player, iters / threads, i, save_pkl_dir, i))
-        tds.append(thread)
+def generate_data(player, save_pkl_dir, iters=20000, threads=16, method="thread"):
+    if method == "thread":
+        tds = []
+        print("using {} threads".format(threads))
+        for i in range(threads):
+            thread = threading.Thread(
+                target=sequential_test,
+                args=(player, player, iters / threads, i, save_pkl_dir, i),
+            )
+            tds.append(thread)
 
-    for thr in tds:
-        thr.start()
+        for thr in tds:
+            thr.start()
 
-    for thr in tds:
-        thr.join()
-
+        for thr in tds:
+            thr.join()
+    elif method == "process":
+        P = Pool(threads)
+        for i in range(threads):
+            P.apply_async(
+                sequential_test, (player, player, iters // threads, i, save_pkl_dir, i)
+            )
+        P.close()
+        P.join()
+    elif method == "single":
+        sequential_test(player, player, iters, 0, save_pkl_dir, 0)
+    else:
+        raise NotImplementedError
 
 
 def parameter_search(
