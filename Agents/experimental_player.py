@@ -78,7 +78,7 @@ class ExperimentalPlayer(Player):
     def _count_cards(self):
         if self.card_count:
             count_card_list(self.knowledge, self.last_state.get_trash())
-            #count_card_list(self.knowledge, self.last_state.get_hands()[self.partner_nr])
+            # count_card_list(self.knowledge, self.last_state.get_hands()[self.partner_nr])
             count_board(self.knowledge, self.last_state.get_board())
 
     def _count_partner_cards(self, partner_knowledge):
@@ -144,7 +144,10 @@ class ExperimentalPlayer(Player):
                 continue
             if newest_playable >= 0:
                 hint_type = best_hint_type(
-                    partner_hand, newest_playable, weighted_partner_knowledge, self.last_state.get_board()
+                    partner_hand,
+                    newest_playable,
+                    weighted_partner_knowledge,
+                    self.last_state.get_board(),
                 )
                 if hint_type is None:
                     del playable[-1]
@@ -178,7 +181,10 @@ class ExperimentalPlayer(Player):
                 continue
             if newest_discardable >= 0:
                 hint_type = best_discard_hint_type(
-                    partner_hand, newest_discardable, weighted_partner_knowledge, self.last_state.get_board()
+                    partner_hand,
+                    newest_discardable,
+                    weighted_partner_knowledge,
+                    self.last_state.get_board(),
                 )
                 if hint_type is None:
                     del discardable[-1]
@@ -201,21 +207,34 @@ class ExperimentalPlayer(Player):
             if self.default_hint == "high":
                 while nums:
                     action = Action(HINT_NUMBER, self.partner_nr, num=max(nums))
-                    if not hint_ambiguous(action, partner_hand, weighted_partner_knowledge, self.last_state.get_board()):
-                        return Action(HINT_NUMBER, self.partner_nr, num=max(nums))
+                    if not hint_ambiguous(
+                        action,
+                        partner_hand,
+                        weighted_partner_knowledge,
+                        self.last_state.get_board(),
+                    ):
+                        return action
                     nums.remove(max(nums))
                 nums = [card[1] for card in partner_hand]
                 return Action(HINT_NUMBER, self.partner_nr, num=max(nums))
             elif self.default_hint == "low":
                 while nums:
                     action = Action(HINT_NUMBER, self.partner_nr, num=min(nums))
-                    if not hint_ambiguous(action, partner_hand, weighted_partner_knowledge,
-                                          self.last_state.get_board()):
+                    if not hint_ambiguous(
+                        action,
+                        partner_hand,
+                        weighted_partner_knowledge,
+                        self.last_state.get_board(),
+                    ):
                         return Action(HINT_NUMBER, self.partner_nr, num=min(nums))
                 nums = [card[1] for card in partner_hand]
                 return Action(HINT_NUMBER, self.partner_nr, num=min(nums))
             elif self.default_hint == "mix":
-                return Action(HINT_NUMBER, self.partner_nr, num=nums[random.randrange(0, len(nums))])
+                return Action(
+                    HINT_NUMBER,
+                    self.partner_nr,
+                    num=nums[random.randrange(0, len(nums))],
+                )
         else:
             return self._discard(True)
 
@@ -246,11 +265,11 @@ class ExperimentalPlayer(Player):
             return Action(DISCARD, cnr=len(self.knowledge) - 1)
 
     def _eval_play(self, action):
-        assert(action.type == PLAY)
+        assert action.type == PLAY
         weighted_knowledge = weight_knowledge(self.knowledge, self.hint_weights)
         pct = slot_playable_pct(
-                    weighted_knowledge[action.cnr], self.last_state.get_board()
-                )
+            weighted_knowledge[action.cnr], self.last_state.get_board()
+        )
         if pct > self.play_threshold:
             return 1
         elif pct > 0.5:
@@ -259,11 +278,11 @@ class ExperimentalPlayer(Player):
             return -1
 
     def _eval_discard(self, action):
-        assert(action.type == DISCARD)
+        assert action.type == DISCARD
         weighted_knowledge = weight_knowledge(self.knowledge, self.hint_weights)
         pct = slot_discardable_pct(
-                    weighted_knowledge[action.cnr], self.last_state.get_board()
-                )
+            weighted_knowledge[action.cnr], self.last_state.get_board()
+        )
         if pct > self.discard_threshold:
             return 1
         elif pct > 0.5:
@@ -272,7 +291,7 @@ class ExperimentalPlayer(Player):
             return -1
 
     def _eval_hint(self, action):
-        assert(action.type in [HINT_COLOR, HINT_NUMBER])
+        assert action.type in [HINT_COLOR, HINT_NUMBER]
         partner_hand = self.last_state.get_hands()[self.partner_nr]
         partner_knowledge = copy.deepcopy(self.last_state.get_all_knowledge())[
             self.partner_nr
@@ -282,7 +301,9 @@ class ExperimentalPlayer(Player):
             return 0
         elif card_playable(partner_hand[target], self.last_state.get_board()):
             return 1
-        elif hint_ambiguous(action, partner_hand, partner_knowledge, self.last_state.get_board()):
+        elif hint_ambiguous(
+            action, partner_hand, partner_knowledge, self.last_state.get_board()
+        ):
             return -1
         return 0
 
@@ -302,18 +323,17 @@ class ExperimentalPlayer(Player):
         if self.last_state is None:
             self.last_state = game_state
 
-
         self.knowledge = copy.deepcopy(self.last_model.get_knowledge())
-        #print("player " + str(self.pnr) + " knowledge: " + str(self.knowledge))
+        # print("player " + str(self.pnr) + " knowledge: " + str(self.knowledge))
         if self.card_count:
             self._count_cards()
-        #print("player " + str(self.pnr) + " knowledge: " + str(self.knowledge))
-        #print("partner hand:" + str(self.last_state.get_hands()[self.partner_nr]))
-        #value_dict = {}
-        #for action in self.last_state.get_valid_actions():
+        # print("player " + str(self.pnr) + " knowledge: " + str(self.knowledge))
+        # print("partner hand:" + str(self.last_state.get_hands()[self.partner_nr]))
+        # value_dict = {}
+        # for action in self.last_state.get_valid_actions():
         #    value_dict[action] = self.eval_action(action)
-        #print(value_dict)
-        #time.sleep(5)
+        # print(value_dict)
+        # time.sleep(5)
         if self.get_action_values:
             value_dict = {}
             for action in self.last_state.get_valid_actions():
@@ -370,9 +390,7 @@ class ExperimentalPlayer(Player):
         if len(self.partner_hint_weights) != len(
             new_state.get_all_knowledge()[self.partner_nr]
         ):
-            self.partner_hint_weights.append([
-                [1 for _ in range(5)] for _ in range(5)
-            ])
+            self.partner_hint_weights.append([[1 for _ in range(5)] for _ in range(5)])
 
     def _receive_discard(self, action, player, new_state, new_model):
         self.last_model = new_model
@@ -383,11 +401,9 @@ class ExperimentalPlayer(Player):
                 self.partner_todo[i] -= 1
         del self.partner_hint_weights[action.cnr]
         if len(self.partner_hint_weights) != len(
-                new_state.get_all_knowledge()[self.partner_nr]
+            new_state.get_all_knowledge()[self.partner_nr]
         ):
-            self.partner_hint_weights.append([
-                [1 for _ in range(5)] for _ in range(5)
-            ])
+            self.partner_hint_weights.append([[1 for _ in range(5)] for _ in range(5)])
 
     # hint_indices is [] if the action is not a hint
     def inform(self, action, player, new_state, new_model):
@@ -399,9 +415,7 @@ class ExperimentalPlayer(Player):
                 self.knowledge = copy.deepcopy(new_model.get_knowledge())
                 del self.hint_weights[action.cnr]
                 if len(self.knowledge) != len(self.hint_weights):
-                    self.hint_weights.append([
-                        [1 for _ in range(5)] for _ in range(5)
-                    ])
+                    self.hint_weights.append([[1 for _ in range(5)] for _ in range(5)])
                 # delete index from todo list
                 self.todo = [i for i in self.todo if i != action.cnr]
                 for i in range(len(self.todo)):

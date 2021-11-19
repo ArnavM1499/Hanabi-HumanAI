@@ -152,6 +152,62 @@ def checkpoint(passed):
         pdb.set_trace()
 
 
+def apply_hint_to_knowledge(action, hands, knowledges):
+    return_knowledge = deepcopy(knowledges)
+    if action.type == HINT_COLOR:
+        for (col, num), knowledge in zip(
+            hands[action.pnr], return_knowledge[action.pnr]
+        ):
+            if col == action.col:
+                for i, k in enumerate(knowledge):
+                    if i != col:
+                        for i in range(len(k)):
+                            k[i] = 0
+            else:
+                for i in range(len(knowledge[action.col])):
+                    knowledge[action.col][i] = 0
+    else:
+        assert action.type == HINT_NUMBER
+        for (col, num), knowledge in zip(
+            hands[action.pnr], return_knowledge[action.pnr]
+        ):
+            if num == action.num:
+                for k in knowledge:
+                    for i in range(len(COUNTS)):
+                        if i + 1 != num:
+                            k[i] = 0
+            else:
+                for k in knowledge:
+                    k[action.num - 1] = 0
+    return return_knowledge[action.pnr]
+
+
+def encode_action_values(value_dict):
+    values = [0] * 20
+    for action in value_dict.keys():
+        values[action.encode()] = value_dict[action]
+    return values
+
+
+def encode_new_knowledge_models(knowledge_models):
+    values = [[] for i in range(10)]
+    for action in knowledge_models.keys():
+        encoding = action.encode()
+        value = knowledge_models[action]
+        values[encoding].extend(value)
+        if len(value) < 5:
+            values[encoding].append([[0, 0, 0, 0, 0] for _ in range(5)])
+    for i in range(10):
+        if not values[i]:
+            values[i] = [[[0, 0, 0, 0, 0] for _ in range(5)] for _ in range(5)]
+    ans = []
+    for knowledge in values:
+        for single in knowledge:
+            ans.extend(sum(single, []))
+    assert len(ans) == 1250
+    return ans
+
+
 def encode_state(
     partner_hand,
     partner_knowledge,
