@@ -1,24 +1,30 @@
-from fire import Fire
 import numpy as np
+import sys
 import torch
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
+from lstm_net import LSTMNet
 
 torch.multiprocessing.set_sharing_strategy("file_system")
+print(sys.argv)
+
+
+AGENT = sys.argv[1]
 
 GAME_STATE_LENGTH = 728  # base + extended (discardable / playable)
 
-DATA_ALL = "../exp00001-200k/00001_all.npy"
+
+DATA_ALL = "../log/features0825/lstm_extended/{}_all.npy".format(AGENT)
 DATA_TRAIN = DATA_ALL.replace("_all", "_train")
 DATA_VAL = DATA_ALL.replace("_all", "_val")
-MODEL_PATH = "../model/101521-singlestage-traininfo.pth"
+MODEL_PATH = "../log/model_lstm_512/model_lstm_{}.pth".format(AGENT)
+WRITER_PATH = "runs/{}".format(AGENT)
 
 BATCH_SIZE = 512
-EPOCH = 100
+EPOCH = 40
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-# DEVICE = torch.device("cpu")
-LOGGER = SummaryWriter()
+LOGGER = SummaryWriter(WRITER_PATH)
 
 
 class PickleDataset(torch.utils.data.Dataset):
@@ -60,58 +66,8 @@ def pack_games(games):
     return (padded_states, packed_actions, [x[-1] for x in games])
 
 
-class Net(torch.nn.Module):
-    def __init__(
-        self,
-        input_fc_units,
-        lstm_hidden_units,
-        lstm_num_layers,
-        output_fc_units,
-        drop_out=False,
-        drop_out_rate=0.5,
-    ):
-        super().__init__()
-        self.input_fc = []
-        for in_dim, out_dim in zip(
-            [GAME_STATE_LENGTH] + input_fc_units, input_fc_units
-        ):
-            self.input_fc.append(torch.nn.Linear(in_dim, out_dim))
-            self.input_fc.append(torch.nn.ReLU())
-            if drop_out:
-                self.input_fc.append(torch.nn.Dropout(drop_out_rate))
-        self.input_fc = torch.nn.Sequential(*self.input_fc)
-        self.lstm = torch.nn.LSTM(
-            GAME_STATE_LENGTH if input_fc_units == [] else input_fc_units[-1],
-            lstm_hidden_units,
-            lstm_num_layers,
-        )
-        self.output_fc = []
-        for in_dim, out_dim in zip(
-            [lstm_hidden_units] + output_fc_units, output_fc_units
-        ):
-            self.output_fc.append(torch.nn.Linear(in_dim, out_dim))
-            self.output_fc.append(torch.nn.ReLU())
-            if drop_out:
-                self.output_fc.append(torch.nn.Dropout(drop_out_rate))
-        if output_fc_units == []:
-            self.output_fc.append(torch.nn.Linear(lstm_hidden_units, 20))
-        else:
-            self.output_fc.append(torch.nn.Linear(output_fc_units[-1], 20))
-        # self.output_fc.append(torch.nn.Softmax())
-        self.output_fc = torch.nn.Sequential(*self.output_fc)
-
-    def forward(self, padded, lengths):
-        padded_output = self.input_fc(padded)
-        packed_output = torch.nn.utils.rnn.pack_padded_sequence(padded_output, lengths)
-        packed_output, _ = self.lstm(packed_output)
-        padded_output, _ = torch.nn.utils.rnn.pad_packed_sequence(packed_output)
-        padded_output = self.output_fc(padded_output)
-        packed_output = torch.nn.utils.rnn.pack_padded_sequence(padded_output, lengths)
-        return packed_output
-
-
-model = Net([512], 512, 2, [], drop_out=True).to(DEVICE)
-# model = Net([512], 512, 2, []).to(DEVICE)
+num_units = 512
+model = LSTMNet([num_units], num_units, 2, [], drop_out=True).to(DEVICE)
 loss_fn = torch.nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
@@ -171,11 +127,12 @@ def train():
         torch.save(model.state_dict(), MODEL_PATH)
 
 
-def eval(log_iter=0):
+def eval(save_matrix=""):
     model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE))
     model.eval()
     corrects = [0] * 20
     totals = [0] * 20
+    matrix = [[0 for i in range(20)] for j in range(20)]
     with torch.no_grad():
         for i, (states, actions, lengths) in enumerate(tqdm(valset)):
             for label in range(20):
@@ -184,20 +141,32 @@ def eval(log_iter=0):
                 mask = actions.data == label
                 masked_pred = pred.data[mask, :]
                 masked_label = torch.masked_select(actions.data, mask)
-                corrects[label] += (
-                    (masked_pred.argmax(1) == masked_label)
-                    .type(torch.float)
-                    .sum()
-                    .item()
-                )
-                totals[label] += masked_label.shape[0]
+                if int(masked_label.shape[0]) > 0:
+                    corrects[label] += (
+                        (masked_pred.argmax(1) == masked_label)
+                        .type(torch.float)
+                        .sum()
+                        .item()
+                    )
+                    totals[label] += masked_label.shape[0]
+                    for p in range(20):
+                        matrix[label][p] += (
+                            (masked_pred.argmax(1) == p).type(torch.float).sum().item()
+                        )
+    if save_matrix.endswith(".npy"):
+        np.save(save_matrix, np.array(matrix, dtype=np.int32))
     print("Accuracy:")
-    print("Hint Color: {:.4f}".format(sum(corrects[:5]) / sum(totals[:5])))
-    print("Hint Number: {:.4f}".format(sum(corrects[5:10]) / sum(totals[5:10])))
-    print("Hint Overall: {:.4f}".format(sum(corrects[:10]) / sum(totals[:10])))
-    print("Play: {:.4f}".format(sum(corrects[10:15]) / sum(totals[10:15])))
-    print("Discard: {:.4f}".format(sum(corrects[15:20]) / sum(totals[15:20])))
+    print("  Hint Color: {:.4f}".format(sum(corrects[:5]) / sum(totals[:5])))
+    print("  Hint Number: {:.4f}".format(sum(corrects[5:10]) / sum(totals[5:10])))
+    print("  Hint Overall: {:.4f}".format(sum(corrects[:10]) / sum(totals[:10])))
+    print("  Play: {:.4f}".format(sum(corrects[10:15]) / sum(totals[10:15])))
+    print("  Discard: {:.4f}".format(sum(corrects[15:20]) / sum(totals[15:20])))
 
 
 if __name__ == "__main__":
-    Fire()
+    if sys.argv[2] == "train":
+        train()
+    elif sys.argv[2] == "eval":
+        eval(sys.argv[3] if len(sys.argv) > 3 else "")
+    else:
+        raise NotImplementedError

@@ -82,5 +82,45 @@
     "self_discard_order": "random",
     "self_hint_order": "newest",
     "decision_permutation": 3640
+  },
+  "09001": {
+    "player_class": "BehaviorPlayer",
+    "agent_id": "00001"
+  },
+  "09002": {
+    "player_class": "BehaviorPlayer",
+    "agent_id": "00002"
+  },
+  "09003": {
+    "player_class": "BehaviorPlayer",
+    "agent_id": "00003"
+  },
+  "09004": {
+    "player_class": "BehaviorPlayer",
+    "agent_id": "00004"
+  },
+  "09005": {
+    "player_class": "BehaviorPlayer",
+    "agent_id": "00005"
+  },
+  "19001": {
+    "player_class": "BehaviorPlayer",
+    "agent_id": "10001"
+  },
+  "19002": {
+    "player_class": "BehaviorPlayer",
+    "agent_id": "10002"
+  },
+  "19003": {
+    "player_class": "BehaviorPlayer",
+    "agent_id": "10003"
+  },
+  "19004": {
+    "player_class": "BehaviorPlayer",
+    "agent_id": "10004"
+  },
+  "19005": {
+    "player_class": "BehaviorPlayer",
+    "agent_id": "10005"
   }
 }

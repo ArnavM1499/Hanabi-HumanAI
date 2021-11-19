@@ -6,17 +6,22 @@ import pickle
 import hanabi
 import numpy as np
 import matplotlib.pyplot as plt
+import json
 
-
-new_chief = ChiefPlayer("chief", 0, "agent_pool.json")
+new_chief = ChiefPlayer("chief", 0, "Agents/configs/players.json")
 
 file_name = "blank.csv"
 pickle_file_name = "chief_testing"
 pickle_file = open(pickle_file_name, "wb")
 
+id_string = "10004"
+
+with open("Agents/configs/players.json", "r") as f:
+    json_vals = json.load(f)
+
 for i in range(1):
-	P1 = ValuePlayer("P1", 0, hint_weight=50)
-	P2 = ValuePlayer("P2", 1, hint_weight=50)
+	P1 = new_chief.player_pool.from_dict("P1", 0, json_vals[id_string])
+	P2 = new_chief.player_pool.from_dict("P2", 1, json_vals[id_string])
 	pickle.dump(["NEW"], pickle_file)
 	G = hanabi.Game([P1, P2], file_name, pickle_file)
 	Result = G.run(100)
@@ -32,6 +37,8 @@ def try_pickle(file):
 B = []
 A = []
 C = []
+
+DATA = {"prediction accuracy":[], "inference confidence":[], "entropy of knowledge":[], "entropy of pool":[]}
 
 with open(pickle_file_name, 'rb') as f:
 	row = try_pickle(f)
@@ -53,9 +60,23 @@ with open(pickle_file_name, 'rb') as f:
 			action = row[3]
 			curr_player = row[5]
 
+			if curr_player != new_chief.pnr:
+				prediction = new_chief.get_prediction()
+
 			print("player",curr_player,"does",action)
 			new_chief.inform(action, curr_player, game_state, player_model)
-			print(new_chief.move_tracking_table.loc[:,("conditional probabilities", "MLE probabilities")].applymap(lambda L: [round(l,2) for l in L]))
+
+			
+
+
+
+
+
+
+			# print(sorted(new_chief.player_pool.get_player_dict().keys()))
+			# print(new_chief.move_tracking_table.loc[:,("agent distribution")].map(lambda L: [round(l,2) for l in L]))
+			# print(new_chief.entropy_of_knowledge(), new_chief.entropy_of_knowledge(5))
+			# print(new_chief.entropy_of_pool(), new_chief.entropy_of_pool(5))
 			
 			if (curr_player == 1):
 				A.append(new_chief.move_tracking_table.tail(1)["agent distribution"])
@@ -65,33 +86,16 @@ with open(pickle_file_name, 'rb') as f:
 
 		row = try_pickle(f)
 
+for i, a in enumerate(sorted(new_chief.player_pool.get_player_dict().keys())):
+	print(i, a, A)
+	L = []
 
+	for item in A:
+		L.append(item.tolist()[0][i])
 
-# C = [c.values[0].tolist() for c in C[1:]]
+	plt.plot(L, label=a)
 
-# for idx, name in enumerate(["Hardcode", "Value", "Experimental"]):
-# 	plt.plot([a[idx] for a in C], label=name)
+plt.title("Agents playing: parameter id" + id_string)
 
-# plt.legend()
-# plt.show()
-
-
-A = [a.values[0].tolist() for a in A[1:]]
-B = [b.values[0].tolist() for b in B[1:]]
-
-
-# for idx, name in enumerate(["Hardcode", "Value"]):
-# 	plt.plot([a[idx] for a in A], label=name)
-
-# plt.legend()
-# plt.title("Trying to recognize" + type(P2).__name__ + "- bayesian w/ boltzmann")
-# plt.savefig("chiefplots/highboltzmann/bayesian_" + type(P2).__name__)
-
-valueplayerlist = new_chief.player_pool.copies()[:-1]
-
-for idx, name in enumerate(["Value-hint_weight=" + str(v.hint_weight) for v in valueplayerlist] + ["Hardcode"]):
-	plt.plot([b[idx] for b in B], label=name)
-
-plt.legend()
-plt.title("Trying to recognize Value-hint_weight=" + str(P2.hint_weight) + " - MLE w/ boltzmann")
-plt.savefig("chiefplots/highboltzmann/mle_Value" + str(P2.hint_weight))
+plt.legend(title="Behavior Clones of each parameter id")
+plt.show()
