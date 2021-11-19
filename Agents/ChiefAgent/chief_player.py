@@ -94,6 +94,8 @@ class ChiefPlayer(Player):
 		best_team_reward = -5
 		best_action = 0
 
+		print("Deciding action...")
+
 		for va in game_state.valid_actions:
 			team_reward = 0
 
@@ -109,6 +111,8 @@ class ChiefPlayer(Player):
 				teammate_action = self.get_prediction(game_state_next, player_model_next, new_samp, sampled_vals)
 				team_reward += self.eval_action(game_state_next.board, game_state.hands[self.partner_nr], teammate_action) + chief_reward
 
+			print("Trying action", va, "reward is", team_reward)
+
 			if team_reward > best_team_reward:
 				best_team_reward = team_reward
 				best_action = va
@@ -116,8 +120,8 @@ class ChiefPlayer(Player):
 		return best_action
 
 	def eval_action(self, pred_board, curr_team_hand, action):
-		if action.type == PLAY:
-			if curr_team_hand[action.cnr].num == pred_board[curr_team_hand[action.cnr].col]+1:
+		if action//5 == PLAY:
+			if curr_team_hand[action%5][1] == pred_board[curr_team_hand[action%5][0]][1]+1:
 				return 1
 			else:
 				return -1
@@ -567,39 +571,36 @@ class ChiefPlayer(Player):
 	    hint_lis = []
 	    reward = 0
 
+	    game_state = deepcopy(game_state)
+	    player_model = deepcopy(player_model)
+
 	    if action.type == DISCARD:
 	        card_discarded = sampled_vals[action.cnr]
 	        game_state.trash.append(card_discarded)
 	        game_state.all_knowledge[game_state.current_player][action.cnr] = initial_knowledge()
 	        game_state.card_changed = card_discarded
-
 	    elif action.type == PLAY:
 	        card_played = sampled_vals[action.cnr]
 	        game_state.card_changed = card_played
 	        game_state.all_knowledge[game_state.current_player][action.cnr] = initial_knowledge()
 
-
 	        if card_playable(card_played, game_state.board):
 	            game_state.played.append(card_played)
-	            game_state.board[card_played.col] = (card_played.col, card_played.num)
+	            game_state.board[card_played[0]] = (card_played[0], card_played[1])
 	            reward = 1
 	        else:
 	            game_state.trash.append(card_played)
 	            game_state.hits -= 1
 	            reward = -1
-
 	    elif action.type == HINT_NUMBER:
 	        game_state.num_hints -= 1
 	        hint_lis.append((game_state.current_player,action))
-
 	        slot_index = 0
 
-	        for (col, num), knowledge in zip(
-	                game_state.hands[action.pnr], game_state.all_knowledge[action.pnr]
-	            ):
+	        for (col, num), knowledge in zip(game_state.hands[action.pnr], game_state.all_knowledge[action.pnr]):
 	            if num == action.num:
 	                hint_indices.append(slot_index)
-	                for k in game_state.all_knowledge:
+	                for k in knowledge:
 	                    for i in range(len(COUNTS)):
 	                        if i + 1 != num:
 	                            k[i] = 0
@@ -611,7 +612,6 @@ class ChiefPlayer(Player):
 	    else:
 	        game_state.num_hints -= 1
 	        hint_lis.append((game_state.current_player,action))
-
 	        slot_index = 0
 
 	        for (col, num), knowledge in zip(
@@ -629,14 +629,10 @@ class ChiefPlayer(Player):
 
 	            slot_index += 1
 
-	        
-	    
-
 	    player_model.actions[player_model.nr].append(action)
 	    player_model.knowledge = game_state.all_knowledge[1 - player_model.nr]
 	    player_model.nr = 1 - player_model.nr
 	    player_model.hints = self.hints_to_partner + hint_lis
-
 
 	    game_state.current_player += 1
 	    game_state.current_player %= len(game_state.hands)
@@ -646,17 +642,17 @@ class ChiefPlayer(Player):
 
 	    valid = []
 
-	    for i in range(len(self.hands[self.current_player])):
+	    for i in range(len(game_state.hands[game_state.current_player])):
 	        valid.append(Action(PLAY, cnr=i))
 	        valid.append(Action(DISCARD, cnr=i))
 
-	    if self.hints > 0:
-	        for i, p in enumerate(self.players):
-	            if i != self.current_player:
-	                for col in set(map(lambda colnum: colnum[0], self.hands[i])):
+	    if game_state.num_hints > 0:
+	        for i in range(len(game_state.hands)):
+	            if i != game_state.current_player:
+	                for col in set(map(lambda colnum: colnum[0], game_state.hands[i])):
 	                    valid.append(Action(HINT_COLOR, pnr=i, col=col))
 
-	                for num in set(map(lambda colnum: colnum[1], self.hands[i])):
+	                for num in set(map(lambda colnum: colnum[1], game_state.hands[i])):
 	                    valid.append(Action(HINT_NUMBER, pnr=i, num=num))
 
 	    game_state.valid_actions = valid

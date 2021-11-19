@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import json
 
-new_chief = ChiefPlayer("chief", 0, "Agents/configs/players.json")
+new_chief = ChiefPlayer("CHIEF", 0, "Agents/configs/players.json")
 
 file_name = "blank.csv"
 pickle_file_name = "chief_testing"
@@ -21,8 +21,8 @@ with open("Agents/configs/players.json", "r") as f:
     json_vals = json.load(f)
 
 for i in range(1):
-	P1 = new_chief.player_pool.from_dict("P1", 0, json_vals[id_string])
-	P2 = new_chief
+	P1 = new_chief
+	P2 = new_chief.player_pool.from_dict("Teammate", 0, json_vals[id_string])
 	pickle.dump(["NEW"], pickle_file)
 	G = hanabi.Game([P1, P2], file_name, pickle_file)
 	Result = G.run(100)
