@@ -7,7 +7,7 @@ from Agents.player import Player, Action
 from common_game_functions import *
 from hanabi import Game
 
-ANALYZE_NUMBER = 500
+ANALYZE_NUMBER = 20000
 
 
 num_games_dict = defaultdict(lambda: 0)
@@ -57,20 +57,25 @@ def load_games(directory):
             with open(os.path.join(root, name), 'r', encoding='utf-8') as file_object:
                 a = json.load(file_object)
                 # NOT IN DOCUMENTATION -- if player 1 is the first player, there will be a label in options
-                assert(len(a["players"]) == 2)
-                # H1 = HumanPlayer(a["players"][0], 0, a["actions"])
-                # H2 = HumanPlayer(a["players"][1], 1, a["actions"])
-                if "options" in a.keys() and "startingPlayer" in a["options"].keys():
-                    assert(a["options"]["startingPlayer"] == 1)
-                    H1 = HumanPlayer(a["players"][0], 0, 1, a["actions"])
-                    H2 = HumanPlayer(a["players"][1], 1, 0, a["actions"])
-                    G = Game([H1, H2], "blah.pkl", deck=load_deck(a["deck"]), starter=1, print_game=False)
-                else:
-                    H1 = HumanPlayer(a["players"][0], 0, 0, a["actions"])
-                    H2 = HumanPlayer(a["players"][1], 1, 1, a["actions"])
-                    G = Game([H1, H2], "blah.pkl", deck=load_deck(a["deck"]), starter=0, print_game=False)
+                try:
+                    assert(len(a["players"]) == 2)
+                    # H1 = HumanPlayer(a["players"][0], 0, a["actions"])
+                    # H2 = HumanPlayer(a["players"][1], 1, a["actions"])
+                    if "options" in a.keys() and "startingPlayer" in a["options"].keys():
+                        assert(a["options"]["startingPlayer"] == 1)
+                        H1 = HumanPlayer(a["players"][0], 0, 1, a["actions"])
+                        H2 = HumanPlayer(a["players"][1], 1, 0, a["actions"])
+                        G = Game([H1, H2], "blah.pkl", deck=load_deck(a["deck"]), starter=1, print_game=False)
+                    else:
+                        H1 = HumanPlayer(a["players"][0], 0, 0, a["actions"])
+                        H2 = HumanPlayer(a["players"][1], 1, 1, a["actions"])
+                        G = Game([H1, H2], "blah.pkl", deck=load_deck(a["deck"]), starter=0, print_game=False)
+                    scores[G.run(-1)] += 1
+                except AssertionError:
+                    print(os.path.join(root, name))
+                    file_object.close()
+                    continue
                 file_object.close()
-                scores[G.run(-1)] += 1
             i += 1
             if i >= ANALYZE_NUMBER:
                 break

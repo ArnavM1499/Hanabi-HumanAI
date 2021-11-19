@@ -19,11 +19,10 @@ GAME_STATE_LENGTH = 583 + 20 + 10 * 125
 
 DATA_ALL = "../log/features0825/lstm_extended/{}_all.npy".format(AGENT)
 DATA_ALL = "../log/jcdata/np1008/{}_all.npy".format(AGENT)
-DATA_ALL = "../00005-allhintknowledges-100k/00005_all.npy"
+DATA_ALL = "../human_pkl/20000_all.npy"
 DATA_TRAIN = DATA_ALL.replace("_all", "_train")
 DATA_VAL = DATA_ALL.replace("_all", "_val")
-MODEL_PATH = "../log/model_lstm_jc/model_lstm_{}-lr0.001_augument.pth".format(AGENT)
-MODEL_PATH = "../model/102221-singlestage-noaugment-trainhints.pth"
+MODEL_PATH = "../model/111821-naivehumandata.pth"
 WRITER_PATH = "runs/{}".format(os.path.basename(MODEL_PATH))
 
 BATCH_SIZE = 512
@@ -40,10 +39,13 @@ class PickleDataset(torch.utils.data.Dataset):
         with open(dataset_file, "rb") as fin:
             while True:
                 try:
-                    self.states.append(
-                        torch.from_numpy(np.load(fin) * 0.333).type(torch.float32)
-                    )
-                    self.actions.append(torch.from_numpy(np.load(fin)).type(torch.long))
+                    state = np.load(fin) * 0.333
+                    action = np.load(fin)
+                    if len(state) > 0:
+                        self.states.append(
+                            torch.from_numpy(state).type(torch.float32)
+                        )
+                        self.actions.append(torch.from_numpy(action).type(torch.long))
                 except ValueError:
                     break
         if model is not None:
@@ -92,7 +94,10 @@ class PickleDataset(torch.utils.data.Dataset):
 
 def pack_games(games):
     games.sort(key=lambda x: -x[-1])
-    padded_states = torch.nn.utils.rnn.pad_sequence([x[0] for x in games])
+    try:
+        padded_states = torch.nn.utils.rnn.pad_sequence([x[0] for x in games])
+    except RuntimeError:
+        print(games)
     packed_actions = torch.nn.utils.rnn.pack_sequence([x[1] for x in games])
     return (padded_states, packed_actions, [x[-1] for x in games])
 
