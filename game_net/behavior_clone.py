@@ -77,6 +77,7 @@ class BehaviorCloneBase:
             pdb.set_trace()
         # action = int(tf.math.argmax(pred, axis=1).numpy()[-1])
         ret = dict()
+        pred = torch.nn.functional.softmax(pred, dim=0)
 
         for i, p in enumerate(pred):
             ret[Action.from_encoded(i, pnr=current_player)] = p

@@ -10,7 +10,7 @@ from copy import deepcopy
 from scipy.stats import entropy
 
 STARTING_COLUMNS_MOVETRACKING = {"move_idx":[], "move": [], "observable game state":[], "card ids":[], "hand knowledge":[], "agent distribution":[], "conditional probabilities":[], "MLE probabilities":[], "generated samples":[], "agent state copies":[]}
-NUM_SAMPLES = 10
+NUM_SAMPLES = 20
 BOLTZMANN_CONSTANT = 4
 
 CardChoices = []
@@ -45,7 +45,6 @@ class ChiefPlayer(Player):
 		self.card_ids = dict()
 		self.new_card_id = 0
 		self.move_idx = 0
-		self.prev_knowledge = dict()
 		self.total_card_knowledge = dict()
 		self.drawn_dict = dict()
 		self.hints_to_partner = []
@@ -63,7 +62,6 @@ class ChiefPlayer(Player):
 			for i, k in enumerate(player_model.knowledge):
 				self.card_ids[self.new_card_id] = i
 				self.drawn_dict[self.new_card_id] = self.move_idx
-				self.prev_knowledge[self.new_card_id] = k
 				self.total_card_knowledge[self.new_card_id] = k
 				self.new_card_id += 1
 
@@ -80,11 +78,9 @@ class ChiefPlayer(Player):
 				else:
 					self.played_or_discarded_card = [cid, [], self.drawn_dict[cid]] # will fill in knowledge during inform
 					del self.drawn_dict[cid]
-					del self.prev_knowledge[cid]
 
 			new_card_ids[self.new_card_id] = len(player_model.knowledge) - 1
 			self.drawn_dict[self.new_card_id] = None
-			self.prev_knowledge[self.new_card_id] = None
 			self.new_card_id += 1
 			self.card_ids = new_card_ids
 		else:
@@ -95,7 +91,43 @@ class ChiefPlayer(Player):
 
 
 	def get_action_helper(self, game_state, player_model):
-		pass
+		best_team_reward = -5
+		best_action = 0
+
+		print("Deciding action...")
+
+		for va in game_state.valid_actions:
+			team_reward = 0
+
+			for i in range(NUM_SAMPLES):	
+				new_samp = self.new_sample(self.total_card_knowledge)
+				sampled_vals = self.new_sample_original(player_model.get_knowledge())
+
+				for cid in self.card_ids:
+					if cid in self.total_card_knowledge:
+						sampled_vals[self.card_ids[cid]] = new_samp.card_vals[cid]
+
+				game_state_next, player_model_next, chief_reward = self.simulate_move(game_state, player_model, va, sampled_vals)
+				teammate_action = self.get_prediction(game_state_next, player_model_next, new_samp, sampled_vals)
+				team_reward += self.eval_action(game_state_next.board, game_state.hands[self.partner_nr], teammate_action) + chief_reward
+
+			print("Trying action", va, "reward is", team_reward)
+
+			if team_reward > best_team_reward:
+				best_team_reward = team_reward
+				best_action = va
+
+		return best_action
+
+	def eval_action(self, pred_board, curr_team_hand, action):
+		if action//5 == PLAY:
+			if curr_team_hand[action%5][1] == pred_board[curr_team_hand[action%5][0]][1]+1:
+				return 1
+			else:
+				return -1
+
+		return 0
+
 
 	def inform(self, action, player, game_state, player_model):
 		changed_cards = []
@@ -125,7 +157,7 @@ class ChiefPlayer(Player):
 				for a in modified_game_state.valid_actions:
 					a.pnr = self.pnr
 
-				modified_game_state.hands = [self.new_sample_original(player_model.get_knowledge()) if a == [] else [] for a in game_state.hands]
+				modified_game_state.hands = [self.new_sample_original(player_model.get_knowledge()) if a == [] else [] for a in modified_game_state.hands]
 				partners_hints = deepcopy(self.hints_to_partner)
 				modified_player_model = BasePlayerModel(self.partner_nr, game_state.all_knowledge[self.partner_nr], self.hints_to_partner, player_model.get_actions())
 				agent.inform(action, self.pnr, modified_game_state, modified_player_model)
@@ -136,7 +168,6 @@ class ChiefPlayer(Player):
 			for i, k in enumerate(player_model.knowledge):
 				self.card_ids[self.new_card_id] = i
 				self.drawn_dict[self.new_card_id] = self.move_idx
-				self.prev_knowledge[self.new_card_id] = k
 				self.total_card_knowledge[self.new_card_id] = k
 				self.new_card_id += 1
 
@@ -154,8 +185,8 @@ class ChiefPlayer(Player):
 
 			if self.drawn_dict[c] == None:
 				self.drawn_dict[c] = self.move_idx
-				self.prev_knowledge[c] = new_k
-			elif new_k != self.prev_knowledge[c]:
+				self.total_card_knowledge[c] = new_k
+			elif new_k != self.total_card_knowledge[c]:
 				changed_cards.append((c, new_k))
 				drawn_move.append(self.drawn_dict[c])
 
@@ -193,7 +224,6 @@ class ChiefPlayer(Player):
 		## storing game state before move for get_action
 		modified_game_state = deepcopy(self.game_state_before_move)
 		modified_game_state.hands = [None if a == [] else [] for a in self.game_state_before_move.hands]
-		modified_game_state.hands[self.pnr] = None
 		modified_game_state.current_player = self.partner_nr
 		modified_game_state.hinted_indices = []
 		modified_game_state.card_changed = None
@@ -222,7 +252,8 @@ class ChiefPlayer(Player):
 
 		## Informing player pool of "their own" actions
 		modified_game_state2 = deepcopy(game_state) # https://stackoverflow.com/questions/48338847/how-to-copy-a-class-instance-in-python
-		
+		modified_game_state2.hands[self.pnr] = []
+
 		for a in modified_game_state2.valid_actions:
 			a.pnr = self.pnr
 
@@ -231,7 +262,7 @@ class ChiefPlayer(Player):
 
 		for agent in self.player_pool.get_agents():
 			game_state_input = deepcopy(modified_game_state2)
-			game_state_input.hands = [self.new_sample_original(player_model.get_knowledge()) if a == [] else [] for a in game_state.hands]
+			game_state_input.hands = [self.new_sample_original(player_model.get_knowledge()) if a == [] else [] for a in modified_game_state2.hands]
 			prev_game = deepcopy(modified_game_state)
 			prev_game.hands = [self.new_sample_original(player_model.get_knowledge()) if a == None else [] for a in modified_game_state.hands]
 			d = agent.get_action(prev_game, modified_player_model)
@@ -246,100 +277,80 @@ class ChiefPlayer(Player):
 		# generate average conditional
 		sample_conditionals = [sample.conditional_probs for sample in self.move_tracking_table.loc[self.move_idx, "generated samples"]]
 		new_conditional = np.mean(np.array(sample_conditionals), axis=0)
+
+		#### SCALING ####
+		pmax = np.max(new_conditional)
+
+		if pmax < 1/(2 * len(new_conditional)):
+			new_conditional = np.ones(len(new_conditional))
+		
 		self.move_tracking_table.at[self.move_idx, "conditional probabilities"] = new_conditional
+		print("NEW CONDITIONAL:", np.vectorize(lambda a: round(a,2))(new_conditional))
 		
 		# get prior using the average conditional and previous prior if available
 		if self.move_idx == 0:
-			self.move_tracking_table.at[self.move_idx,"agent distribution"] = new_conditional
+			self.move_tracking_table.at[self.move_idx,"agent distribution"] = self.makeprob(new_conditional)
 			self.move_tracking_table.at[self.move_idx,"MLE probabilities"] = new_conditional
 		else:
 			prev_row = self.move_tracking_table.loc[self.move_idx - 1]
 			prior = prev_row["agent distribution"]
 			prior2 = prev_row["MLE probabilities"]
 			updated_prior = new_conditional*prior
+			print(np.vectorize(lambda a: round(a,2))(updated_prior), np.vectorize(lambda a: round(a,2))([prior]))
 			self.move_tracking_table.at[self.move_idx,"agent distribution"] = self.makeprob(updated_prior)
 			self.move_tracking_table.at[self.move_idx,"MLE probabilities"] = (new_conditional + prior2*self.move_idx)/(self.move_idx + 1)
 
 		self.move_idx += 1
 
-	def get_prediction(self):
-		# assumes that the game_state_before_move reflect state after our own action
-		
-		##
-		# Modify game state same way as is done in inform
-		##
-		modified_game_state = deepcopy(self.game_state_before_move)
-		modified_game_state.hands = [None if a == [] else [] for a in self.game_state_before_move.hands]
-		modified_game_state.hands[self.pnr] = None
-		modified_game_state.current_player = self.partner_nr
-		modified_game_state.hinted_indices = []
-		modified_game_state.card_changed = None
-		VA = []
-
-		for a in modified_game_state.valid_actions:
-			if a.type in [PLAY, DISCARD] and a.cnr >= len(modified_game_state.all_knowledge[self.partner_nr]):
-				continue
-			else:
-				VA.append(a)
-
-		modified_game_state.valid_actions = deepcopy(VA)
-
-		partners_hints = self.hints_to_partner
-		modified_player_model = BasePlayerModel(self.partner_nr, self.game_state_before_move.all_knowledge[self.partner_nr], self.hints_to_partner, self.player_model_before_move.get_actions())
+	def get_prediction(self, game_state, player_model, new_samp, sampled_vals):		
+		modified_game_state = deepcopy(game_state)
+		modified_player_model = deepcopy(player_model)
 
 		##
 		# Generate samples like hand_sampler but try to guess action this time
 		##
-		prediction_vector = np.zeros(20)
-		
-		for i in range(NUM_SAMPLES):
-			new_samp = self.new_sample(self.total_card_knowledge)
-			agent_ids = sorted(self.player_pool.get_player_dict().keys())
+		agent_ids = sorted(self.player_pool.get_player_dict().keys())
 
-			game_states = []
-			base_player_models = []
+		game_states = []
+		base_player_models = []
 
-			for idx in range(len(self.move_tracking_table)+1):
-				if idx == len(self.move_tracking_table):
-					game_state_ref, base_player_model_ref = modified_game_state, modified_player_model
-				else:
-					game_state_ref, base_player_model_ref = self.move_tracking_table.iloc[idx]["observable game state"]
-				
-				game_state = deepcopy(game_state_ref)
-				base_player_model = deepcopy(base_player_model_ref)
-
-				for i in range(len(game_state.hands)):
-					if game_state.hands[i] is None:
-						if idx == len(self.move_tracking_table):
-							game_state.hands[i] = self.new_sample_original(base_player_model.get_knowledge())
-
-							for cid in self.card_ids:
-								if cid in self.total_card_knowledge:
-									game_state.hands[i][self.card_ids[cid]] = new_samp.card_vals[cid]
-						else:
-							game_state.hands[i] = self.gen_hand(new_samp.card_vals, idx)
-
-				game_states.append(game_state)
-				base_player_models.append(base_player_model)
-
-			probs = np.zeros(20)
-			agent_ids = sorted(self.player_pool.get_player_dict().keys())
-
-			if len(self.move_tracking_table) > 0:
-				agent_weights = self.move_tracking_table.iloc[-1]["agent distribution"]
+		for idx in range(len(self.move_tracking_table)+1):
+			if idx == len(self.move_tracking_table):
+				game_state_ref, base_player_model_ref = modified_game_state, modified_player_model
 			else:
-				agent_weights = np.ones(len(agent_ids))
+				game_state_ref, base_player_model_ref = self.move_tracking_table.iloc[idx]["observable game state"]
+			
+			game_state = deepcopy(game_state_ref)
+			base_player_model = deepcopy(base_player_model_ref)
 
-			for i, agent_id in enumerate(agent_ids):
-				bc_output = BehaviorClone.sequential_predict(agent_id, game_states, base_player_models)
-				actionvalues = np.zeros(20)
+			for i in range(len(game_state.hands)):
+				if game_state.hands[i] is None:
+					if idx == len(self.move_tracking_table):
+						game_state.hands[i] = sampled_vals
+					else:
+						game_state.hands[i] = self.gen_hand(new_samp.card_vals, idx)
 
-				for action in bc_output:
-					actionvalues[self.action_to_key(action)] = bc_output[action].numpy()
-				
-				probs += self.makeprob(actionvalues)*agent_weights[i]
+			game_states.append(game_state)
+			base_player_models.append(base_player_model)
 
-			prediction_vector += self.makeprob(probs)
+		probs = np.zeros(20)
+		agent_ids = sorted(self.player_pool.get_player_dict().keys())
+
+		if len(self.move_tracking_table) > 0:
+			agent_weights = self.move_tracking_table.iloc[-1]["agent distribution"]
+		else:
+			agent_weights = np.ones(len(agent_ids))
+
+		for i, agent_id in enumerate(agent_ids):
+			bc_output = BehaviorClone.sequential_predict(agent_id, game_states, base_player_models)
+			actionvalues = np.zeros(20)
+
+			for action in bc_output:
+				actionvalues[self.action_to_key(action)] = float(bc_output[action])
+			
+			probs += self.makeprob(actionvalues)*agent_weights[i]
+
+		prediction_vector = self.makeprob(probs)
 
 		return np.argmax(prediction_vector)
 
@@ -447,13 +458,14 @@ class ChiefPlayer(Player):
 		game_states = []
 		base_player_models = []
 
-		for idx in range(len(self.move_tracking_table)):
+		for idx in range(move_idx+1):
 			game_state_ref, base_player_model_ref = self.move_tracking_table.iloc[idx]["observable game state"]
 			game_state = deepcopy(game_state_ref)
 			base_player_model = deepcopy(base_player_model_ref)
 
 			for i in range(len(game_state.hands)):
 				if game_state.hands[i] is None:
+					# print("hello")
 					game_state.hands[i] = self.gen_hand(samp_values, idx)
 
 			game_states.append(game_state)
@@ -467,7 +479,7 @@ class ChiefPlayer(Player):
 			actionvalues = np.zeros(20)
 
 			for action in bc_output:
-				actionvalues[self.action_to_key(action)] = bc_output[action].numpy()
+				actionvalues[self.action_to_key(action)] = bc_output[action]
 
 			probs.append(self.makeprob(actionvalues)[action_idx])
 
@@ -524,7 +536,15 @@ class ChiefPlayer(Player):
 			# compute new average conditional probabilities
 			sample_conditionals = [sample.conditional_probs for sample in self.move_tracking_table.loc[table_idx]["generated samples"]]
 			new_conditional = np.mean(np.array(sample_conditionals), axis=0)
+
+			#### SCALING ####
+			pmax = np.max(new_conditional)
+
+			if pmax < 1/(2 * len(new_conditional)):
+				new_conditional = np.ones(len(new_conditional))
+
 			self.move_tracking_table.at[table_idx,"conditional probabilities"] = new_conditional
+			print("NEW CONDITIONAL for MOVE", table_idx, ":", np.vectorize(lambda a: round(a,2))(new_conditional))
 
 
 			# get prior distribution
@@ -542,5 +562,99 @@ class ChiefPlayer(Player):
 			# update current agent distribution using updated conditional and previous prior
 			new_prior_pre = new_conditional * prev_prior
 			new_prior = self.makeprob(new_prior_pre)
+			print(np.vectorize(lambda a: round(a,3))(new_prior))
 			self.move_tracking_table.at[table_idx,"agent distribution"] = new_prior
 			self.move_tracking_table.at[table_idx,"MLE probabilities"] = (new_conditional + prev_prior2*table_idx)/(table_idx + 1)
+
+	def simulate_move(self, game_state, player_model, action, sampled_vals):
+	    hint_indices = []
+	    hint_lis = []
+	    reward = 0
+
+	    game_state = deepcopy(game_state)
+	    player_model = deepcopy(player_model)
+
+	    if action.type == DISCARD:
+	        card_discarded = sampled_vals[action.cnr]
+	        game_state.trash.append(card_discarded)
+	        game_state.all_knowledge[game_state.current_player][action.cnr] = initial_knowledge()
+	        game_state.card_changed = card_discarded
+	    elif action.type == PLAY:
+	        card_played = sampled_vals[action.cnr]
+	        game_state.card_changed = card_played
+	        game_state.all_knowledge[game_state.current_player][action.cnr] = initial_knowledge()
+
+	        if card_playable(card_played, game_state.board):
+	            game_state.played.append(card_played)
+	            game_state.board[card_played[0]] = (card_played[0], card_played[1])
+	            reward = 1
+	        else:
+	            game_state.trash.append(card_played)
+	            game_state.hits -= 1
+	            reward = -1
+	    elif action.type == HINT_NUMBER:
+	        game_state.num_hints -= 1
+	        hint_lis.append((game_state.current_player,action))
+	        slot_index = 0
+
+	        for (col, num), knowledge in zip(game_state.hands[action.pnr], game_state.all_knowledge[action.pnr]):
+	            if num == action.num:
+	                hint_indices.append(slot_index)
+	                for k in knowledge:
+	                    for i in range(len(COUNTS)):
+	                        if i + 1 != num:
+	                            k[i] = 0
+	            else:
+	                for k in knowledge:
+	                    k[action.num - 1] = 0
+
+	            slot_index += 1
+	    else:
+	        game_state.num_hints -= 1
+	        hint_lis.append((game_state.current_player,action))
+	        slot_index = 0
+
+	        for (col, num), knowledge in zip(
+	                game_state.hands[action.pnr], game_state.all_knowledge[action.pnr]
+	            ):
+	            if col == action.col:
+	                hint_indices.append(slot_index)
+	                for i, k in enumerate(knowledge):
+	                    if i != col:
+	                        for i in range(len(k)):
+	                            k[i] = 0
+	            else:
+	                for i in range(len(knowledge[action.col])):
+	                    knowledge[action.col][i] = 0
+
+	            slot_index += 1
+
+	    player_model.actions[player_model.nr].append(action)
+	    player_model.knowledge = game_state.all_knowledge[1 - player_model.nr]
+	    player_model.nr = 1 - player_model.nr
+	    player_model.hints = self.hints_to_partner + hint_lis
+
+	    game_state.current_player += 1
+	    game_state.current_player %= len(game_state.hands)
+	    game_state.hinted_indices = hint_indices
+	    game_state.hands[player_model.nr] = []
+	    game_state.hands[1 - player_model.nr] = sampled_vals
+
+	    valid = []
+
+	    for i in range(len(game_state.hands[game_state.current_player])):
+	        valid.append(Action(PLAY, cnr=i))
+	        valid.append(Action(DISCARD, cnr=i))
+
+	    if game_state.num_hints > 0:
+	        for i in range(len(game_state.hands)):
+	            if i != game_state.current_player:
+	                for col in set(map(lambda colnum: colnum[0], game_state.hands[i])):
+	                    valid.append(Action(HINT_COLOR, pnr=i, col=col))
+
+	                for num in set(map(lambda colnum: colnum[1], game_state.hands[i])):
+	                    valid.append(Action(HINT_NUMBER, pnr=i, num=num))
+
+	    game_state.valid_actions = valid
+
+	    return game_state, player_model, reward
