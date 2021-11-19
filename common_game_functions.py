@@ -44,6 +44,14 @@ def make_deck():
     return deck
 
 
+def load_deck(input):
+    deck = []
+    for card in input:
+        deck.append((card["suitIndex"], card["rank"]))
+    deck.reverse()
+    return deck
+
+
 def initial_knowledge():
     knowledge = []
     for col in ALL_COLORS:
@@ -91,6 +99,7 @@ class GameState(object):
         all_knowledge,
         hinted_indices=[],
         card_changed=None,
+        hand_idxs=[]
     ):
         self.current_player = current_player
         self.hands = hands
@@ -103,6 +112,7 @@ class GameState(object):
         self.all_knowledge = all_knowledge
         self.hinted_indices = hinted_indices
         self.card_changed = card_changed
+        self.hand_idxs = hand_idxs
 
     def get_current_player(self):
         return self.current_player

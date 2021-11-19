@@ -15,20 +15,25 @@ def format_hand(hand):
 
 
 class Game(object):
-    def __init__(self, players, data_file, pickle_file=None, format=0, http_player=-1, print_game=True):
+    def __init__(self, players, data_file, deck=None, starter=0, pickle_file=None, format=0, http_player=-1, print_game=True):
         self.players = players
         self.hits = 3
         self.hints = 8
-        self.current_player = 0
+        self.current_player = starter
         self.board = [(c, 0) for c in ALL_COLORS]
         self.played = []
-        self.deck = make_deck()
+        if deck:
+            self.deck = deck
+        else:
+            self.deck = make_deck()
         self.extra_turns = 0
         self.hands = []
+        self.hand_idxs = []
         self.knowledge = []
         self.make_hands()
         self.trash = []
         self.turn = 1
+        self.finished = False
         self.format = format
         self.dopostsurvey = False
         self.study = False
@@ -83,6 +88,7 @@ class Game(object):
             self.knowledge,
             hinted_indices,
             card_changed,
+            self.hand_idxs
         )
 
     def _make_player_model(self, player_nr):
@@ -101,6 +107,7 @@ class Game(object):
 
         for i, p in enumerate(self.players):
             self.hands.append([])
+            self.hand_idxs.append([])
             self.knowledge.append([])
             for j in range(handsize):
                 self.draw_card(i)
@@ -112,6 +119,8 @@ class Game(object):
         if not self.deck:
             return
 
+        # initial deck size = 50
+        self.hand_idxs[pnr].append(50 - len(self.deck))
         self.hands[pnr].append(self.deck.pop())
         self.knowledge[pnr].append(initial_knowledge())
 
@@ -222,6 +231,7 @@ class Game(object):
                 self.hits -= 1
                 self._print("and fails. Board was", format_hand(self.board))
 
+            del self.hand_idxs[self.current_player][action.cnr]
             del self.hands[self.current_player][action.cnr]
             del self.knowledge[self.current_player][action.cnr]
             self.draw_card()
@@ -241,6 +251,7 @@ class Game(object):
                 format_card(self.hands[self.current_player][action.cnr]),
             )
             self._print("trash is now", format_hand(self.trash))
+            del self.hand_idxs[self.current_player][action.cnr]
             del self.hands[self.current_player][action.cnr]
             del self.knowledge[self.current_player][action.cnr]
             self.draw_card()
@@ -290,6 +301,9 @@ class Game(object):
         game_state = self._make_game_state(self.current_player)
         player_model = self._make_player_model(self.current_player)
         action = self.players[self.current_player].get_action(game_state, player_model)
+        if action is None:
+            self.finished = True
+            return
         partner_knowledge_model = {}
         for possible_action in game_state.get_valid_actions():
             if possible_action.type in [HINT_COLOR, HINT_NUMBER]:
@@ -395,7 +409,7 @@ class Game(object):
             self.current_player %= len(self.players)
 
     def done(self):
-        if self.extra_turns == len(self.players) or self.hits == 0:
+        if self.finished or self.extra_turns == len(self.players) or self.hits == 0:
             return True
 
         for (col, num) in self.board:
