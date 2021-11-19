@@ -4,5 +4,7 @@ log/
 *.swp
 *.bak
 *.csv
+*.npy
+*.pkl
 .idea/
 game_net/runs

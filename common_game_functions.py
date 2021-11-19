@@ -44,6 +44,14 @@ def make_deck():
     return deck
 
 
+def load_deck(input):
+    deck = []
+    for card in input:
+        deck.append((card["suitIndex"], card["rank"]))
+    deck.reverse()
+    return deck
+
+
 def initial_knowledge():
     knowledge = []
     for col in ALL_COLORS:
@@ -91,6 +99,7 @@ class GameState(object):
         all_knowledge,
         hinted_indices=[],
         card_changed=None,
+        hand_idxs=[]
     ):
         self.current_player = current_player
         self.hands = hands
@@ -103,6 +112,7 @@ class GameState(object):
         self.all_knowledge = all_knowledge
         self.hinted_indices = hinted_indices
         self.card_changed = card_changed
+        self.hand_idxs = hand_idxs
 
     def get_current_player(self):
         return self.current_player
@@ -152,6 +162,62 @@ def checkpoint(passed):
         pdb.set_trace()
 
 
+def apply_hint_to_knowledge(action, hands, knowledges):
+    return_knowledge = deepcopy(knowledges)
+    if action.type == HINT_COLOR:
+        for (col, num), knowledge in zip(
+                hands[action.pnr], return_knowledge[action.pnr]
+        ):
+            if col == action.col:
+                for i, k in enumerate(knowledge):
+                    if i != col:
+                        for i in range(len(k)):
+                            k[i] = 0
+            else:
+                for i in range(len(knowledge[action.col])):
+                    knowledge[action.col][i] = 0
+    else:
+        assert action.type == HINT_NUMBER
+        for (col, num), knowledge in zip(
+                hands[action.pnr], return_knowledge[action.pnr]
+        ):
+            if num == action.num:
+                for k in knowledge:
+                    for i in range(len(COUNTS)):
+                        if i + 1 != num:
+                            k[i] = 0
+            else:
+                for k in knowledge:
+                    k[action.num - 1] = 0
+    return return_knowledge[action.pnr]
+
+
+def encode_action_values(value_dict):
+    values = [0] * 20
+    for action in value_dict.keys():
+        values[action.encode()] = value_dict[action]
+    return values
+
+
+def encode_new_knowledge_models(knowledge_models):
+    values = [[] for i in range(10)]
+    for action in knowledge_models.keys():
+        encoding = action.encode()
+        value = knowledge_models[action]
+        values[encoding].extend(value)
+        if len(value) < 5:
+            values[encoding].append([[0, 0, 0, 0, 0] for _ in range(5)])
+    for i in range(10):
+        if not values[i]:
+            values[i] = [[[0, 0, 0, 0, 0] for _ in range(5)] for _ in range(5)]
+    ans = []
+    for knowledge in values:
+        for single in knowledge:
+            ans.extend(sum(single, []))
+    assert(len(ans) == 1250)
+    return ans
+
+
 def encode_state(
     partner_hand,
     partner_knowledge,
@@ -162,6 +228,7 @@ def encode_state(
     hints,
     last_action,
     action,
+    partner_knowledge_model,
     pnr,
     extras=[],
 ):
@@ -180,12 +247,12 @@ def encode_state(
         knowledges.append([[0, 0, 0, 0, 0] for _ in range(5)])
     for knowledge in knowledges:
         state.extend(sum(knowledge, []))
-    checkpoint(len(state) == 260)
     trash_reformat = [[0] * 5 for _ in range(5)]
     for (col, num) in trash:
         trash_reformat[col][num - 1] += 1
     state.extend(sum(trash_reformat, []))
     checkpoint(len(state) == 285)
+    state.extend(encode_new_knowledge_models(partner_knowledge_model))
     state.extend(
         [3 * x for x in extras]
     )  # 3 is a magic number, extras should be normalized to 0-1
@@ -220,6 +287,7 @@ def decode_state(state):
     hand[state[10]] = 1
     expanded.extend(hand)
     expanded.extend(state[10:-5])
+    # action_values = state[-25:-5]
     hits, hints, last_action, action, pnr = state[-5:]
     expanded.append(hits % 2)
     expanded.append(hits // 2)
