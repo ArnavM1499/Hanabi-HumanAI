@@ -5,15 +5,15 @@ from tqdm import tqdm
 
 torch.multiprocessing.set_sharing_strategy("file_system")
 
-GAME_STATE_LENGTH = 728
+GAME_STATE_LENGTH = 583 + 20
 
-DATA_ALL = "../exp00001-50k/00001_all.npy"
+DATA_ALL = "../log/features0825/lstm_extended/00005_all.npy"
 DATA_TRAIN = DATA_ALL.replace("_all", "_train")
 DATA_VAL = DATA_ALL.replace("_all", "_val")
-MODEL_PATH = "../model/101521-singlestage-traininfo.pth"
+MODEL_PATH = "../log/model_lstm_two_stage.pth"
 
 BATCH_SIZE = 600
-EPOCH = 20
+EPOCH = 100
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 LOGGER = SummaryWriter()
@@ -43,13 +43,12 @@ class PickleDataset(torch.utils.data.Dataset):
                             buffer_cat.append(2)
                     self.action_cats.append(torch.tensor(buffer_cat))
                     self.action_hints.append(action_label)
-                    self.action_cards.append(torch.fmod(action_label, 5))
+                    self.action_cards.append(torch.clamp(action_label, max=4))
                 except ValueError:
                     break
         assert len(self.states) == len(self.action_cats)
         assert len(self.states) == len(self.action_hints)
         assert len(self.states) == len(self.action_cards)
-        print("finished loading dataset: " + dataset_file)
 
     def __len__(self):
         return len(self.states)
@@ -187,7 +186,7 @@ class FullNet(torch.nn.Module):
 
 model = FullNet([512], 512, 2, [], drop_out=True).to(DEVICE)
 loss_fn = torch.nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.0003)
 
 
 trainset = torch.utils.data.DataLoader(
@@ -206,10 +205,6 @@ valset = torch.utils.data.DataLoader(
 
 def val(log_iter=0):
     losses = []
-    cat_loss = 0
-    hint_loss = 0
-    play_loss = 0
-    disc_loss = 0
     correct_cat = 0
     correct_hint = 0
     correct_play = 0
@@ -219,13 +214,10 @@ def val(log_iter=0):
     total_play = 0
     total_discard = 0
     model.eval()
-    print("starting no grad")
-    asdf = 0
     with torch.no_grad():
         for i, (states, action_cats, action_hints, action_cards, lengths) in enumerate(
             tqdm(valset)
         ):
-            asdf += 1
             states, action_cats, action_hints, action_cards = (
                 states.to(DEVICE),
                 action_cats.to(DEVICE),
@@ -242,11 +234,11 @@ def val(log_iter=0):
             masked_pred_hint = pred_hint.data[mask_hint, :]
             masked_pred_play = pred_play.data[mask_play, :]
             masked_pred_discard = pred_discard.data[mask_discard, :]
-            cat_loss = loss_fn(pred_cat.data, action_cats.data).item()
-            hint_loss = loss_fn(masked_pred_hint, masked_label_hint).item()
-            play_loss = loss_fn(masked_pred_play, masked_label_play).item()
-            disc_loss = loss_fn(masked_pred_discard, masked_label_discard).item()
-            loss = cat_loss + hint_loss + play_loss + disc_loss
+            loss = 0
+            loss += loss_fn(pred_cat.data, action_cats.data).item()
+            loss += loss_fn(masked_pred_hint, masked_label_hint).item()
+            loss += loss_fn(masked_pred_play, masked_label_play).item()
+            loss += loss_fn(masked_pred_discard, masked_label_discard).item()
             losses.append(loss)
             correct_cat += (
                 (pred_cat.data.argmax(1) == action_cats.data)
@@ -276,19 +268,14 @@ def val(log_iter=0):
             total_hint += masked_label_hint.data.shape[0]
             total_play += masked_label_play.data.shape[0]
             total_discard += masked_label_discard.data.shape[0]
-    print("sizeof: " + str(asdf))
     loss = round(sum(losses) / len(losses), 5)
-
     acc_cat = correct_cat / total_cat
     acc_hint = correct_hint / total_hint
     acc_play = correct_play / total_play
     acc_discard = correct_discard / total_discard
     print(
-        "  cat loss: {:.4f} hint loss: {:.4f} play loss: {:.4f} disc loss: {:.4f} category: {:.4f} hint: {:.4f} play: {:.4f} discard: {:.4f}".format(  # noqa E501
-            cat_loss,
-            hint_loss,
-            play_loss,
-            disc_loss,
+        "  val loss: {:.4f} category: {:.4f} hint: {:.4f} play: {:.4f} discard: {:.4f}".format(  # noqa E501
+            loss,
             acc_cat,
             acc_hint,
             acc_play,
@@ -296,10 +283,6 @@ def val(log_iter=0):
         )
     )
     LOGGER.add_scalar("Loss/Val", loss, log_iter)
-    LOGGER.add_scalar("Cat Loss/Val", cat_loss, log_iter)
-    LOGGER.add_scalar("Hint Loss/Val", hint_loss, log_iter)
-    LOGGER.add_scalar("Play Loss/Val", play_loss, log_iter)
-    LOGGER.add_scalar("Disc Loss/Val", disc_loss, log_iter)
     LOGGER.add_scalar("Category Accuracy/Val", acc_cat, log_iter)
     LOGGER.add_scalar("Hint Accuracy/Val", acc_hint, log_iter)
     LOGGER.add_scalar("Play Accuracy/Val", acc_play, log_iter)
@@ -314,6 +297,7 @@ def train():
         for i, (states, action_cats, action_hints, action_cards, lengths) in enumerate(
             tqdm(trainset, desc="epoch: {}".format(e))
         ):
+            loss = 0
             states, action_cats, action_hints, action_cards = (
                 states.to(DEVICE),
                 action_cats.to(DEVICE),
@@ -331,11 +315,10 @@ def train():
             masked_pred_play = pred_play.data[mask_play, :]
             masked_pred_discard = pred_discard.data[mask_discard, :]
             loss = 0
-            cat_loss = loss_fn(pred_cat.data, action_cats.data)
-            hint_loss = loss_fn(masked_pred_hint, masked_label_hint)
-            play_loss = loss_fn(masked_pred_play, masked_label_play)
-            disc_loss = loss_fn(masked_pred_discard, masked_label_discard)
-            loss += cat_loss.item() + hint_loss.item() + play_loss.item() + disc_loss.item()
+            loss += loss_fn(pred_cat.data, action_cats.data)
+            loss += loss_fn(masked_pred_hint, masked_label_hint)
+            loss += loss_fn(masked_pred_play, masked_label_play)
+            loss += loss_fn(masked_pred_discard, masked_label_discard)
 
             acc_cat = (
                 (pred_cat.data.argmax(1) == action_cats.data).type(torch.float).mean()
@@ -355,22 +338,14 @@ def train():
                 .type(torch.float)
                 .mean()
             )
-            log_iter = e * size + i
-            LOGGER.add_scalar("Loss/Train", loss, e * size + i)
-            LOGGER.add_scalar("Cat Loss/Val", cat_loss.item(), log_iter)
-            LOGGER.add_scalar("Hint Loss/Val", hint_loss.item(), log_iter)
-            LOGGER.add_scalar("Play Loss/Val", play_loss.item(), log_iter)
-            LOGGER.add_scalar("Disc Loss/Val", disc_loss.item(), log_iter)
+            LOGGER.add_scalar("Loss/Train", loss.item(), e * size + i)
             LOGGER.add_scalar("Category Accuracy/Train", acc_cat.item(), e * size + i)
             LOGGER.add_scalar("Hint Accuracy/Train", acc_hint.item(), e * size + i)
             LOGGER.add_scalar("Play Accuracy/Train", acc_play.item(), e * size + i)
             LOGGER.add_scalar(
                 "Discard Accuracy/Train", acc_discard.item(), e * size + i
             )
-            cat_loss.backward()
-            hint_loss.backward()
-            play_loss.backward()
-            disc_loss.backward()
+            loss.backward()
             optimizer.step()
         torch.save(model.state_dict(), MODEL_PATH)
 

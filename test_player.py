@@ -7,8 +7,6 @@ from pprint import pprint
 import random
 import sys
 import time
-import threading
-from tqdm import tqdm
 from hanabi import Game
 from Agents.player import Player
 from Agents.ChiefAgent.player_pool import PlayerPool
@@ -41,13 +39,13 @@ def run_single(
         P2 = dummy_pool.from_dict("Bob", 1, player_pool[str(player2)])
     if (key is not None) and hasattr(P1, "set_from_key"):
         P1.set_from_key(key)
-    elif print_data:
+    else:
         print("player1 key not set")
     if (key2 is not None) and hasattr(P2, "set_from_key"):
         P2.set_from_key(key2)
-    elif print_data:
+    else:
         print("player2 key not set")
-    G = Game([P1, P2], file_name, print_game=print_data)
+    G = Game([P1, P2], file_name)
     score = G.run(100)
     hints = G.hints
     hits = G.hits
@@ -202,12 +200,11 @@ def test_player(
     return iters, avg, smin, smax, smid, smod, hints, hits, turns
 
 
-def sequential_test(player, player2=None, iters=20, seed=0, save_pkl_dir=None, tid=0):
+def sequential_test(player, player2=None, iters=5000, seed=0, save_pkl_dir=None):
     random.seed(seed)
     iters = int(iters)
     if isinstance(save_pkl_dir, str):
-        if tid == 0:
-            print("saving into ", os.path.abspath(save_pkl_dir))
+        print("saving into ", os.path.abspath(save_pkl_dir))
         if not os.path.isdir(save_pkl_dir):
             os.makedirs(save_pkl_dir)
         save_file = os.path.join(
@@ -217,6 +214,7 @@ def sequential_test(player, player2=None, iters=20, seed=0, save_pkl_dir=None, t
             # remove previous data
             f = open(save_file, "w")
             f.close()
+<<<<<<< HEAD
         if tid == 0:
             for i in tqdm(range(iters)):
                 run_single(save_file, player, player2, clean=False, print_data=False)

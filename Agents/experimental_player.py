@@ -126,15 +126,15 @@ class ExperimentalPlayer(Player):
 
         self._count_partner_cards(partner_knowledge)
 
-        weighted_partner_knowledge = weight_knowledge(
-            partner_knowledge, self.partner_hint_weights
-        )
-
         # check for playable card
         playable = []
         for i in range(len(partner_hand)):
             if card_playable(partner_hand[i], self.last_state.get_board()):
                 playable.append(i)
+
+        weighted_partner_knowledge = weight_knowledge(
+            partner_knowledge, self.partner_hint_weights
+        )
 
         # if card is playable, hint it with the most info gain
         while playable:
@@ -339,29 +339,7 @@ class ExperimentalPlayer(Player):
             for action in self.last_state.get_valid_actions():
                 value_dict[action] = self.eval_action(action)
             return value_dict
-
-        partner_knowledge = copy.deepcopy(self.last_state.get_all_knowledge())[
-            self.partner_nr
-        ]
-
-        self._count_partner_cards(partner_knowledge)
-
-        weighted_partner_knowledge = weight_knowledge(
-            partner_knowledge, self.partner_hint_weights
-        )
-
-        # normalize knowledge
-        max_knowledge = 0
-        for kn in weighted_partner_knowledge:
-            for val in kn:
-                for single in val:
-                    max_knowledge = max(max_knowledge, single)
-
-        for kn in weighted_partner_knowledge:
-            for val in kn:
-                for i in range(len(val)):
-                    val[i] /= max_knowledge
-        return self._execute(), weighted_partner_knowledge
+        return self._execute()
 
     # for 2 player the only hints we need to consider are hints about our cards
     # this will need to be revisited if we generalize to more players
