@@ -15,7 +15,7 @@ def format_hand(hand):
 
 
 class Game(object):
-<<<<<<< HEAD
+
     def __init__(
         self,
         players,
@@ -25,9 +25,6 @@ class Game(object):
         http_player=-1,
         print_game=True,
     ):
-=======
-    def __init__(self, players, data_file, pickle_file=None, format=0, http_player=-1):
->>>>>>> origin/master
         self.players = players
         self.hits = 3
         self.hints = 8
@@ -293,7 +290,6 @@ class Game(object):
     def score(self):
         return sum(map(lambda colnum: colnum[1], self.board))
 
-<<<<<<< HEAD
     def _make_partner_knowledge_model(self, game_state):
         partner_knowledge_model = {}
         for possible_action in game_state.get_valid_actions():
@@ -317,12 +313,6 @@ class Game(object):
             )
         if isinstance(action, tuple):  # workaround for experimental player
             action = action[0]
-=======
-    def single_turn(self):
-        game_state = self._make_game_state(self.current_player)
-        player_model = self._make_player_model(self.current_player)
-        action = self.players[self.current_player].get_action(game_state, player_model)
->>>>>>> origin/master
 
         # Data collection
         if self.pickle_file:
