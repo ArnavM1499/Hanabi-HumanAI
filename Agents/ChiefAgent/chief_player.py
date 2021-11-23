@@ -10,7 +10,7 @@ from copy import deepcopy
 from scipy.stats import entropy
 
 STARTING_COLUMNS_MOVETRACKING = {"move_idx":[], "move": [], "observable game state":[], "card ids":[], "hand knowledge":[], "agent distribution":[], "conditional probabilities":[], "MLE probabilities":[], "generated samples":[], "agent state copies":[]}
-NUM_SAMPLES = 20
+NUM_SAMPLES = 4
 BOLTZMANN_CONSTANT = 4
 
 CardChoices = []
@@ -144,12 +144,12 @@ class ChiefPlayer(Player):
 				temp = np.zeros(shape=(5,5))
 				card = game_state.card_changed
 				temp[card[0]][card[1] - 1] = 1
-				self.played_or_discarded_card[1] = temp
+				self.played_or_discarded_card[1] = temp.tolist()
 			elif action.type == DISCARD:
 				temp = np.zeros(shape=(5,5))
 				card = game_state.trash[-1]
 				temp[card[0]][card[1] - 1] = 1
-				self.played_or_discarded_card[1] = temp
+				self.played_or_discarded_card[1] = temp.tolist()
 
 			for agent in self.player_pool.get_agents():
 				modified_game_state = deepcopy(game_state)
