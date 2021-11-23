@@ -26,6 +26,7 @@ def run_single(
     key2=None,
     clean=False,
     print_game=True,
+    print_data=False
 ):
 
     if not player2:
@@ -41,11 +42,11 @@ def run_single(
         P2 = dummy_pool.from_dict("Bob", 1, player_pool[str(player2)])
     if (key is not None) and hasattr(P1, "set_from_key"):
         P1.set_from_key(key)
-    else:
+    elif print_data:
         print("player1 key not set")
     if (key2 is not None) and hasattr(P2, "set_from_key"):
         P2.set_from_key(key2)
-    else:
+    elif print_data:
         print("player2 key not set")
     G = Game([P1, P2], file_name, print_game=print_game)
     score = G.run(100)
