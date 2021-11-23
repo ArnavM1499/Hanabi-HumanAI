@@ -141,12 +141,12 @@ class ChiefPlayer(Player):
 			self.player_model_before_move = deepcopy(player_model)
 
 			if action.type == PLAY:
-				temp = np.zeros(shape=(5,5))
+				temp = np.zeros(shape=(5,5), dtype=np.int32)
 				card = game_state.card_changed
 				temp[card[0]][card[1] - 1] = 1
 				self.played_or_discarded_card[1] = temp.tolist()
 			elif action.type == DISCARD:
-				temp = np.zeros(shape=(5,5))
+				temp = np.zeros(shape=(5,5), dtype=np.int32)
 				card = game_state.trash[-1]
 				temp[card[0]][card[1] - 1] = 1
 				self.played_or_discarded_card[1] = temp.tolist()
