@@ -7,6 +7,14 @@ import hanabi
 import numpy as np
 import matplotlib.pyplot as plt
 import json
+import sys
+import random
+
+args = sys.argv[1:]
+
+if len(args) == 2 and args[0] == '-seed':
+	random.seed(int(args[1]))
+	np.random.seed(int(args[1]))
 
 new_chief = ChiefPlayer("CHIEF", 0, "Agents/configs/players.json")
 
@@ -14,8 +22,8 @@ file_name = "blank.csv"
 pickle_file_name = "chief_testing"
 pickle_file = open(pickle_file_name, "wb")
 
-id_string = "10005"
-pool_index = 9
+id_string = "10004"
+pool_index = 8
 
 with open("Agents/configs/players.json", "r") as f:
     json_vals = json.load(f)

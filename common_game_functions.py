@@ -156,7 +156,7 @@ def apply_hint_to_knowledge(action, hands, knowledges):
     return_knowledge = deepcopy(knowledges)
     if action.type == HINT_COLOR:
         for (col, num), knowledge in zip(
-            hands[action.pnr], return_knowledge[action.pnr]
+                hands[action.pnr], return_knowledge[action.pnr]
         ):
             if col == action.col:
                 for i, k in enumerate(knowledge):
@@ -169,7 +169,7 @@ def apply_hint_to_knowledge(action, hands, knowledges):
     else:
         assert action.type == HINT_NUMBER
         for (col, num), knowledge in zip(
-            hands[action.pnr], return_knowledge[action.pnr]
+                hands[action.pnr], return_knowledge[action.pnr]
         ):
             if num == action.num:
                 for k in knowledge:
@@ -204,7 +204,7 @@ def encode_new_knowledge_models(knowledge_models):
     for knowledge in values:
         for single in knowledge:
             ans.extend(sum(single, []))
-    assert len(ans) == 1250
+    assert(len(ans) == 1250)
     return ans
 
 
@@ -218,6 +218,7 @@ def encode_state(
     hints,
     last_action,
     action,
+    partner_knowledge_model,
     pnr,
     extras=[],
 ):
@@ -236,12 +237,12 @@ def encode_state(
         knowledges.append([[0, 0, 0, 0, 0] for _ in range(5)])
     for knowledge in knowledges:
         state.extend(sum(knowledge, []))
-    checkpoint(len(state) == 260)
     trash_reformat = [[0] * 5 for _ in range(5)]
     for (col, num) in trash:
         trash_reformat[col][num - 1] += 1
     state.extend(sum(trash_reformat, []))
     checkpoint(len(state) == 285)
+    state.extend(encode_new_knowledge_models(partner_knowledge_model))
     state.extend(
         [3 * x for x in extras]
     )  # 3 is a magic number, extras should be normalized to 0-1
@@ -276,6 +277,7 @@ def decode_state(state):
     hand[state[10]] = 1
     expanded.extend(hand)
     expanded.extend(state[10:-5])
+    # action_values = state[-25:-5]
     hits, hints, last_action, action, pnr = state[-5:]
     expanded.append(hits % 2)
     expanded.append(hits // 2)
