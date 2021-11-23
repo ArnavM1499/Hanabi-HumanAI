@@ -22,8 +22,8 @@ file_name = "blank.csv"
 pickle_file_name = "chief_testing"
 pickle_file = open(pickle_file_name, "wb")
 
-id_string = "10005"
-pool_index = 9
+id_string = "10004"
+pool_index = 8
 
 with open("Agents/configs/players.json", "r") as f:
     json_vals = json.load(f)

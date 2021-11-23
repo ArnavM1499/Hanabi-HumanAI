@@ -111,7 +111,7 @@ class ChiefPlayer(Player):
 				teammate_action = self.get_prediction(game_state_next, player_model_next, new_samp, sampled_vals)
 				team_reward += self.eval_action(game_state_next.board, game_state.hands[self.partner_nr], teammate_action) + chief_reward
 
-			print("Trying action", va, "reward is", team_reward)
+			#print("Trying action", va, "reward is", team_reward)
 
 			if team_reward > best_team_reward:
 				best_team_reward = team_reward
@@ -283,6 +283,8 @@ class ChiefPlayer(Player):
 
 		if pmax < 1/(2 * len(new_conditional)):
 			new_conditional = np.ones(len(new_conditional))
+
+		print("PMAX", pmax)
 		
 		self.move_tracking_table.at[self.move_idx, "conditional probabilities"] = new_conditional
 		print("NEW CONDITIONAL:", np.vectorize(lambda a: round(a,2))(new_conditional))
@@ -296,7 +298,7 @@ class ChiefPlayer(Player):
 			prior = prev_row["agent distribution"]
 			prior2 = prev_row["MLE probabilities"]
 			updated_prior = new_conditional*prior
-			print(np.vectorize(lambda a: round(a,2))(updated_prior), np.vectorize(lambda a: round(a,2))([prior]))
+			print(np.vectorize(lambda a: round(a,2))(self.makprob(updated_prior)), np.vectorize(lambda a: round(a,2))([prior]))
 			self.move_tracking_table.at[self.move_idx,"agent distribution"] = self.makeprob(updated_prior)
 			self.move_tracking_table.at[self.move_idx,"MLE probabilities"] = (new_conditional + prior2*self.move_idx)/(self.move_idx + 1)
 
