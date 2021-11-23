@@ -142,7 +142,7 @@ class ChiefPlayer(Player):
 
 			if action.type == PLAY:
 				temp = np.zeros(shape=(5,5))
-				card = game_state.played[-1]
+				card = game_state.card_changed
 				temp[card[0]][card[1] - 1] = 1
 				self.played_or_discarded_card[1] = temp
 			elif action.type == DISCARD:
@@ -342,7 +342,7 @@ class ChiefPlayer(Player):
 			agent_weights = np.ones(len(agent_ids))
 
 		for i, agent_id in enumerate(agent_ids):
-			bc_output = BehaviorClone.sequential_predict(agent_id, game_states, base_player_models)
+			bc_output = BehaviorClone.sequential_predict(agent_id, game_states, base_player_models, [self._make_partner_knowledge_model(gs) for gs in game_states])
 			actionvalues = np.zeros(20)
 
 			for action in bc_output:
@@ -353,6 +353,16 @@ class ChiefPlayer(Player):
 		prediction_vector = self.makeprob(probs)
 
 		return np.argmax(prediction_vector)
+
+	def _make_partner_knowledge_model(self, game_state):
+		partner_knowledge_model = dict()
+
+		for possible_action in game_state.get_valid_actions():
+			if possible_action.type in [HINT_COLOR, HINT_NUMBER]:
+				partner_knowledge_model[possible_action] = apply_hint_to_knowledge(
+					possible_action, game_state.hands, game_state.all_knowledge
+				)
+		return partner_knowledge_model
 
 
 	def entropy_of_knowledge(self, back_moves=1):
@@ -475,7 +485,7 @@ class ChiefPlayer(Player):
 		agent_ids = sorted(self.player_pool.get_player_dict().keys())
 
 		for agent_id in agent_ids:
-			bc_output = BehaviorClone.sequential_predict(agent_id, game_states, base_player_models)
+			bc_output = BehaviorClone.sequential_predict(agent_id, game_states, base_player_models, [self._make_partner_knowledge_model(gs) for gs in game_states])
 			actionvalues = np.zeros(20)
 
 			for action in bc_output:
@@ -567,94 +577,94 @@ class ChiefPlayer(Player):
 			self.move_tracking_table.at[table_idx,"MLE probabilities"] = (new_conditional + prev_prior2*table_idx)/(table_idx + 1)
 
 	def simulate_move(self, game_state, player_model, action, sampled_vals):
-	    hint_indices = []
-	    hint_lis = []
-	    reward = 0
+		hint_indices = []
+		hint_lis = []
+		reward = 0
 
-	    game_state = deepcopy(game_state)
-	    player_model = deepcopy(player_model)
+		game_state = deepcopy(game_state)
+		player_model = deepcopy(player_model)
 
-	    if action.type == DISCARD:
-	        card_discarded = sampled_vals[action.cnr]
-	        game_state.trash.append(card_discarded)
-	        game_state.all_knowledge[game_state.current_player][action.cnr] = initial_knowledge()
-	        game_state.card_changed = card_discarded
-	    elif action.type == PLAY:
-	        card_played = sampled_vals[action.cnr]
-	        game_state.card_changed = card_played
-	        game_state.all_knowledge[game_state.current_player][action.cnr] = initial_knowledge()
+		if action.type == DISCARD:
+			card_discarded = sampled_vals[action.cnr]
+			game_state.trash.append(card_discarded)
+			game_state.all_knowledge[game_state.current_player][action.cnr] = initial_knowledge()
+			game_state.card_changed = card_discarded
+		elif action.type == PLAY:
+			card_played = sampled_vals[action.cnr]
+			game_state.card_changed = card_played
+			game_state.all_knowledge[game_state.current_player][action.cnr] = initial_knowledge()
 
-	        if card_playable(card_played, game_state.board):
-	            game_state.played.append(card_played)
-	            game_state.board[card_played[0]] = (card_played[0], card_played[1])
-	            reward = 1
-	        else:
-	            game_state.trash.append(card_played)
-	            game_state.hits -= 1
-	            reward = -1
-	    elif action.type == HINT_NUMBER:
-	        game_state.num_hints -= 1
-	        hint_lis.append((game_state.current_player,action))
-	        slot_index = 0
+			if card_playable(card_played, game_state.board):
+				game_state.played.append(card_played)
+				game_state.board[card_played[0]] = (card_played[0], card_played[1])
+				reward = 1
+			else:
+				game_state.trash.append(card_played)
+				game_state.hits -= 1
+				reward = -1
+		elif action.type == HINT_NUMBER:
+			game_state.num_hints -= 1
+			hint_lis.append((game_state.current_player,action))
+			slot_index = 0
 
-	        for (col, num), knowledge in zip(game_state.hands[action.pnr], game_state.all_knowledge[action.pnr]):
-	            if num == action.num:
-	                hint_indices.append(slot_index)
-	                for k in knowledge:
-	                    for i in range(len(COUNTS)):
-	                        if i + 1 != num:
-	                            k[i] = 0
-	            else:
-	                for k in knowledge:
-	                    k[action.num - 1] = 0
+			for (col, num), knowledge in zip(game_state.hands[action.pnr], game_state.all_knowledge[action.pnr]):
+				if num == action.num:
+					hint_indices.append(slot_index)
+					for k in knowledge:
+						for i in range(len(COUNTS)):
+							if i + 1 != num:
+								k[i] = 0
+				else:
+					for k in knowledge:
+						k[action.num - 1] = 0
 
-	            slot_index += 1
-	    else:
-	        game_state.num_hints -= 1
-	        hint_lis.append((game_state.current_player,action))
-	        slot_index = 0
+				slot_index += 1
+		else:
+			game_state.num_hints -= 1
+			hint_lis.append((game_state.current_player,action))
+			slot_index = 0
 
-	        for (col, num), knowledge in zip(
-	                game_state.hands[action.pnr], game_state.all_knowledge[action.pnr]
-	            ):
-	            if col == action.col:
-	                hint_indices.append(slot_index)
-	                for i, k in enumerate(knowledge):
-	                    if i != col:
-	                        for i in range(len(k)):
-	                            k[i] = 0
-	            else:
-	                for i in range(len(knowledge[action.col])):
-	                    knowledge[action.col][i] = 0
+			for (col, num), knowledge in zip(
+					game_state.hands[action.pnr], game_state.all_knowledge[action.pnr]
+				):
+				if col == action.col:
+					hint_indices.append(slot_index)
+					for i, k in enumerate(knowledge):
+						if i != col:
+							for i in range(len(k)):
+								k[i] = 0
+				else:
+					for i in range(len(knowledge[action.col])):
+						knowledge[action.col][i] = 0
 
-	            slot_index += 1
+				slot_index += 1
 
-	    player_model.actions[player_model.nr].append(action)
-	    player_model.knowledge = game_state.all_knowledge[1 - player_model.nr]
-	    player_model.nr = 1 - player_model.nr
-	    player_model.hints = self.hints_to_partner + hint_lis
+		player_model.actions[player_model.nr].append(action)
+		player_model.knowledge = game_state.all_knowledge[1 - player_model.nr]
+		player_model.nr = 1 - player_model.nr
+		player_model.hints = self.hints_to_partner + hint_lis
 
-	    game_state.current_player += 1
-	    game_state.current_player %= len(game_state.hands)
-	    game_state.hinted_indices = hint_indices
-	    game_state.hands[player_model.nr] = []
-	    game_state.hands[1 - player_model.nr] = sampled_vals
+		game_state.current_player += 1
+		game_state.current_player %= len(game_state.hands)
+		game_state.hinted_indices = hint_indices
+		game_state.hands[player_model.nr] = []
+		game_state.hands[1 - player_model.nr] = sampled_vals
 
-	    valid = []
+		valid = []
 
-	    for i in range(len(game_state.hands[game_state.current_player])):
-	        valid.append(Action(PLAY, cnr=i))
-	        valid.append(Action(DISCARD, cnr=i))
+		for i in range(len(game_state.hands[game_state.current_player])):
+			valid.append(Action(PLAY, cnr=i))
+			valid.append(Action(DISCARD, cnr=i))
 
-	    if game_state.num_hints > 0:
-	        for i in range(len(game_state.hands)):
-	            if i != game_state.current_player:
-	                for col in set(map(lambda colnum: colnum[0], game_state.hands[i])):
-	                    valid.append(Action(HINT_COLOR, pnr=i, col=col))
+		if game_state.num_hints > 0:
+			for i in range(len(game_state.hands)):
+				if i != game_state.current_player:
+					for col in set(map(lambda colnum: colnum[0], game_state.hands[i])):
+						valid.append(Action(HINT_COLOR, pnr=i, col=col))
 
-	                for num in set(map(lambda colnum: colnum[1], game_state.hands[i])):
-	                    valid.append(Action(HINT_NUMBER, pnr=i, num=num))
+					for num in set(map(lambda colnum: colnum[1], game_state.hands[i])):
+						valid.append(Action(HINT_NUMBER, pnr=i, num=num))
 
-	    game_state.valid_actions = valid
+		game_state.valid_actions = valid
 
-	    return game_state, player_model, reward
+		return game_state, player_model, reward
