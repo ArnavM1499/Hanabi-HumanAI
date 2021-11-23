@@ -12,8 +12,9 @@ import random
 
 args = sys.argv[1:]
 
-if len(args) == 2 and args[0] == 'seed':
+if len(args) == 2 and args[0] == '-seed':
 	random.seed(int(args[1]))
+	np.random.seed(int(args[1]))
 
 new_chief = ChiefPlayer("CHIEF", 0, "Agents/configs/players.json")
 
