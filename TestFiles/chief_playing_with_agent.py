@@ -7,6 +7,13 @@ import hanabi
 import numpy as np
 import matplotlib.pyplot as plt
 import json
+import sys
+import random
+
+args = sys.argv[1:]
+
+if len(args) == 2 and args[0] == 'seed':
+	random.seed(int(args[1]))
 
 new_chief = ChiefPlayer("CHIEF", 0, "Agents/configs/players.json")
 
