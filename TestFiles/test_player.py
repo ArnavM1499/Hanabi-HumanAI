@@ -7,6 +7,8 @@ from pprint import pprint
 import random
 import sys
 import time
+import threading
+from tqdm import tqdm
 from hanabi import Game
 from Agents.player import Player
 from Agents.ChiefAgent.player_pool import PlayerPool
@@ -23,7 +25,7 @@ def run_single(
     key=None,
     key2=None,
     clean=False,
-    print_data=True,
+    print_game=True,
 ):
 
     if not player2:
@@ -45,14 +47,14 @@ def run_single(
         P2.set_from_key(key2)
     else:
         print("player2 key not set")
-    G = Game([P1, P2], file_name)
+    G = Game([P1, P2], file_name, print_game=print_game)
     score = G.run(100)
     hints = G.hints
     hits = G.hits
     turns = G.turn
     if clean:
         os.remove(file_name)
-    return (score, hints, hits, turns)
+    return score, hints, hits, turns
 
 
 def from_param_dict(file_name, dict):
@@ -200,7 +202,7 @@ def test_player(
     return iters, avg, smin, smax, smid, smod, hints, hits, turns
 
 
-def sequential_test(player, player2=None, iters=5000, seed=0, save_pkl_dir=None):
+def sequential_test(player, player2=None, iters=5000, seed=0, save_pkl_dir=None, tid=0):
     random.seed(seed)
     iters = int(iters)
     if isinstance(save_pkl_dir, str):
@@ -214,17 +216,16 @@ def sequential_test(player, player2=None, iters=5000, seed=0, save_pkl_dir=None)
             # remove previous data
             f = open(save_file, "w")
             f.close()
-<<<<<<< HEAD
         if tid == 0:
             for i in tqdm(range(iters)):
-                run_single(save_file, player, player2, clean=False, print_data=False)
+                run_single(save_file, player, player2, clean=False, print_game=False)
         else:
             for i in range(iters):
-                run_single(save_file, player, player2, clean=False, print_data=False)
+                run_single(save_file, player, player2, clean=False, print_game=False)
     else:
         for i in tqdm(range(iters)):
             run_single(
-                "sink_{}.csv".format(i), player, player2, clean=True, print_data=False
+                "sink_{}.csv".format(i), player, player2, clean=True, print_game=False
             )
 
 
