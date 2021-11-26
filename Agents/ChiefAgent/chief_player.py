@@ -10,7 +10,6 @@ from copy import deepcopy
 from scipy.stats import entropy
 
 STARTING_COLUMNS_MOVETRACKING = {"move_idx":[], "move": [], "observable game state":[], "card ids":[], "hand knowledge":[], "agent distribution":[], "conditional probabilities":[], "MLE probabilities":[], "generated samples":[], "agent state copies":[]}
-NUM_SAMPLES = 4
 BOLTZMANN_CONSTANT = 4
 
 CardChoices = []
@@ -35,7 +34,7 @@ class Sample(object):
 		return True
 
 class ChiefPlayer(Player):
-	def __init__(self, name, pnr, pool_file):
+	def __init__(self, name, pnr, pool_file, pool_ids, num_samples=20, avoid_knowledge_rollback=False):
 		self.name = name
 		self.pnr = pnr
 		self.partner_nr = (pnr + 1) % 2
@@ -51,6 +50,8 @@ class ChiefPlayer(Player):
 		self.game_state_before_move = None
 		self.player_model_before_move = None
 		self.played_or_discarded_card = None
+		self.num_samples = num_samples
+		self.avoid_knowledge_rollback = avoid_knowledge_rollback
 
 	def get_action(self, game_state, player_model, action_default=None):
 		if action_default is None:
@@ -99,7 +100,7 @@ class ChiefPlayer(Player):
 		for va in game_state.valid_actions:
 			team_reward = 0
 
-			for i in range(NUM_SAMPLES):	
+			for i in range(self.num_samples):	
 				new_samp = self.new_sample(self.total_card_knowledge)
 				sampled_vals = self.new_sample_original(player_model.get_knowledge())
 
@@ -200,7 +201,7 @@ class ChiefPlayer(Player):
 		#########################################################################
 		### Updating historical data based on all-time card knowledge changes ###
 		#########################################################################
-		if (len(changed_cards) > 0) or self.played_or_discarded_card != None:
+		if ((len(changed_cards) > 0) or self.played_or_discarded_card != None) and not self.avoid_knowledge_rollback:
 			if (self.played_or_discarded_card):
 				changed_cards.append(tuple(self.played_or_discarded_card[:-1]))
 
@@ -244,7 +245,7 @@ class ChiefPlayer(Player):
 		new_row["card ids"] = self.card_ids
 		new_row["hand knowledge"] = player_model.get_knowledge()
 		new_row["agent state copies"] = self.player_pool.copies()
-		new_row["generated samples"] = [None]*NUM_SAMPLES
+		new_row["generated samples"] = [None]*self.num_samples
 		new_row["conditional probabilities"] = [0]*self.player_pool.get_size()
 		new_row["agent distribution"] = [0]*self.player_pool.get_size()
 		new_row["MLE probabilities"] = [0]*self.player_pool.get_size()
@@ -272,7 +273,7 @@ class ChiefPlayer(Player):
 		self.move_tracking_table = self.move_tracking_table.append(pd.Series(data=new_row, name=self.move_idx)) # https://stackoverflow.com/questions/39998262/append-an-empty-row-in-dataframe-using-pandas
 
 		# Generate samples with corresponding conditionals
-		self.hand_sampler(self.move_idx, NUM_SAMPLES)
+		self.hand_sampler(self.move_idx, self.num_samples)
 
 		# generate average conditional
 		sample_conditionals = [sample.conditional_probs for sample in self.move_tracking_table.loc[self.move_idx, "generated samples"]]
@@ -542,7 +543,7 @@ class ChiefPlayer(Player):
 
 			# use hand_sampler to get new samples where needed
 			### num_possibilities = np.prod(np.sum(self.move_tracking_table.loc[table_idx]["hand knowledge"], axis=(1,2)))
-			agent_copies = self.hand_sampler(table_idx, NUM_SAMPLES)
+			agent_copies = self.hand_sampler(table_idx, self.num_samples)
 
 
 			# compute new average conditional probabilities

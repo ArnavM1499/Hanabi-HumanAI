@@ -5,11 +5,11 @@ from copy import deepcopy
 
 # A way to interface with our player pool files
 class PlayerPool:
-    def __init__(self, name, pnr, json_file):
+    def __init__(self, name, pnr, json_file, pool_ids):
         with open(json_file, "r") as f:
             json_vals = json.load(f)
 
-        filtered_vals = {key: value for key, value in json_vals.items() if key[1] != '9'}
+        filtered_vals = {key: value for key, value in json_vals.items() if key in pool_ids}
 
         self.player_dict = {
             k: self.from_dict(name, pnr, v) for k, v in filtered_vals.items()
