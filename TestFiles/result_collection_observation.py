@@ -1,4 +1,5 @@
 import Agents
+from Agents.ChiefAgent.chief_player import ChiefPlayer
 import pickle
 import hanabi
 import numpy as np
@@ -8,11 +9,11 @@ from copy import deepcopy
 
 
 with open("Agents/configs/players.json", "r") as f:
-    json_vals = json.load(f)
+	json_vals = json.load(f)
 
 
-def collect_run(pickle_file_name, agent_template1, agent_template2, file_name="blank.csv")
-   	pickle_file = open(pickle_file_name,"wb")
+def collect_run(pickle_file_name, agent_template1, agent_template2, file_name="blank.csv"):
+	pickle_file = open(pickle_file_name,"wb")
 
 	for i in range(1):
 		P1 = deepcopy(agent_template1)
@@ -33,48 +34,63 @@ def decode_action(a):
 	TYPE = ["Hint color", "Hint number", "Play", "Discard"]
 	LAMBDAS = [(lambda a : a%5), (lambda a : a%5 + 1), (lambda a: a%5), (lambda a:a%5)]
 
-	return TYPE[a//5] + "->" + str(LAMBDAS[a//5](a))
+	return TYPE[a//5], LAMBDAS[a//5](a)
 
-def analyze_game(pickle_file_name, data_collection_func, source_id, new_chief)
+def analyze_game(pickle_file_name, data_collection_func, source_id, new_chief):
 	data_set = []
 
 	with open(pickle_file_name, 'rb') as f:
 		row = try_pickle(f)
 
 		while(row != None):
-			if row[0] == "Action" and row[1].get_current_player() == 0:
+			if row[0] == "Action" and row[1].get_current_player() == new_chief.pnr:
 				game_state = row[1]
 				player_model = row[2]
 				action = row[3]
 
 				new_chief.get_action(game_state, player_model, action_default=action)
 
-			elif row[0] == "Inform" and row[4] == 0:
+			elif row[0] == "Inform" and row[4] == new_chief.pnr:
 				game_state = row[1]
 				player_model = row[2]
 				action = row[3]
 				curr_player = row[5]
 
 				if curr_player != new_chief.pnr:
+					if new_chief.game_state_before_move == None:
+						new_chief.generate_initial_state(game_state, player_model, action) # only for testing, chief would never have to have this called externally when actually playing
+					
 					prediction = new_chief.get_prediction()
 
 				new_chief.inform(action, curr_player, game_state, player_model)
 
-				data_set.append(data_collection_func(source_id, new_chief, prediction, action))
+				if curr_player != new_chief.pnr:
+					data_set.append(data_collection_func(source_id, new_chief, prediction, action))
 
 			row = try_pickle(f)
 
 	return data_set
 
 def get_conditionals(source_id, new_chief, prediction, action):
-	pass
+	for idx, id_ in enumerate(list(new_chief.player_pool.get_player_dict().keys())):
+		if source_id == id_:
+			return new_chief.current_probabilities()["conditional probabilities"][idx]
 
 def get_confidence(source_id, new_chief, prediction, action):
-	pass
+	for idx, id_ in enumerate(list(new_chief.player_pool.get_player_dict().keys())):
+		if source_id == id_:
+			return new_chief.current_probabilities()["agent likelihood"][idx]
 
-def prediction_accuracy(source_id, new_chief, prediction, action, tag="A"):
+def prediction_accuracy(source_id, new_chief, prediction, action, tag='A'):
 	# Return: A, C, and AMH (Action-level, Category-level, and Action-level minus hint) based on tag
-	pass
+	if tag == 'A':
+		return int(prediction == action)
+	elif tag == 'C':
+		return int(decode_action(prediction)[0] == decode_action(action)[0])
+	else:
+		prop1 = ("Hint" in decode_action(prediction)[0] and "Hint" in decode_action(action)[0])
+		prop2 = (prediction == action)
+		return int(prop1 or prop2)
 
 def get_agents(should_match_type=True, should_match_id=True):
 	class1 = ["00001","00002","00003"]
@@ -104,19 +120,27 @@ def get_agents(should_match_type=True, should_match_id=True):
 
 	json_dict = json_vals[agent1_id]
 	json_dict["name"] = "P1"
-    json_dict["pnr"] = 0
-    agent1 = getattr(Agents, json_dict["player_class"])(**json_dict)
+	json_dict["pnr"] = 0
+	agent1 = getattr(Agents, json_dict["player_class"])(**json_dict)
 
-    json_dict = json_vals[agent2_id]
+	json_dict = json_vals[agent2_id]
 	json_dict["name"] = "P2"
-    json_dict["pnr"] = 1
-    agent2 = getattr(Agents, json_dict["player_class"])(**json_dict)
+	json_dict["pnr"] = 1
+	agent2 = getattr(Agents, json_dict["player_class"])(**json_dict)
 
-    return agent1, agent2, source_id, chief_idx
+	return agent1, agent2, source_id, chief_idx
 				
 
 
 if __name__ == "__main__":
+	import sys
+
+	args = sys.argv[1:]
+
+	if len(args) == 2 and args[0] == '--nruns':
+		num_runs = int(args[1])
+	else:
+		num_runs = 50
 
 	# Knowledge management results - effect of samples and knowledge rollbacks on accuracy of conditionals (TEST SEPARATE)
 	SAMPLES = [1,5,10,50]
@@ -138,7 +162,7 @@ if __name__ == "__main__":
 	DATA["Action-level minus hint prediction accuracy"] = [[]]*len(AGENT_IN_POOL)
 
 	ListKey = [(SAMPLES, "Sample Conditionals", get_conditionals),
-			   (KNOWLEDGE_ROLLBACK, "Knowledge Rollback Conditionals", get_conditionals),
+			   (AVOID_KNOWLEDGE_ROLLBACK, "Knowledge Rollback Conditionals", get_conditionals),
 			   (MATCHING_AGENTS, "Inference Confidence of Source Clone", get_confidence),
 			   (AGENT_IN_POOL, "Action-level prediction accuracy", lambda s,n,p,a : prediction_accuracy(s,n,p,a,tag="A")),
 			   (AGENT_IN_POOL, "Category-level prediction accuracy", lambda s,n,p,a : prediction_accuracy(s,n,p,a,tag="C")),
@@ -175,3 +199,7 @@ if __name__ == "__main__":
 				agg_data.append(data_point)
 
 			DATA[k][idx].append(np.array(agg_data).mean(axis=0))
+			print("DATA COLLECTION LOG - ", DATA[k][idx], k, idx)
+
+	with open("OBSERVATION_DATA.pkl", "wb") as f:
+		pickle.dump(DATA, f)

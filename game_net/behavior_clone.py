@@ -119,6 +119,7 @@ class BehaviorCloneBase:
             extra.append(cpf.slot_discardable_pct(k, board, trash))
         while len(extra) < 20:
             extra.append(0)
+
         encoded = cgf.encode_state(
             game_state.get_hands()[partner_player],
             knowledge[partner_player],
@@ -133,6 +134,7 @@ class BehaviorCloneBase:
             current_player,
             extra,
         )
+
         pnr, _, encoded_state = cgf.decode_state(encoded)
         return current_player, encoded_state
 

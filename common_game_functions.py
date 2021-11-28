@@ -266,12 +266,14 @@ def decode_state(state):
     hand = [0] * 30
     for i in range(5):  # board (5)
         h = hand.copy()
-        h[state[i]] = 1
+        if state[i] < 25:
+            h[state[i]] = 1
         expanded.extend(h)
     hand = [0] * 25
     for i in range(5, 9):  # first four cards
         h = hand.copy()
-        h[state[i]] = 1
+        if state[i] < 25:
+            h[state[i]] = 1
         expanded.extend(h)
     hand.append(0)  # include empty card
     hand[state[10]] = 1

@@ -40,7 +40,7 @@ class ChiefPlayer(Player):
 		self.partner_nr = (pnr + 1) % 2
 		self.move_tracking_table = pd.DataFrame(data=STARTING_COLUMNS_MOVETRACKING)
 		self.move_tracking_table = self.move_tracking_table.set_index("move_idx")
-		self.player_pool = PlayerPool("pool_agent", self.partner_nr, pool_file)
+		self.player_pool = PlayerPool("pool_agent", self.partner_nr, pool_file, pool_ids)
 		self.card_ids = dict()
 		self.new_card_id = 0
 		self.move_idx = 0
@@ -109,10 +109,9 @@ class ChiefPlayer(Player):
 						sampled_vals[self.card_ids[cid]] = new_samp.card_vals[cid]
 
 				game_state_next, player_model_next, chief_reward = self.simulate_move(game_state, player_model, va, sampled_vals)
-				teammate_action = self.get_prediction(game_state_next, player_model_next, new_samp, sampled_vals)
+				pred_vec = self._get_prediction_internal(game_state_next, player_model_next, new_samp, sampled_vals)
+				teammate_action = np.argmax(pred_vec)
 				team_reward += self.eval_action(game_state_next.board, game_state.hands[self.partner_nr], teammate_action) + chief_reward
-
-			#print("Trying action", va, "reward is", team_reward)
 
 			if team_reward > best_team_reward:
 				best_team_reward = team_reward
@@ -164,6 +163,27 @@ class ChiefPlayer(Player):
 				agent.inform(action, self.pnr, modified_game_state, modified_player_model)
 
 			return
+
+
+		if self.game_state_before_move == None: # CHIEF going second this means
+			if action == PLAY or action == DISCARD:
+				hand = []
+
+				for i in range(5):
+					if i < action.cnr:
+						hand.append(game_state.hands[self.partner_nr][i])
+					elif i > action.cnr:
+						hand.append(game_state.hands[self.partner_nr][i-1])
+					else:
+						hand.append(game_state.card_changed)
+			else:
+				hand = game_state.hands[self.partner_nr]
+
+			hands = [[]]*2
+			hands[self.partner_nr] = hand
+
+			self.game_state_before_move = GameState(self.partner_nr, hands, [], [], [(c, 0) for c in ALL_COLORS], 3, game_state.valid_actions, 8, [[initial_knowledge()]*5]*2)
+			self.player_model_before_move = BasePlayerModel(self.pnr, [initial_knowledge()]*5, [], [])
 
 		if len(self.card_ids) == 0:
 			for i, k in enumerate(player_model.knowledge):
@@ -299,19 +319,60 @@ class ChiefPlayer(Player):
 			prior = prev_row["agent distribution"]
 			prior2 = prev_row["MLE probabilities"]
 			updated_prior = new_conditional*prior
-			print(np.vectorize(lambda a: round(a,2))(self.makprob(updated_prior)), np.vectorize(lambda a: round(a,2))([prior]))
+			print(np.vectorize(lambda a: round(a,2))(self.makeprob(updated_prior)), np.vectorize(lambda a: round(a,2))([prior]))
 			self.move_tracking_table.at[self.move_idx,"agent distribution"] = self.makeprob(updated_prior)
 			self.move_tracking_table.at[self.move_idx,"MLE probabilities"] = (new_conditional + prior2*self.move_idx)/(self.move_idx + 1)
 
 		self.move_idx += 1
 
-	def get_prediction(self, game_state, player_model, new_samp, sampled_vals):		
+
+	## THESE 2 ARE ONLY USED FOR OBSERVATION TESTING/RESULTS #############################################
+
+	def generate_initial_state(self, game_state, player_model, action):
+		if action == PLAY or action == DISCARD:
+			hand = []
+
+			for i in range(5):
+				if i < action.cnr:
+					hand.append(game_state.hands[self.partner_nr][i])
+				elif i > action.cnr:
+					hand.append(game_state.hands[self.partner_nr][i-1])
+				else:
+					hand.append(game_state.card_changed)
+		else:
+			hand = game_state.hands[self.partner_nr]
+
+		hands = [[]]*2
+		hands[self.partner_nr] = hand
+
+		self.game_state_before_move = GameState(self.partner_nr, hands, [], [], [(c, 0) for c in ALL_COLORS], 3, game_state.valid_actions, 8, [[initial_knowledge()]*5]*2)
+		self.player_model_before_move = BasePlayerModel(self.pnr, [initial_knowledge()]*5, [], [])
+
+
+	def get_prediction(self): # Called when informing of other move, which means most recent game state after our own move
+		game_state = self.game_state_before_move
+		player_model = self.player_model_before_move
+		pred_vec = np.zeros(20)
+
+		for i in range(self.num_samples):	
+			new_samp = self.new_sample(self.total_card_knowledge)
+			sampled_vals = self.new_sample_original(game_state.all_knowledge[self.partner_nr])
+
+			for cid in self.card_ids:
+				if cid in self.total_card_knowledge:
+					sampled_vals[self.card_ids[cid]] = new_samp.card_vals[cid]
+
+			pred_vec += self._get_prediction_internal(game_state, player_model, new_samp, sampled_vals)
+
+		return np.argmax(pred_vec)
+
+
+	###################################################################################################
+
+	def _get_prediction_internal(self, game_state, player_model, new_samp, sampled_vals):		
 		modified_game_state = deepcopy(game_state)
 		modified_player_model = deepcopy(player_model)
 
-		##
-		# Generate samples like hand_sampler but try to guess action this time
-		##
 		agent_ids = sorted(self.player_pool.get_player_dict().keys())
 
 		game_states = []
@@ -355,7 +416,7 @@ class ChiefPlayer(Player):
 
 		prediction_vector = self.makeprob(probs)
 
-		return np.argmax(prediction_vector)
+		return prediction_vector
 
 	def _make_partner_knowledge_model(self, game_state):
 		partner_knowledge_model = dict()
@@ -388,6 +449,13 @@ class ChiefPlayer(Player):
 			return -1
 
 		return entropy(self.move_tracking_table.iloc[-1*back_moves_modified]["agent distribution"])
+
+	def current_probabilities(self):
+		if len(self.move_tracking_table) == 0:
+			return None
+
+		return {"agent likelihood":self.move_tracking_table.iloc[-1]["agent distribution"],
+				"conditional probabilities":self.move_tracking_table.iloc[-1]["conditional probabilities"]}
 
 	def weighted_sample(self, choices, probs): # making this because numpy.random.choice has annoying errors with floating point errors
 		x = random.random()
