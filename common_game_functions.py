@@ -156,7 +156,7 @@ def apply_hint_to_knowledge(action, hands, knowledges):
     return_knowledge = deepcopy(knowledges)
     if action.type == HINT_COLOR:
         for (col, num), knowledge in zip(
-            hands[action.pnr], return_knowledge[action.pnr]
+                hands[action.pnr], return_knowledge[action.pnr]
         ):
             if col == action.col:
                 for i, k in enumerate(knowledge):
@@ -169,7 +169,7 @@ def apply_hint_to_knowledge(action, hands, knowledges):
     else:
         assert action.type == HINT_NUMBER
         for (col, num), knowledge in zip(
-            hands[action.pnr], return_knowledge[action.pnr]
+                hands[action.pnr], return_knowledge[action.pnr]
         ):
             if num == action.num:
                 for k in knowledge:
@@ -204,7 +204,7 @@ def encode_new_knowledge_models(knowledge_models):
     for knowledge in values:
         for single in knowledge:
             ans.extend(sum(single, []))
-    assert len(ans) == 1250
+    assert(len(ans) == 1250)
     return ans
 
 
