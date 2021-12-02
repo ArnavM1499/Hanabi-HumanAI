@@ -113,6 +113,8 @@ class ChiefPlayer(Player):
                                 teammate_action = np.argmax(pred_vec)
                                 team_reward += self.eval_action(game_state_next.board, game_state.hands[self.partner_nr], teammate_action) + chief_reward
 
+                        print("Trying", va, "-> Predicted Team Reward =", team_reward/self.num_samples)
+
                         if team_reward > best_team_reward:
                                 best_team_reward = team_reward
                                 best_action = va
