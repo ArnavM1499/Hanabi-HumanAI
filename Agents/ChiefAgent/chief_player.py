@@ -654,6 +654,7 @@ class ChiefPlayer(Player):
                         game_state.trash.append(card_discarded)
                         game_state.all_knowledge[game_state.current_player][action.cnr] = initial_knowledge()
                         game_state.card_changed = card_discarded
+                        reward = -1 * slot_playable_pct(player_model.knowledge[action.cnr], game_state.board)
                 elif action.type == PLAY:
                         card_played = sampled_vals[action.cnr]
                         game_state.card_changed = card_played
@@ -684,6 +685,8 @@ class ChiefPlayer(Player):
                                                 k[action.num - 1] = 0
 
                                 slot_index += 1
+
+                        reward -= 1 - game_state.num_hints/8
                 else:
                         game_state.num_hints -= 1
                         hint_lis.append((game_state.current_player,action))
@@ -703,6 +706,8 @@ class ChiefPlayer(Player):
                                                 knowledge[action.col][i] = 0
 
                                 slot_index += 1
+
+                        reward -= 1 - game_state.num_hints/8
 
                 player_model.actions[player_model.nr].append(action)
                 player_model.knowledge = game_state.all_knowledge[1 - player_model.nr]
