@@ -57,7 +57,7 @@ def pkl_to_np(dataset_dir, *paths, rename=False):
                     )
 
 
-def pkl_to_lstm_np(dataset_dir, *paths, rename=False, train_split=0.7):
+def pkl_to_lstm_np(dataset_dir, *paths, rename=False, train_split=0.7, suffix=""):
     name2id = {}
     cnt = 0
     if not os.path.isdir(dataset_dir):
@@ -93,39 +93,22 @@ def pkl_to_lstm_np(dataset_dir, *paths, rename=False, train_split=0.7):
                     except EOFError:
                         break
                     except StartOfGame:
-                        # p1_output_path_all = os.path.join(
-                        #     dataset_dir, name2id[p1] + "_all.npy"
-                        # )
-                        # p2_output_path_all = os.path.join(
-                        #     dataset_dir, name2id[p2] + "_all.npy"
-                        # )
                         p1_output_path_train = os.path.join(
-                            dataset_dir, name2id[p2] + "_train.npy"
+                            dataset_dir, name2id[p2] + suffix + "_train.npy"
                         )
                         p2_output_path_train = os.path.join(
-                            dataset_dir, name2id[p2] + "_train.npy"
+                            dataset_dir, name2id[p2] + suffix + "_train.npy"
                         )
                         p1_output_path_val = os.path.join(
-                            dataset_dir, name2id[p2] + "_val.npy"
+                            dataset_dir, name2id[p2] + suffix + "_val.npy"
                         )
                         p2_output_path_val = os.path.join(
-                            dataset_dir, name2id[p2] + "_val.npy"
+                            dataset_dir, name2id[p2] + suffix + "_val.npy"
                         )
                         game_states = [np.array(x, dtype=np.int8) for x in game_states]
                         game_actions = [
                             np.array(x, dtype=np.int8) for x in game_actions
                         ]
-                        # game_action_values = [
-                        #     np.array(x, dtype=np.float16) for x in game_action_values
-                        # ]
-                        # with open(p1_output_path_all, "ab+") as fout:
-                        #     np.save(fout, game_states[0])
-                        #     np.save(fout, game_actions[0])
-                        #     # np.save(fout, game_action_values[0])
-                        # with open(p2_output_path_all, "ab+") as fout:
-                        #     np.save(fout, game_states[1])
-                        #     np.save(fout, game_actions[1])
-                        # np.save(fout, game_action_values[1])
                         if random() < train_split:
                             with open(p1_output_path_train, "ab+") as fout:
                                 np.save(fout, game_states[0])

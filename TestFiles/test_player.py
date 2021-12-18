@@ -5,17 +5,24 @@ from multiprocessing import Pool
 import os
 from pprint import pprint
 import random
+from subprocess import Popen, DEVNULL
+from signal import SIGTERM
 import sys
 import time
 import threading
 from tqdm import tqdm
+
 from hanabi import Game
 from Agents.player import Player
 from Agents.ChiefAgent.player_pool import PlayerPool
 from Agents.value_player import ValuePlayer
 
-player_pool = json.load(open("Agents/configs/players.json"))
-dummy_pool = PlayerPool("dummy", 0, "Agents/configs/players.json")
+base_path = os.path.abspath(__file__).replace("TestFiles/test_player.py", "")
+pool_path = os.path.abspath(__file__).replace(
+    "TestFiles/test_player.py", "Agents/configs/players.json"
+)
+player_pool = json.load(open(pool_path))
+dummy_pool = PlayerPool("dummy", 0, pool_path)
 
 
 def run_single(
@@ -26,7 +33,7 @@ def run_single(
     key2=None,
     clean=False,
     print_game=True,
-    print_data=False
+    print_data=False,
 ):
 
     if not player2:
@@ -54,7 +61,10 @@ def run_single(
     hits = G.hits
     turns = G.turn
     if clean:
-        os.remove(file_name)
+        try:
+            os.remove(file_name)
+        except FileNotFoundError:
+            pass
     return score, hints, hits, turns
 
 
@@ -159,7 +169,7 @@ def test_player(
         ]
         results = [list(x) for x in zip(*res)]
     else:
-        p = Pool(min(16, iters))
+        p = Pool(min(24, iters))
         res = p.starmap_async(
             run_single,
             [
@@ -182,20 +192,15 @@ def test_player(
     hints = sum(results[1]) / iters
     hits = sum(results[2]) / iters
     turns = sum(results[3]) / iters
+    full = results[0].count(25) / iters
     print(
-        "{} games: avg: {}, min: {}, max: {}, median: {}, mode: {}".format(
-            iters,
-            avg,
-            smin,
-            smax,
-            smid,
-            smod,
+        "{} games: avg: {}, min: {}, max: {}, median: {}, mode: {}, full: {}".format(
+            iters, avg, smin, smax, smid, smod, full
         )
     )
     print(
         "average: hints left: {}, hits left: {}, turns: {}".format(hints, hits, turns)
     )
-    return sum(results[0]) / iters
 
     if print_details:
         pprint(list(zip(*results)))
@@ -207,12 +212,12 @@ def sequential_test(player, player2=None, iters=5000, seed=0, save_pkl_dir=None,
     random.seed(seed)
     iters = int(iters)
     if isinstance(save_pkl_dir, str):
-        print("saving into ", os.path.abspath(save_pkl_dir))
         if not os.path.isdir(save_pkl_dir):
             os.makedirs(save_pkl_dir)
         save_file = os.path.join(
-            save_pkl_dir, "{}_{}_{}.pkl".format(player, player2, seed)
+            save_pkl_dir, "{}_{}_{}.pkl".format(player, player2, str(seed).zfill(4))
         )
+        print("saving into ", os.path.abspath(save_file))
         if os.path.isfile(save_file):
             # remove previous data
             f = open(save_file, "w")
@@ -224,20 +229,25 @@ def sequential_test(player, player2=None, iters=5000, seed=0, save_pkl_dir=None,
             for i in range(iters):
                 run_single(save_file, player, player2, clean=False, print_game=False)
     else:
+        print(save_pkl_dir, "is not a str")
         for i in tqdm(range(iters)):
             run_single(
                 "sink_{}.csv".format(i), player, player2, clean=True, print_game=False
             )
 
 
-def generate_data(player, save_pkl_dir, iters=20000, threads=16, method="thread"):
+def generate_data(
+    player, save_pkl_dir, player2=None, iters=20000, threads=16, method="thread", seed=0
+):
+    if player2 is None:
+        player2 = player
     if method == "thread":
         tds = []
         print("using {} threads".format(threads))
         for i in range(threads):
             thread = threading.Thread(
                 target=sequential_test,
-                args=(player, player, iters / threads, i, save_pkl_dir, i),
+                args=(player, player2, iters / threads, seed + i, save_pkl_dir, 1),
             )
             tds.append(thread)
 
@@ -250,13 +260,50 @@ def generate_data(player, save_pkl_dir, iters=20000, threads=16, method="thread"
         P = Pool(threads)
         for i in range(threads):
             P.apply_async(
-                sequential_test, (player, player, iters // threads, i, save_pkl_dir, i)
+                sequential_test,
+                (player, player2, iters // threads, seed + i, save_pkl_dir, 1),
             )
         P.close()
         P.join()
     elif method == "single":
         sequential_test(player, player, iters, 0, save_pkl_dir, 0)
+    elif method == "subprocess":
+        processes = []
+        for i in range(threads):
+            processes.append(
+                Popen(
+                    " ".join(
+                        [
+                            "cd {}; ".format(base_path),
+                            "python3 -m TestFiles.test_player sequential_test",
+                            "--player=" + str(player),
+                            "--player2=" + str(player2),
+                            "--iters=" + str(iters),
+                            "--seed=" + str(i + seed),
+                            "--save_pkl_dir=" + save_pkl_dir,
+                            "--tid=1",
+                        ]
+                    ),
+                    shell=True,
+                    stdout=DEVNULL,
+                    preexec_fn=os.setsid,
+                )
+            )
+        try:
+            for p in processes:
+                p.wait()
+                try:
+                    os.killpg(os.getpgid(p.pid), SIGTERM)
+                except ProcessLookupError:
+                    pass
+        except KeyboardInterrupt:
+            for p in processes:
+                try:
+                    os.killpg(os.getpgid(p.pid), SIGTERM)
+                except ProcessLookupError:
+                    pass
     else:
+        print("method {} not found".format(method))
         raise NotImplementedError
 
 

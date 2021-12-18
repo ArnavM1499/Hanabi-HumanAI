@@ -1,3 +1,4 @@
+from glob import glob
 import numpy as np
 import sys
 import torch
@@ -5,6 +6,10 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 import os
 from lstm_net import LSTMNet
+from utils import pkl_to_lstm_np
+
+sys.path.insert(0, "..")
+from TestFiles.test_player import test_player, generate_data  # noqa
 
 torch.manual_seed(0)
 torch.multiprocessing.set_sharing_strategy("file_system")
@@ -12,18 +17,26 @@ print(sys.argv)
 
 
 AGENT = sys.argv[1]
+BC_NAME = list(AGENT)
+BC_NAME[1] = "9"
+BC_NAME = "".join(BC_NAME)
 
-GAME_STATE_LENGTH = 583 + 20  # base + extended (discardable / playable)
 GAME_STATE_LENGTH = 583 + 20 + 10 * 125
 
-DATA_ALL = "../log/data1103/lstm/{}_all.npy".format(AGENT)
-DATA_TRAIN = DATA_ALL.replace("_all", "_train")
-DATA_VAL = DATA_ALL.replace("_all", "_val")
-MODEL_PATH = "../log/model_lstm_jc/model_fc_extend_{}.pth".format(AGENT)
-WRITER_PATH = "runs_poster/{}".format(os.path.basename(MODEL_PATH).replace(".pth", ""))
+DATA_DIR = "../log/dagger_data/{}".format(AGENT)
+DATA_DIR = os.path.abspath(DATA_DIR)
+DATA_TRAIN = os.path.join(DATA_DIR, "{}_base_train.npy".format(AGENT))
+DATA_VAL = os.path.join(DATA_DIR, "{}_base_val.npy".format(AGENT))
+MODEL_PATH = "./models/model_lstm_{}.pth".format(AGENT)
+WRITER_PATH = "runs/dagger_{}".format(os.path.basename(MODEL_PATH).replace(".pth", ""))
 
 BATCH_SIZE = 512
-EPOCH = 50
+EPOCH = 60
+
+ROUNDS = 40
+INCREMENT = 20000
+MAX_GAMES = 100000
+TEST_GAME = 100
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 LOGGER = SummaryWriter(WRITER_PATH)
@@ -33,15 +46,7 @@ class PickleDataset(torch.utils.data.Dataset):
     def __init__(self, dataset_file, model=None):
         self.states = []
         self.actions = []
-        with open(dataset_file, "rb") as fin:
-            while True:
-                try:
-                    self.states.append(
-                        torch.from_numpy(np.load(fin) * 0.333).type(torch.float32)
-                    )
-                    self.actions.append(torch.from_numpy(np.load(fin)).type(torch.long))
-                except ValueError:
-                    break
+        self.add_file(dataset_file)
         if model is not None:
             self.mapping = [
                 (lambda x: x < 10, 20),
@@ -49,7 +54,6 @@ class PickleDataset(torch.utils.data.Dataset):
                 (lambda x: 15 <= x and x < 20, 22),
             ]
             self.update_labels(model)
-        self.set_weights()
 
     def __len__(self):
         return len(self.states)
@@ -61,7 +65,7 @@ class PickleDataset(torch.utils.data.Dataset):
             torch.tensor(self.actions[idx].size()[0]),
         )
 
-    def set_weights(self):
+    def _set_weights(self):
         count = {
             i: sum(x.to(torch.int32).tolist().count(i) for x in self.actions)
             for i in range(20)
@@ -71,6 +75,32 @@ class PickleDataset(torch.utils.data.Dataset):
         self.weights = torch.tensor(
             [1 if count[i] == 0 else total / count[i] for i in range(20)]
         )
+
+    def add_file(self, dataset_file):
+        count = len(self)
+        head = 0
+        with open(dataset_file, "rb") as fin:
+            while True:
+                try:
+                    if count < MAX_GAMES:
+                        self.states.append(
+                            torch.from_numpy(np.load(fin) * 0.333).type(torch.float32)
+                        )
+                        self.actions.append(
+                            torch.from_numpy(np.load(fin)).type(torch.long)
+                        )
+                        count += 1
+                    else:
+                        self.states[head] = torch.from_numpy(np.load(fin) * 0.333).type(
+                            torch.float32
+                        )
+                        self.actions[head] = torch.from_numpy(np.load(fin)).type(
+                            torch.long
+                        )
+                        head = (head + 1) % MAX_GAMES
+                except ValueError:
+                    break
+        self._set_weights()
 
     def update_labels(self, model):
         model.eval()
@@ -94,20 +124,15 @@ def pack_games(games):
 
 
 num_units = 512
-model = LSTMNet([num_units], num_units, 2, [], drop_out=True).to(DEVICE)
-model = torch.nn.Sequential(
-    torch.nn.Linear(GAME_STATE_LENGTH, num_units),
-    torch.nn.ReLU(),
-    torch.nn.Linear(num_units, num_units),
-    torch.nn.ReLU(),
-    torch.nn.Linear(num_units, 20),
+model = LSTMNet([num_units], num_units, 2, [], drop_out=True, drop_out_rate=0.3).to(
+    DEVICE
 )
 
 loss_fn = torch.nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
 
-valset = torch.utils.data.DataLoader(
+valset_base = torch.utils.data.DataLoader(
     PickleDataset(DATA_VAL),
     batch_size=BATCH_SIZE,
     shuffle=False,
@@ -115,13 +140,13 @@ valset = torch.utils.data.DataLoader(
 )
 
 
-def val(log_iter=0, include_cat=False):
+def val(log_iter=0, include_cat=False, run_game=False):
     losses = []
     correct = 0
     total = 0
     model.eval()
     with torch.no_grad():
-        for i, (states, actions, lengths) in enumerate(tqdm(valset)):
+        for i, (states, actions, lengths) in enumerate(tqdm(valset_base)):
             states, actions = states.to(DEVICE), actions.to(DEVICE)
             pred = model(states, lengths)
             loss = loss_fn(pred.data, actions.data)
@@ -140,7 +165,18 @@ def val(log_iter=0, include_cat=False):
         LOGGER.add_scalar("Cat/Accuracy", cat_accuracy, log_iter)
     LOGGER.add_scalar("Loss/Val", loss, log_iter)
     LOGGER.add_scalar("Accuracy/Val", accuracy, log_iter)
-    print("  val loss: ", loss, " accuracy: ", accuracy)
+    print("val loss: ", loss, " accuracy: ", accuracy)
+    if run_game:
+        result1 = test_player(AGENT, BC_NAME, TEST_GAME // 2, single_thread=True)
+        result2 = test_player(BC_NAME, AGENT, TEST_GAME // 2, single_thread=True)
+        savg = (result1[1] + result2[1]) / 2
+        smin = (result1[2] + result2[2]) / 2
+        smax = (result1[3] + result2[3]) / 2
+        hits = (result1[7] + result2[7]) / 2
+        LOGGER.add_scalar("Game/Average", savg, log_iter)
+        LOGGER.add_scalar("Game/Min", smin, log_iter)
+        LOGGER.add_scalar("Game/Max", smax, log_iter)
+        LOGGER.add_scalar("Game/Hits", hits, log_iter)
     model.train()
 
 
@@ -154,21 +190,51 @@ def train():
     )
     loss_fn = torch.nn.CrossEntropyLoss(weight=traindata.weights.to(DEVICE))
     size = len(trainset)
-    for e in range(EPOCH):
-        val(e * size, include_cat=True)
-        for i, (states, actions, lengths) in enumerate(
-            tqdm(trainset, desc="epoch: {}".format(e))
-        ):
-            states, actions = states.to(DEVICE), actions.to(DEVICE)
-            pred = model(states, lengths)
-            loss = loss_fn(pred.data, actions.data)
-            accuracy = (pred.data.argmax(1) == actions.data).type(torch.float).mean()
-            LOGGER.add_scalar("Loss/Train", loss.item(), e * size + i)
-            LOGGER.add_scalar("Accuracy/Train", accuracy.item(), e * size + i)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-        torch.save(model.state_dict(), MODEL_PATH)
+    for r in range(1, ROUNDS + 1):
+        for e in range(EPOCH):
+            val(e * size, include_cat=True, run_game=True)
+            for i, (states, actions, lengths) in enumerate(
+                tqdm(trainset, desc="epoch: {}".format(e))
+            ):
+                states, actions = states.to(DEVICE), actions.to(DEVICE)
+                pred = model(states, lengths)
+                loss = loss_fn(pred.data, actions.data)
+                accuracy = (
+                    (pred.data.argmax(1) == actions.data).type(torch.float).mean()
+                )
+                LOGGER.add_scalar("Loss/Train", loss.item(), e * size + i)
+                LOGGER.add_scalar("Accuracy/Train", accuracy.item(), e * size + i)
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+            torch.save(
+                model.state_dict(),
+                MODEL_PATH.replace(".pth", "_{}.pth".format(str(r).zfill(2))),
+            )
+        print("generating new data for round", r)
+        generate_data(
+            AGENT, DATA_DIR, BC_NAME, INCREMENT // 2, 3, "subprocess", r * 100
+        )
+        generate_data(
+            BC_NAME, DATA_DIR, AGENT, INCREMENT // 2, 3, "subprocess", r * 100
+        )
+        round_id = str(r).zfill(2)
+        pkl_to_lstm_np(
+            DATA_DIR,
+            *glob(os.path.join(DATA_DIR, "*_*_{}*.pkl".format(round_id))),
+            train_split=1,
+            suffix="_" + round_id,
+        )
+        print("loading new data for round", r)
+        traindata.add_file(
+            os.path.join(DATA_DIR, "{}_{}_train.npy".format(AGENT, round_id))
+        )
+        trainset = torch.utils.data.DataLoader(
+            traindata,
+            batch_size=BATCH_SIZE,
+            shuffle=True,
+            collate_fn=pack_games,
+        )
 
 
 def eval_model(save_matrix="", cat3=False, load_model=True):
@@ -179,7 +245,7 @@ def eval_model(save_matrix="", cat3=False, load_model=True):
     totals = [0] * 20
     matrix = [[0 for i in range(20)] for j in range(20)]
     with torch.no_grad():
-        for i, (states, actions, lengths) in enumerate(tqdm(valset)):
+        for i, (states, actions, lengths) in enumerate(tqdm(valset_base)):
             for label in range(20):
                 states, actions = states.to(DEVICE), actions.to(DEVICE)
                 pred = model(states, lengths)
