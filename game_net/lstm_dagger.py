@@ -31,12 +31,12 @@ MODEL_PATH = "./models/model_lstm_{}.pth".format(AGENT)
 WRITER_PATH = "runs/dagger_{}".format(os.path.basename(MODEL_PATH).replace(".pth", ""))
 
 BATCH_SIZE = 512
-EPOCH = 60
+EPOCH = 50
 
 ROUNDS = 40
 INCREMENT = 20000
 MAX_GAMES = 100000
-TEST_GAME = 500
+TEST_GAME = 1000
 THREADS = 16
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -47,6 +47,7 @@ class PickleDataset(torch.utils.data.Dataset):
     def __init__(self, dataset_file, model=None):
         self.states = []
         self.actions = []
+        self.lru_head = 0
         self.add_file(dataset_file)
         if model is not None:
             self.mapping = [
@@ -79,7 +80,6 @@ class PickleDataset(torch.utils.data.Dataset):
 
     def add_file(self, dataset_file):
         count = len(self)
-        head = 0
         with open(dataset_file, "rb") as fin:
             while True:
                 try:
@@ -92,13 +92,13 @@ class PickleDataset(torch.utils.data.Dataset):
                         )
                         count += 1
                     else:
-                        self.states[head] = torch.from_numpy(np.load(fin) * 0.333).type(
-                            torch.float32
-                        )
-                        self.actions[head] = torch.from_numpy(np.load(fin)).type(
-                            torch.long
-                        )
-                        head = (head + 1) % MAX_GAMES
+                        self.states[self.lru_head] = torch.from_numpy(
+                            np.load(fin) * 0.333
+                        ).type(torch.float32)
+                        self.actions[self.lru_head] = torch.from_numpy(
+                            np.load(fin)
+                        ).type(torch.long)
+                        self.lrh_head = (self.lru_head + 1) % count
                 except ValueError:
                     break
         print("current dataset size: ", len(self))
@@ -173,13 +173,15 @@ def val(log_iter=0, include_cat=False, run_game=False):
         result1 = test_player(AGENT, BC_NAME, TEST_GAME // 2)
         result2 = test_player(BC_NAME, AGENT, TEST_GAME // 2)
         savg = (result1[1] + result2[1]) / 2
-        smin = (result1[2] + result2[2]) / 2
-        smax = (result1[3] + result2[3]) / 2
+        smin = min(result1[2], result2[2])
+        smax = max(result1[3], result2[3])
         hits = (result1[7] + result2[7]) / 2
+        turns = (result1[8] + result2[8]) / 2
         LOGGER.add_scalar("Game/Average", savg, log_iter)
         LOGGER.add_scalar("Game/Min", smin, log_iter)
         LOGGER.add_scalar("Game/Max", smax, log_iter)
         LOGGER.add_scalar("Game/Hits", hits, log_iter)
+        LOGGER.add_scalar("Game/Turns", turns, log_iter)
     model.train()
 
 
@@ -195,7 +197,8 @@ def train():
     size = len(trainset)
     for r in range(1, ROUNDS + 1):
         for e in range(EPOCH):
-            val((r - 1) * EPOCH * size + e * size, include_cat=True, run_game=True)
+            timestamp = (r - 1) * EPOCH * size + e * size
+            val(timestamp, include_cat=True, run_game=(e % 5 == 1))
             for i, (states, actions, lengths) in enumerate(
                 tqdm(trainset, desc="epoch: {}".format(e))
             ):
@@ -205,8 +208,8 @@ def train():
                 accuracy = (
                     (pred.data.argmax(1) == actions.data).type(torch.float).mean()
                 )
-                LOGGER.add_scalar("Loss/Train", loss.item(), e * size + i)
-                LOGGER.add_scalar("Accuracy/Train", accuracy.item(), e * size + i)
+                LOGGER.add_scalar("Loss/Train", loss.item(), timestamp + i)
+                LOGGER.add_scalar("Accuracy/Train", accuracy.item(), timestamp + i)
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
