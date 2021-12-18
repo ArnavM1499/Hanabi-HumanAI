@@ -36,7 +36,8 @@ EPOCH = 60
 ROUNDS = 40
 INCREMENT = 20000
 MAX_GAMES = 100000
-TEST_GAME = 100
+TEST_GAME = 500
+THREADS = 16
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 LOGGER = SummaryWriter(WRITER_PATH)
@@ -100,6 +101,7 @@ class PickleDataset(torch.utils.data.Dataset):
                         head = (head + 1) % MAX_GAMES
                 except ValueError:
                     break
+        print("current dataset size: ", len(self))
         self._set_weights()
 
     def update_labels(self, model):
@@ -141,6 +143,7 @@ valset_base = torch.utils.data.DataLoader(
 
 
 def val(log_iter=0, include_cat=False, run_game=False):
+    print("evaluation for timestamp:", log_iter)
     losses = []
     correct = 0
     total = 0
@@ -167,8 +170,8 @@ def val(log_iter=0, include_cat=False, run_game=False):
     LOGGER.add_scalar("Accuracy/Val", accuracy, log_iter)
     print("val loss: ", loss, " accuracy: ", accuracy)
     if run_game:
-        result1 = test_player(AGENT, BC_NAME, TEST_GAME // 2, single_thread=True)
-        result2 = test_player(BC_NAME, AGENT, TEST_GAME // 2, single_thread=True)
+        result1 = test_player(AGENT, BC_NAME, TEST_GAME // 2)
+        result2 = test_player(BC_NAME, AGENT, TEST_GAME // 2)
         savg = (result1[1] + result2[1]) / 2
         smin = (result1[2] + result2[2]) / 2
         smax = (result1[3] + result2[3]) / 2
@@ -192,7 +195,7 @@ def train():
     size = len(trainset)
     for r in range(1, ROUNDS + 1):
         for e in range(EPOCH):
-            val(e * size, include_cat=True, run_game=True)
+            val((r - 1) * EPOCH * size + e * size, include_cat=True, run_game=True)
             for i, (states, actions, lengths) in enumerate(
                 tqdm(trainset, desc="epoch: {}".format(e))
             ):
@@ -213,10 +216,22 @@ def train():
             )
         print("generating new data for round", r)
         generate_data(
-            AGENT, DATA_DIR, BC_NAME, INCREMENT // 2, 3, "subprocess", r * 100
+            AGENT,
+            DATA_DIR,
+            BC_NAME,
+            INCREMENT // 2 // THREADS,
+            THREADS,
+            "subprocess",
+            r * 100,
         )
         generate_data(
-            BC_NAME, DATA_DIR, AGENT, INCREMENT // 2, 3, "subprocess", r * 100
+            BC_NAME,
+            DATA_DIR,
+            AGENT,
+            INCREMENT // 2 // THREADS,
+            THREADS,
+            "subprocess",
+            r * 100,
         )
         round_id = str(r).zfill(2)
         pkl_to_lstm_np(
@@ -246,43 +261,45 @@ def eval_model(save_matrix="", cat3=False, load_model=True):
     matrix = [[0 for i in range(20)] for j in range(20)]
     with torch.no_grad():
         for i, (states, actions, lengths) in enumerate(tqdm(valset_base)):
-            for label in range(20):
-                states, actions = states.to(DEVICE), actions.to(DEVICE)
-                pred = model(states, lengths)
-                mask = actions.data == label
-                masked_pred = pred.data[mask, :]
-                masked_label = torch.masked_select(actions.data, mask)
-                if int(masked_label.shape[0]) > 0:
-                    if cat3:
-                        predicted = masked_pred.argmax(1).cpu()
-                        if label < 10:
-                            corrects[label] += (
-                                np.logical_or(predicted < 10, predicted == 20)
-                                .type(torch.float)
-                                .sum()
-                                .item()
-                            )
-                        elif label < 15:
+            states, actions = states.to(DEVICE), actions.to(DEVICE)
+            pred = model(states, lengths)
+            if cat3:
+                for label_lo, label_hi, extra in [
+                    (0, 10, 20),
+                    (10, 15, 21),
+                    (15, 20, 22),
+                ]:
+                    for label in range(label_lo, label_hi):
+                        mask = actions.data == label
+                        masked_pred = pred.data[mask, :]
+                        masked_label = torch.masked_select(actions.data, mask)
+                        if int(masked_label.shape[0]) > 0:
+                            predicted = masked_pred.argmax(1).cpu()
                             corrects[label] += (
                                 np.logical_or(
-                                    np.logical_and(predicted >= 10, predicted < 15),
-                                    predicted == 21,
+                                    np.logical_and(
+                                        predicted >= label_lo, predicted < label_hi
+                                    ),
+                                    predicted == extra,
                                 )
                                 .type(torch.float)
                                 .sum()
                                 .item()
                             )
-                        else:
-                            corrects[label] += (
-                                np.logical_or(
-                                    np.logical_and(predicted >= 15, predicted < 20),
-                                    predicted == 22,
-                                )
+                        totals[label] += masked_label.shape[0]
+                        for p in range(20):
+                            matrix[label][p] += (
+                                (masked_pred.argmax(1) == p)
                                 .type(torch.float)
                                 .sum()
                                 .item()
                             )
-                    else:
+            else:
+                for label in range(20):
+                    mask = actions.data == label
+                    masked_pred = pred.data[mask, :]
+                    masked_label = torch.masked_select(actions.data, mask)
+                    if int(masked_label.shape[0]) > 0:
                         corrects[label] += (
                             (masked_pred.argmax(1) == masked_label)
                             .type(torch.float)
@@ -294,6 +311,7 @@ def eval_model(save_matrix="", cat3=False, load_model=True):
                         matrix[label][p] += (
                             (masked_pred.argmax(1) == p).type(torch.float).sum().item()
                         )
+
     if save_matrix.endswith(".npy"):
         np.save(save_matrix, np.array(matrix, dtype=np.int32))
     hint = sum(corrects[:10]) / sum(totals[:10])

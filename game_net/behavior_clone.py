@@ -10,7 +10,7 @@ from Agents.player import Action
 
 
 MODEL_DIR = os.path.abspath(__file__).replace("behavior_clone.py", "models")
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+DEVICE = "cpu"  # "cuda" if torch.cuda.is_available() else "cpu"
 
 
 class BehaviorCloneBase:

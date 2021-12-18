@@ -95,13 +95,6 @@ def pack_games(games):
 
 num_units = 512
 model = LSTMNet([num_units], num_units, 2, [], drop_out=True).to(DEVICE)
-model = torch.nn.Sequential(
-    torch.nn.Linear(GAME_STATE_LENGTH, num_units),
-    torch.nn.ReLU(),
-    torch.nn.Linear(num_units, num_units),
-    torch.nn.ReLU(),
-    torch.nn.Linear(num_units, 20),
-)
 
 loss_fn = torch.nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
