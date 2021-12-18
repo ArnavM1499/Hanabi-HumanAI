@@ -194,8 +194,8 @@ def train():
         collate_fn=pack_games,
     )
     loss_fn = torch.nn.CrossEntropyLoss(weight=traindata.weights.to(DEVICE))
-    size = len(trainset)
     for r in range(1, ROUNDS + 1):
+        size = len(trainset)
         for e in range(EPOCH):
             timestamp = (r - 1) * EPOCH * size + e * size
             val(timestamp, include_cat=True, run_game=(e % 5 == 1))
