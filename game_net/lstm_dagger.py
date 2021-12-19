@@ -33,7 +33,7 @@ WRITER_PATH = "runs/dagger_{}".format(os.path.basename(MODEL_PATH).replace(".pth
 BATCH_SIZE = 512
 EPOCH = 50
 
-ROUNDS = 40
+ROUNDS = 20
 INCREMENT = 20000
 MAX_GAMES = 100000
 TEST_GAME = 1000
@@ -194,11 +194,10 @@ def train():
         collate_fn=pack_games,
     )
     loss_fn = torch.nn.CrossEntropyLoss(weight=traindata.weights.to(DEVICE))
+    count = 0
     for r in range(1, ROUNDS + 1):
-        size = len(trainset)
         for e in range(EPOCH):
-            timestamp = (r - 1) * EPOCH * size + e * size
-            val(timestamp, include_cat=True, run_game=(e % 5 == 1))
+            val(count, include_cat=True, run_game=(e % 5 == 1))
             for i, (states, actions, lengths) in enumerate(
                 tqdm(trainset, desc="epoch: {}".format(e))
             ):
@@ -208,11 +207,12 @@ def train():
                 accuracy = (
                     (pred.data.argmax(1) == actions.data).type(torch.float).mean()
                 )
-                LOGGER.add_scalar("Loss/Train", loss.item(), timestamp + i)
-                LOGGER.add_scalar("Accuracy/Train", accuracy.item(), timestamp + i)
+                LOGGER.add_scalar("Loss/Train", loss.item(), count)
+                LOGGER.add_scalar("Accuracy/Train", accuracy.item(), count)
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
+                count += 1
             torch.save(
                 model.state_dict(),
                 MODEL_PATH.replace(".pth", "_{}.pth".format(str(r).zfill(2))),
@@ -226,7 +226,7 @@ def train():
             THREADS,
             "subprocess",
             r * 100,
-            BC_NAME[0] + '0' + BC_NAME[2:] + '1'
+            AGENT + "1",  # BC_NAME[0] + '0' + BC_NAME[2:] + '1'
         )
         generate_data(
             BC_NAME,
@@ -236,7 +236,7 @@ def train():
             THREADS,
             "subprocess",
             r * 100,
-            BC_NAME[0] + '0' + BC_NAME[2:] + '0'
+            AGENT + "0",  # BC_NAME[0] + '0' + BC_NAME[2:] + '0'
         )
         round_id = str(r).zfill(2)
         pkl_to_lstm_np(
