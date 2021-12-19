@@ -226,6 +226,7 @@ def train():
             THREADS,
             "subprocess",
             r * 100,
+            BC_NAME[0] + '0' + BC_NAME[2:] + '1'
         )
         generate_data(
             BC_NAME,
@@ -235,6 +236,7 @@ def train():
             THREADS,
             "subprocess",
             r * 100,
+            BC_NAME[0] + '0' + BC_NAME[2:] + '0'
         )
         round_id = str(r).zfill(2)
         pkl_to_lstm_np(
