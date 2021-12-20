@@ -12,9 +12,9 @@ import random
 
 args = sys.argv[1:]
 
-if len(args) == 2 and args[0] == '-seed':
-	random.seed(int(args[1]))
-	np.random.seed(int(args[1]))
+if len(args) == 2 and args[0] == "-seed":
+    random.seed(int(args[1]))
+    np.random.seed(int(args[1]))
 
 new_chief = ChiefPlayer("CHIEF", 0, "Agents/configs/players.json")
 
@@ -29,10 +29,10 @@ with open("Agents/configs/players.json", "r") as f:
     json_vals = json.load(f)
 
 for i in range(1):
-	P1 = new_chief
-	P2 = new_chief.player_pool.from_dict("Teammate", 0, json_vals[id_string])
-	pickle.dump(["NEW"], pickle_file)
-	G = hanabi.Game([P1, P2], file_name, pickle_file)
-	Result = G.run(100)
+    P1 = new_chief
+    P2 = new_chief.player_pool.from_dict("Teammate", 0, json_vals[id_string])
+    pickle.dump(["NEW"], pickle_file)
+    G = hanabi.Game([P1, P2], file_name, pickle_file)
+    Result = G.run(100)
 
 pickle_file.close()
