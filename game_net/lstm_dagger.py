@@ -130,6 +130,8 @@ model = LSTMNet([num_units], num_units, 2, [], drop_out=True, drop_out_rate=0.3)
     DEVICE
 )
 
+model.load_state_dict(torch.load("models/dagger_00004_w_relabel/model_lstm_00004_10.pth", map_location=DEVICE))
+
 loss_fn = torch.nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
@@ -215,7 +217,7 @@ def train():
                 count += 1
             torch.save(
                 model.state_dict(),
-                MODEL_PATH.replace(".pth", "_{}.pth".format(str(r).zfill(2))),
+                "models/dagger_00004_w_relabel/model_lstm_00004.pth".replace(".pth", "_{}.pth".format(str(r+10).zfill(2))),
             )
         print("generating new data for round", r)
         generate_data(
