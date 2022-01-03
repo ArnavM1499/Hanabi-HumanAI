@@ -312,7 +312,7 @@ class Game(object):
 
         # Data collection
         if self.pickle_file:
-            pickle.dump(["Action", game_state, player_model, action], self.pickle_file)
+            pickle.dump(["Action", game_state, player_model, action, partner_knowledge_model], self.pickle_file)
 
         # Process action
         self.external_turn(action, partner_knowledge_model)

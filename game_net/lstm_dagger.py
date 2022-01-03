@@ -188,7 +188,25 @@ def val(log_iter=0, include_cat=False, run_game=False):
 
 
 def train():
-    traindata = PickleDataset(DATA_TRAIN)
+    generate_data(
+        AGENT,
+        DATA_DIR,
+        AGENT,
+        INCREMENT // 20 // THREADS,
+        THREADS,
+        "subprocess",
+        0
+    )
+    pkl_to_lstm_np(
+        DATA_DIR,
+        *glob(os.path.join(DATA_DIR, "*_*_{}*.pkl".format(round_id))),
+        train_split=1,
+        suffix="_" + round_id,
+    )
+    print("loading new data for round", r)
+    traindata.add_file(
+        os.path.join(DATA_DIR, "{}_{}_train.npy".format(AGENT, round_id))
+    )
     trainset = torch.utils.data.DataLoader(
         traindata,
         batch_size=BATCH_SIZE,
