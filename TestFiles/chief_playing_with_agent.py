@@ -21,7 +21,6 @@ pickle_file_name = "chief_testing"
 # pool_ids = ["00001","00002","00003","00004","00005","10001","10002","10003","10004","10005"]
 pool_ids = ["10001"]
 id_string = np.random.choice(pool_ids)
-new_chief = ChiefPlayer("CHIEF", 0, pool_ids)
 
 def from_dict(name, pnr, json_dict):
     json_dict["name"] = name
@@ -36,8 +35,8 @@ print("CHOSE AGENT: ", json_vals[id_string])
 L = []
 
 for i in range(10):
-	# P1 = new_chief
-	P1 = BehaviorPlayer("BC",0,agent_id=id_string)
+	P1 = ChiefPlayer("CHIEF", 0, pool_ids)
+	# P1 = BehaviorPlayer("BC",0,agent_id=id_string)
 	P2 = from_dict("Teammate", 1, json_vals[id_string])
 	
 	pickle_file = open(pickle_file_name, "wb")
@@ -47,5 +46,6 @@ for i in range(10):
 	pickle_file.close()
 
 	L.append(Result)
+	print(L, file=sys.stderr)
 
 print(np.mean(L), file=sys.stderr)

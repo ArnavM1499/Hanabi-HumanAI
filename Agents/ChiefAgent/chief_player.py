@@ -57,6 +57,8 @@ class ChiefPlayer(Player):
                 self.sequential_partnerknowledgemodels_chief_persp = []
 
         def get_action(self, game_state, player_model, action_default=None):
+                print("Starting get action")
+
                 self.sequential_gamestates_chief_persp.append(game_state)
                 self.sequential_playermodels_chief_persp.append(player_model)
                 self.sequential_partnerknowledgemodels_chief_persp.append(self._make_partner_knowledge_model(game_state))
@@ -126,6 +128,8 @@ class ChiefPlayer(Player):
                 return self.action_from_key(action_key, self.partner_nr)
 
         def inform(self, action, player, game_state, player_model):
+                print("Starting inform")
+
                 changed_cards = []
                 drawn_move = []
 
@@ -450,6 +454,13 @@ class ChiefPlayer(Player):
 
                 return action.type*5 + j
 
+        def action_from_key(self, action_key, partner_nr):
+                action_type = action_key//5
+                action_idx = action_key%5
+                pnr = 1 - partner_nr if action_type in [PLAY, DISCARD] else partner_nr
+
+                return Action(action_type, pnr, action_idx, action_idx + 1, action_idx)
+
         def sample_hash(self, sample):
                 temp = sample.card_vals
                 return str(temp)
@@ -507,7 +518,6 @@ class ChiefPlayer(Player):
 
                         for i in range(len(game_state.hands)):
                                 if game_state.hands[i] is None:
-                                        # print("hello")
                                         game_state.hands[i] = self.gen_hand(samp_values, idx)
 
                         game_states.append(game_state)
