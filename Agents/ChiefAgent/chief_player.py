@@ -52,9 +52,17 @@ class ChiefPlayer(Player):
                 self.num_samples = num_samples
                 self.avoid_knowledge_rollback = avoid_knowledge_rollback
 
+                self.sequential_gamestates_chief_persp = []
+                self.sequential_playermodels_chief_persp = []
+                self.sequential_partnerknowledgemodels_chief_persp = []
+
         def get_action(self, game_state, player_model, action_default=None):
+                self.sequential_gamestates_chief_persp.append(game_state)
+                self.sequential_playermodels_chief_persp.append(player_model)
+                self.sequential_partnerknowledgemodels_chief_persp.append(self._make_partner_knowledge_model(game_state))
+
                 if action_default is None:
-                        action = self.get_action_helper(game_state, player_model)
+                        action = self.get_action_helper()
                 else:
                         action = action_default
 
@@ -90,45 +98,32 @@ class ChiefPlayer(Player):
                 return action
 
 
-        def get_action_helper(self, game_state, player_model):
-                best_team_reward = -5
-                best_action = 0
+        def get_action_helper(self):
+                action_to_play = np.zeros(20)
+                agent_ids = sorted(self.pool_ids)
 
-                print("Deciding action...")
+                if len(self.move_tracking_table) > 0:
+                        agent_weights = self.move_tracking_table.iloc[-1]["agent distribution"]
+                else:
+                        agent_weights = np.ones(len(agent_ids))
 
-                for va in game_state.valid_actions:
-                        team_reward = 0
+                for i, agent_id in enumerate(agent_ids):
+                        bc_output = BehaviorClone.sequential_predict(agent_id,
+                                                                     self.sequential_gamestates_chief_persp,
+                                                                     self.sequential_playermodels_chief_persp,
+                                                                     self.sequential_partnerknowledgemodels_chief_persp)
+                        actionvalues = np.zeros(20)
 
-                        for i in range(self.num_samples):       
-                                new_samp = self.new_sample(self.total_card_knowledge)
-                                sampled_vals = self.new_sample_original(player_model.get_knowledge())
+                        print(max(bc_output, key=bc_output.get))
 
-                                for cid in self.card_ids:
-                                        if cid in self.total_card_knowledge:
-                                                sampled_vals[self.card_ids[cid]] = new_samp.card_vals[cid]
+                        for action in bc_output:
+                                actionvalues[self.action_to_key(action)] = float(bc_output[action])
+                        
+                        action_to_play += self.makeprob(actionvalues)*agent_weights[i]
 
-                                game_state_next, player_model_next, chief_reward = self.simulate_move(game_state, player_model, va, sampled_vals)
-                                pred_vec = self._get_prediction_internal(game_state_next, player_model_next, new_samp, sampled_vals)
-                                teammate_action = np.argmax(pred_vec)
-                                team_reward += self.eval_action(game_state_next.board, game_state.hands[self.partner_nr], teammate_action) + chief_reward
-
-                        print("Trying", va, "-> Predicted Team Reward =", team_reward/self.num_samples)
-
-                        if team_reward > best_team_reward:
-                                best_team_reward = team_reward
-                                best_action = va
-
-                return best_action
-
-        def eval_action(self, pred_board, curr_team_hand, action):
-                if action//5 == PLAY:
-                        if curr_team_hand[action%5][1] == pred_board[curr_team_hand[action%5][0]][1]+1:
-                                return 1
-                        else:
-                                return -1
-
-                return 0
-
+                action_to_play = self.makeprob(action_to_play)
+                action_key = np.argmax(action_to_play)
+                return self.action_from_key(action_key, self.partner_nr)
 
         def inform(self, action, player, game_state, player_model):
                 changed_cards = []
