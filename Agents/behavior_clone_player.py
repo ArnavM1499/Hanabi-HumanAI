@@ -1,5 +1,6 @@
 from Agents.player import Player
 from game_net.behavior_clone import BehaviorClone
+from copy import deepcopy
 
 
 class BehaviorPlayer(Player):
@@ -14,9 +15,9 @@ class BehaviorPlayer(Player):
         self.is_behavior_clone = True
 
     def get_action(self, game_state, player_model, partner_knowledge_model):
-        self.history_states.append(game_state)
-        self.history_models.append(player_model)
-        self.history_partner_knowledge_model.append(partner_knowledge_model)
+        self.history_states.append(deepcopy(game_state))
+        self.history_models.append(deepcopy(player_model))
+        self.history_partner_knowledge_model.append(deepcopy(partner_knowledge_model))
         return BehaviorClone.sequential_predict(
             self.agent_id,
             self.history_states,
