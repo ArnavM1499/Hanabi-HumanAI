@@ -23,13 +23,15 @@ pool_path = os.path.abspath(__file__).replace(
     "TestFiles/test_player.py", "Agents/configs/players.json"
 )
 player_pool = json.load(open(pool_path))
-dummy_pool = PlayerPool("dummy", 0, pool_path)
+# pool_ids = ["00001","00002","00003","00004","00005","10001","10002","10003","10004","10005"]
+pool_ids = ["10001"]
+dummy_pool = PlayerPool("dummy", 0, pool_path, pool_ids)
 
 
 def try_pickle(file):
     try:
         return pickle.load(file)
-    except:
+    except:  # noqa
         return None
 
 

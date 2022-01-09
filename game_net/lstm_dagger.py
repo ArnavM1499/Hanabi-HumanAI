@@ -1,4 +1,5 @@
 from glob import glob
+import multiprocessing
 import numpy as np
 import sys
 import torch
@@ -33,11 +34,11 @@ WRITER_PATH = "runs/dagger_{}".format(os.path.basename(MODEL_PATH).replace(".pth
 BATCH_SIZE = 512
 EPOCH = 50
 
-ROUNDS = 20
+ROUNDS = 10
 INCREMENT = 20000
 MAX_GAMES = 100000
 TEST_GAME = 1000
-THREADS = 16
+THREADS = multiprocessing.cpu_count()
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 LOGGER = SummaryWriter(WRITER_PATH)
@@ -292,13 +293,15 @@ def eval_model(save_matrix="", cat3=False, load_model=True):
                                 .item()
                             )
                         totals[label] += masked_label.shape[0]
-                        for p in range(20):
-                            matrix[label][p] += (
-                                (masked_pred.argmax(1) == p)
-                                .type(torch.float)
-                                .sum()
-                                .item()
-                            )
+                        if masked_pred.shape[0] > 0:
+                            masked_pred_max = masked_pred.argmax(1)
+                            for p in range(20):
+                                matrix[label][p] += (
+                                    (masked_pred_max == p)
+                                    .type(torch.float)
+                                    .sum()
+                                    .item()
+                                )
             else:
                 for label in range(20):
                     mask = actions.data == label
