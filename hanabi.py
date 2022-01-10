@@ -4,6 +4,7 @@ from common_game_functions import *
 from Agents.common_player_functions import *
 from Agents.player import Action
 
+from copy import deepcopy
 
 def format_card(colnum):
     col, num = colnum
@@ -301,11 +302,11 @@ class Game(object):
         partner_knowledge_model = self._make_partner_knowledge_model(game_state)
         if hasattr(self.players[self.current_player], "is_behavior_clone"):
             action = self.players[self.current_player].get_action(
-                game_state, player_model, partner_knowledge_model
+                deepcopy(game_state), deepcopy(player_model), deepcopy(partner_knowledge_model)
             )
         else:
             action = self.players[self.current_player].get_action(
-                game_state, player_model
+                deepcopy(game_state), deepcopy(player_model)
             )
         if isinstance(action, tuple):  # workaround for experimental player
             action = action[0]
@@ -388,8 +389,8 @@ class Game(object):
                 p.inform(
                     action,
                     self.current_player,
-                    game_state,
-                    player_model,
+                    deepcopy(game_state),
+                    deepcopy(player_model),
                 )
 
                 # Data collection
