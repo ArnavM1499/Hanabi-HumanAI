@@ -31,8 +31,6 @@ class Game(object):
         self.trash = []
         self.turn = 1
         self.format = format
-        self.dopostsurvey = False
-        self.study = False
         self.pickle_file = pickle_file
         if data_file.endswith(".csv"):
             self.data_format = "csv"
@@ -70,20 +68,20 @@ class Game(object):
             if i == player_nr and i != self.http_player:
                 hands.append([])
             else:
-                hands.append(h)
+                hands.append(deepcopy(h))
 
         return GameState(
             self.current_player,
             hands,
-            self.trash,
-            self.played,
-            self.board,
+            deepcopy(self.trash),
+            deepcopy(self.played),
+            deepcopy(self.board),
             self.hits,
-            self.valid_actions(),
+            deepcopy(self.valid_actions()),
             self.hints,
-            self.knowledge,
-            hinted_indices,
-            card_changed,
+            deepcopy(self.knowledge),
+            deepcopy(hinted_indices),
+            deepcopy(card_changed),
         )
 
     def _make_player_model(self, player_nr):
@@ -302,11 +300,11 @@ class Game(object):
         partner_knowledge_model = self._make_partner_knowledge_model(game_state)
         if hasattr(self.players[self.current_player], "is_behavior_clone"):
             action = self.players[self.current_player].get_action(
-                deepcopy(game_state), deepcopy(player_model), deepcopy(partner_knowledge_model)
+                game_state, deepcopy(player_model), deepcopy(partner_knowledge_model)
             )
         else:
             action = self.players[self.current_player].get_action(
-                deepcopy(game_state), deepcopy(player_model)
+                game_state, deepcopy(player_model)
             )
         if isinstance(action, tuple):  # workaround for experimental player
             action = action[0]
