@@ -61,6 +61,7 @@ class Game(object):
             print(*args)
 
     # returns blank array for player_nr's own hand if not httpui
+    # everything is guaranteed to be a copy
     def _make_game_state(self, player_nr, hinted_indices=[], card_changed=None):
         hands = []
 
@@ -77,19 +78,20 @@ class Game(object):
             deepcopy(self.played),
             deepcopy(self.board),
             self.hits,
-            deepcopy(self.valid_actions()),
+            self.valid_actions(),
             self.hints,
             deepcopy(self.knowledge),
             deepcopy(hinted_indices),
             deepcopy(card_changed),
         )
 
+    # everything is guaranteed to be a copy
     def _make_player_model(self, player_nr):
         return BasePlayerModel(
             player_nr,
-            self.knowledge[player_nr],
-            self.hint_log[player_nr],
-            self.action_log,
+            deepcopy(self.knowledge[player_nr]),
+            deepcopy(self.hint_log[player_nr]),
+            deepcopy(self.action_log),
         )
 
     def make_hands(self):
@@ -285,6 +287,7 @@ class Game(object):
     def score(self):
         return sum(map(lambda colnum: colnum[1], self.board))
 
+    # everything is guaranteed to be a copy
     def _make_partner_knowledge_model(self, game_state):
         partner_knowledge_model = {}
         for possible_action in game_state.get_valid_actions():
@@ -300,11 +303,11 @@ class Game(object):
         partner_knowledge_model = self._make_partner_knowledge_model(game_state)
         if hasattr(self.players[self.current_player], "is_behavior_clone"):
             action = self.players[self.current_player].get_action(
-                game_state, deepcopy(player_model), deepcopy(partner_knowledge_model)
+                game_state, player_model, partner_knowledge_model
             )
         else:
             action = self.players[self.current_player].get_action(
-                game_state, deepcopy(player_model)
+                game_state, player_model
             )
         if isinstance(action, tuple):  # workaround for experimental player
             action = action[0]
