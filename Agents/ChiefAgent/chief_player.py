@@ -286,8 +286,6 @@ class ChiefPlayer(Player):
                                                                      self.sequential_partnerknowledgemodels_chief_persp)
                         actionvalues = np.zeros(20)
 
-                        print(max(bc_output, key=bc_output.get))
-
                         for action in bc_output:
                                 actionvalues[self._action_to_key(action)] = float(bc_output[action])
                         

@@ -21,7 +21,6 @@ file_name = "blank.csv"
 pickle_file_name = "chief_testing"
 
 pool_ids = ["00001","00002","00003","00004","00005","10001","10002","10003","10004","10005"]
-id_string = np.random.choice(pool_ids)
 
 def from_dict(name, pnr, json_dict):
     json_dict["name"] = name
@@ -37,7 +36,10 @@ def try_pickle(file):
 	except:
 		return None
 
+L = []
+
 for i in range(10):
+	id_string = np.random.choice(pool_ids)
 	P1 = ChiefPlayer("CHIEF", 0, pool_ids)
 	P2 = from_dict("Teammate", 1, json_vals[id_string])
 	
@@ -47,7 +49,7 @@ for i in range(10):
 	Result = G.run(100)
 	pickle_file.close()
 
-	L.append(Result)
+	L.append((json_vals[id_string], Result))
 	print(L, file=sys.stderr)
 
-print(np.mean(L), file=sys.stderr)
+print(np.mean([a[1] for a in L]), file=sys.stderr)
