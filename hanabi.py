@@ -4,7 +4,6 @@ from common_game_functions import *
 from Agents.common_player_functions import *
 from Agents.player import Action
 
-from copy import deepcopy
 
 def format_card(colnum):
     col, num = colnum

@@ -5,8 +5,8 @@ from game_net.behavior_clone import BehaviorClone
 import pandas as pd
 import numpy as np
 import random
-from copy import deepcopy
 from scipy.stats import entropy
+
 
 STARTING_COLUMNS_MOVETRACKING = {"move_idx":[], "move": [], "observable game state":[], "card ids":[], "hand knowledge":[], "agent distribution":[], "conditional probabilities":[], "MLE probabilities":[], "generated samples":[]}
 BOLTZMANN_CONSTANT = 4
