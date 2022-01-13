@@ -56,7 +56,7 @@ def card_playable(card, board):
 
 def card_discardable(card, board, trash=None):
     col, nr = card
-    if board[col][1] >= card[1]:
+    if board[col][1] >= nr:
         return True
     if trash:
         for i in range(1, nr):
