@@ -57,7 +57,9 @@ def pkl_to_np(dataset_dir, *paths, rename=False):
                     )
 
 
-def pkl_to_lstm_np(dataset_dir, *paths, rename=False, train_split=0.7, suffix=""):
+def pkl_to_lstm_np(
+    dataset_dir, *paths, rename=False, train_split=0.7, suffix="", remove_pkl=False
+):
     name2id = {}
     cnt = 0
     if not os.path.isdir(dataset_dir):
@@ -125,9 +127,10 @@ def pkl_to_lstm_np(dataset_dir, *paths, rename=False, train_split=0.7, suffix=""
                                 np.save(fout, game_actions[1])
                         game_states = [[], []]
                         game_actions = [[], []]
-
                     game_states[p].append(s)
                     game_actions[p].append(a)
+        if remove_pkl:
+            os.remove(path)
 
 
 def merge_np(dataset_root, agent_name, train_split=0.7):

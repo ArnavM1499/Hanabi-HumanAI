@@ -6,6 +6,7 @@ from Agents.player import Action
 
 from copy import deepcopy
 
+
 def format_card(colnum):
     col, num = colnum
     return COLORNAMES[col] + " " + str(num)
@@ -16,7 +17,15 @@ def format_hand(hand):
 
 
 class Game(object):
-    def __init__(self, players, data_file, pickle_file=None, format=0, http_player=-1, print_game=True):
+    def __init__(
+        self,
+        players,
+        data_file,
+        pickle_file=None,
+        format=0,
+        http_player=-1,
+        print_game=True,
+    ):
         self.players = players
         self.hits = 3
         self.hints = 8
@@ -302,7 +311,9 @@ class Game(object):
         partner_knowledge_model = self._make_partner_knowledge_model(game_state)
         if hasattr(self.players[self.current_player], "is_behavior_clone"):
             action = self.players[self.current_player].get_action(
-                deepcopy(game_state), deepcopy(player_model), deepcopy(partner_knowledge_model)
+                deepcopy(game_state),
+                deepcopy(player_model),
+                deepcopy(partner_knowledge_model),
             )
         else:
             action = self.players[self.current_player].get_action(

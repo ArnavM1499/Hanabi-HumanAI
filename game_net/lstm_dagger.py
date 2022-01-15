@@ -34,10 +34,10 @@ WRITER_PATH = "runs/dagger_{}".format(os.path.basename(MODEL_PATH).replace(".pth
 BATCH_SIZE = 512
 EPOCH = 50
 
-ROUNDS = 10
+ROUNDS = 7
 INCREMENT = 20000
 MAX_GAMES = 100000
-TEST_GAME = 1000
+TEST_GAME = 500
 THREADS = multiprocessing.cpu_count()
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -173,6 +173,7 @@ def val(log_iter=0, include_cat=False, run_game=False):
     if run_game:
         result1 = test_player(AGENT, BC_NAME, TEST_GAME // 2)
         result2 = test_player(BC_NAME, AGENT, TEST_GAME // 2)
+        selfplay = test_player(BC_NAME, BC_NAME, TEST_GAME)
         savg = (result1[1] + result2[1]) / 2
         smin = min(result1[2], result2[2])
         smax = max(result1[3], result2[3])
@@ -183,6 +184,7 @@ def val(log_iter=0, include_cat=False, run_game=False):
         LOGGER.add_scalar("Game/Max", smax, log_iter)
         LOGGER.add_scalar("Game/Hits", hits, log_iter)
         LOGGER.add_scalar("Game/Turns", turns, log_iter)
+        LOGGER.add_scalar("Game/Self Average", selfplay[1], log_iter)
     model.train()
 
 
@@ -227,7 +229,7 @@ def train():
             THREADS,
             "subprocess",
             r * 100,
-            AGENT + "1",  # BC_NAME[0] + '0' + BC_NAME[2:] + '1'
+            AGENT + "1",
         )
         generate_data(
             BC_NAME,
@@ -237,7 +239,7 @@ def train():
             THREADS,
             "subprocess",
             r * 100,
-            AGENT + "0",  # BC_NAME[0] + '0' + BC_NAME[2:] + '0'
+            AGENT + "0",
         )
         round_id = str(r).zfill(2)
         pkl_to_lstm_np(
@@ -245,6 +247,7 @@ def train():
             *glob(os.path.join(DATA_DIR, "*_*_{}*.pkl".format(round_id))),
             train_split=1,
             suffix="_" + round_id,
+            remove_pkl=True
         )
         print("loading new data for round", r)
         traindata.add_file(
