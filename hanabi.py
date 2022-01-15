@@ -4,8 +4,6 @@ from common_game_functions import *
 from Agents.common_player_functions import *
 from Agents.player import Action
 
-from copy import deepcopy
-
 
 def format_card(colnum):
     col, num = colnum
@@ -40,8 +38,6 @@ class Game(object):
         self.trash = []
         self.turn = 1
         self.format = format
-        self.dopostsurvey = False
-        self.study = False
         self.pickle_file = pickle_file
         if data_file.endswith(".csv"):
             self.data_format = "csv"
@@ -72,6 +68,7 @@ class Game(object):
             print(*args)
 
     # returns blank array for player_nr's own hand if not httpui
+    # everything is guaranteed to be a copy
     def _make_game_state(self, player_nr, hinted_indices=[], card_changed=None):
         hands = []
 
@@ -79,28 +76,29 @@ class Game(object):
             if i == player_nr and i != self.http_player:
                 hands.append([])
             else:
-                hands.append(h)
+                hands.append(deepcopy(h))
 
         return GameState(
             self.current_player,
             hands,
-            self.trash,
-            self.played,
-            self.board,
+            deepcopy(self.trash),
+            deepcopy(self.played),
+            deepcopy(self.board),
             self.hits,
             self.valid_actions(),
             self.hints,
-            self.knowledge,
-            hinted_indices,
-            card_changed,
+            deepcopy(self.knowledge),
+            deepcopy(hinted_indices),
+            deepcopy(card_changed),
         )
 
+    # everything is guaranteed to be a copy
     def _make_player_model(self, player_nr):
         return BasePlayerModel(
             player_nr,
-            self.knowledge[player_nr],
-            self.hint_log[player_nr],
-            self.action_log,
+            deepcopy(self.knowledge[player_nr]),
+            deepcopy(self.hint_log[player_nr]),
+            deepcopy(self.action_log),
         )
 
     def make_hands(self):
@@ -296,6 +294,7 @@ class Game(object):
     def score(self):
         return sum(map(lambda colnum: colnum[1], self.board))
 
+    # everything is guaranteed to be a copy
     def _make_partner_knowledge_model(self, game_state):
         partner_knowledge_model = {}
         for possible_action in game_state.get_valid_actions():
@@ -311,13 +310,11 @@ class Game(object):
         partner_knowledge_model = self._make_partner_knowledge_model(game_state)
         if hasattr(self.players[self.current_player], "is_behavior_clone"):
             action = self.players[self.current_player].get_action(
-                deepcopy(game_state),
-                deepcopy(player_model),
-                deepcopy(partner_knowledge_model),
+                game_state, player_model, partner_knowledge_model
             )
         else:
             action = self.players[self.current_player].get_action(
-                deepcopy(game_state), deepcopy(player_model)
+                game_state, player_model
             )
         if isinstance(action, tuple):  # workaround for experimental player
             action = action[0]

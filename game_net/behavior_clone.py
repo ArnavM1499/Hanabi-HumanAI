@@ -55,12 +55,12 @@ class BehaviorCloneBase:
         partner_knowledge_models,
         return_dict=True,
     ) -> Action:
-        if agent_id not in self.models.keys():
-            self._load_model(agent_id)
-
-        state_list = []
-
         with torch.no_grad():
+            if agent_id not in self.models.keys():
+                self._load_model(agent_id)
+
+            state_list = []
+
             for game_state, player_model, partner_knowledge_model in zip(
                 game_states, player_models, partner_knowledge_models
             ):
@@ -84,13 +84,13 @@ class BehaviorCloneBase:
             ret = dict()
             pred = torch.nn.functional.softmax(pred, dim=0)
 
-        for i, p in enumerate(pred):
-            ret[Action.from_encoded(i, pnr=current_player)] = p
+            for i, p in enumerate(pred):
+                ret[Action.from_encoded(i, pnr=current_player)] = p
 
-        if return_dict:
-            return ret
-        else:
-            return max(ret.keys(), key=lambda x: ret[x])
+            if return_dict:
+                return ret
+            else:
+                return max(ret.keys(), key=lambda x: ret[x])
 
     def _convert_game_state(
         self,
