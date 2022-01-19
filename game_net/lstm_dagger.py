@@ -34,7 +34,7 @@ WRITER_PATH = "runs/dagger_{}".format(os.path.basename(MODEL_PATH).replace(".pth
 BATCH_SIZE = 512
 EPOCH = 50
 
-ROUNDS = 7
+ROUNDS = 8
 INCREMENT = 20000
 MAX_GAMES = 100000
 TEST_GAME = 500
@@ -199,6 +199,46 @@ def train():
     loss_fn = torch.nn.CrossEntropyLoss(weight=traindata.weights.to(DEVICE))
     count = 0
     for r in range(1, ROUNDS + 1):
+        if r > 1:
+            print("generating new data for round", r)
+            generate_data(
+                AGENT,
+                DATA_DIR,
+                BC_NAME,
+                INCREMENT // 2 // THREADS,
+                THREADS,
+                "subprocess",
+                r * 100,
+                AGENT + "1",
+            )
+            generate_data(
+                BC_NAME,
+                DATA_DIR,
+                AGENT,
+                INCREMENT // 2 // THREADS,
+                THREADS,
+                "subprocess",
+                r * 100,
+                AGENT + "0",
+            )
+            round_id = str(r).zfill(2)
+            pkl_to_lstm_np(
+                DATA_DIR,
+                *glob(os.path.join(DATA_DIR, "*_*_{}*.pkl".format(round_id))),
+                train_split=1,
+                suffix="_" + round_id,
+                remove_pkl=True
+            )
+            print("loading new data for round", r)
+            traindata.add_file(
+                os.path.join(DATA_DIR, "{}_{}_train.npy".format(AGENT, round_id))
+            )
+            trainset = torch.utils.data.DataLoader(
+                traindata,
+                batch_size=BATCH_SIZE,
+                shuffle=True,
+                collate_fn=pack_games,
+            )
         for e in range(EPOCH):
             val(count, include_cat=True, run_game=(e % 5 == 1))
             for i, (states, actions, lengths) in enumerate(
@@ -220,45 +260,6 @@ def train():
                 model.state_dict(),
                 MODEL_PATH.replace(".pth", "_{}.pth".format(str(r).zfill(2))),
             )
-        print("generating new data for round", r)
-        generate_data(
-            AGENT,
-            DATA_DIR,
-            BC_NAME,
-            INCREMENT // 2 // THREADS,
-            THREADS,
-            "subprocess",
-            r * 100,
-            AGENT + "1",
-        )
-        generate_data(
-            BC_NAME,
-            DATA_DIR,
-            AGENT,
-            INCREMENT // 2 // THREADS,
-            THREADS,
-            "subprocess",
-            r * 100,
-            AGENT + "0",
-        )
-        round_id = str(r).zfill(2)
-        pkl_to_lstm_np(
-            DATA_DIR,
-            *glob(os.path.join(DATA_DIR, "*_*_{}*.pkl".format(round_id))),
-            train_split=1,
-            suffix="_" + round_id,
-            remove_pkl=True
-        )
-        print("loading new data for round", r)
-        traindata.add_file(
-            os.path.join(DATA_DIR, "{}_{}_train.npy".format(AGENT, round_id))
-        )
-        trainset = torch.utils.data.DataLoader(
-            traindata,
-            batch_size=BATCH_SIZE,
-            shuffle=True,
-            collate_fn=pack_games,
-        )
 
 
 def eval_model(save_matrix="", cat3=False, load_model=True):
