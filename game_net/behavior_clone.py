@@ -1,3 +1,4 @@
+from glob import glob
 import numpy as np
 import os
 import torch
@@ -8,8 +9,8 @@ from lstm_net import LSTMNet, default_config
 from Agents.player import Action
 
 
-MODEL_DIR = "game_net/models"
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+MODEL_DIR = os.path.abspath(__file__).replace("behavior_clone.py", "models")
+DEVICE = "cpu"  # "cuda" if torch.cuda.is_available() else "cpu"
 
 
 class BehaviorCloneBase:
@@ -18,7 +19,9 @@ class BehaviorCloneBase:
 
     def _load_model(self, agent_id):
         model = LSTMNet(**default_config)
-        model_path = os.path.join(MODEL_DIR, "model_lstm_{}.pth".format(agent_id))
+        model_path = max(
+            glob(os.path.join(MODEL_DIR, "model_lstm_{}*.pth".format(agent_id)))
+        )
         model.load_state_dict(
             torch.load(
                 model_path,

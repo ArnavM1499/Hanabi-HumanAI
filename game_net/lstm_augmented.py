@@ -19,11 +19,11 @@ GAME_STATE_LENGTH = 583 + 20 + 10 * 125
 DATA_ALL = "../log/data1103/lstm/{}_all.npy".format(AGENT)
 DATA_TRAIN = DATA_ALL.replace("_all", "_train")
 DATA_VAL = DATA_ALL.replace("_all", "_val")
-MODEL_PATH = "../log/model_lstm_jc/model_lstm_extend_{}.pth".format(AGENT)
-WRITER_PATH = "runs/{}".format(os.path.basename(MODEL_PATH).replace(".pth", ""))
+MODEL_PATH = "../log/model_lstm_jc/model_fc_extend_{}.pth".format(AGENT)
+WRITER_PATH = "runs_poster/{}".format(os.path.basename(MODEL_PATH).replace(".pth", ""))
 
 BATCH_SIZE = 512
-EPOCH = 40
+EPOCH = 50
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 LOGGER = SummaryWriter(WRITER_PATH)
@@ -95,6 +95,7 @@ def pack_games(games):
 
 num_units = 512
 model = LSTMNet([num_units], num_units, 2, [], drop_out=True).to(DEVICE)
+
 loss_fn = torch.nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
@@ -146,7 +147,7 @@ def train():
     )
     loss_fn = torch.nn.CrossEntropyLoss(weight=traindata.weights.to(DEVICE))
     size = len(trainset)
-    for e in range(2 * EPOCH):
+    for e in range(EPOCH):
         val(e * size, include_cat=True)
         for i, (states, actions, lengths) in enumerate(
             tqdm(trainset, desc="epoch: {}".format(e))

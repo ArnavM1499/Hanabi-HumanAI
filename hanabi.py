@@ -15,7 +15,15 @@ def format_hand(hand):
 
 
 class Game(object):
-    def __init__(self, players, data_file, pickle_file=None, format=0, http_player=-1, print_game=True):
+    def __init__(
+        self,
+        players,
+        data_file,
+        pickle_file=None,
+        format=0,
+        http_player=-1,
+        print_game=True,
+    ):
         self.players = players
         self.hits = 3
         self.hints = 8

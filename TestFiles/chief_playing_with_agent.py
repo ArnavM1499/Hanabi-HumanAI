@@ -12,20 +12,21 @@ import random
 
 args = sys.argv[1:]
 
-if len(args) == 2 and args[0] == '--seed':
-	print("setting seed", args[1])
-	random.seed(int(args[1]))
-	np.random.seed(int(args[1]))
+if len(args) == 2 and args[0] == "-seed":
+    random.seed(int(args[1]))
+    np.random.seed(int(args[1]))
 
 file_name = "blank.csv"
 pickle_file_name = "chief_testing"
 
 pool_ids = ["00001","00002","00003","00004","00005","10001","10002","10003","10004","10005"]
 
+
 def from_dict(name, pnr, json_dict):
     json_dict["name"] = name
     json_dict["pnr"] = pnr
     return getattr(Agents, json_dict["player_class"])(**json_dict)
+
 
 with open("Agents/configs/players.json", "r") as f:
     json_vals = json.load(f)
