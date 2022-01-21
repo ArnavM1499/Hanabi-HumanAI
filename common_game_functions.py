@@ -1,5 +1,10 @@
-from copy import deepcopy
 import random
+import pickle
+
+
+def deepcopy(obj):
+    return pickle.loads(pickle.dumps(obj))
+
 
 global HINT_COLOR, HINT_NUMBER, PLAY, DISCARD, CANDISCARD, GREEN, YELLOW, WHITE, BLUE, RED, ALL_COLORS, COLORNAMES, COUNTS  # noqa E501
 
