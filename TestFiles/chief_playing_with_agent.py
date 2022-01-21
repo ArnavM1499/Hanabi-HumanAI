@@ -38,7 +38,7 @@ def try_pickle(file):
 
 L = []
 
-for i in range(10):
+for i in range(50):
 	id_string = np.random.choice(pool_ids)
 	P1 = ChiefPlayer("CHIEF", 0, pool_ids)
 	P2 = from_dict("Teammate", 1, json_vals[id_string])
@@ -49,7 +49,7 @@ for i in range(10):
 	Result = G.run(100)
 	pickle_file.close()
 
-	L.append((json_vals[id_string], Result))
-	print(L, file=sys.stderr)
+	L.append((id_string, json_vals[id_string]["player_class"], Result))
+	print(L[-1], file=sys.stderr)
 
 print(np.mean([a[1] for a in L]), file=sys.stderr)
