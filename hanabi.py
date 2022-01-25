@@ -1,14 +1,8 @@
-import random
-import sys
-import copy
-import time
 import csv
 import pickle
 from common_game_functions import *
+from Agents.common_player_functions import *
 from Agents.player import Action
-
-# comment this line out when running multithreaded tests
-# random.seed(0)  # for reproducing results
 
 
 def format_card(colnum):
@@ -21,7 +15,15 @@ def format_hand(hand):
 
 
 class Game(object):
-    def __init__(self, players, data_file, pickle_file=None, format=0, http_player=-1):
+    def __init__(
+        self,
+        players,
+        data_file,
+        pickle_file=None,
+        format=0,
+        http_player=-1,
+        print_game=True,
+    ):
         self.players = players
         self.hits = 3
         self.hints = 8
@@ -36,14 +38,22 @@ class Game(object):
         self.trash = []
         self.turn = 1
         self.format = format
-        self.dopostsurvey = False
-        self.study = False
-        self.data_file = open(data_file, "a")
         self.pickle_file = pickle_file
-        self.data_writer = csv.writer(self.data_file, delimiter=",")
+        if data_file.endswith(".csv"):
+            self.data_format = "csv"
+            self.data_file = open(data_file, "a+")
+            self.data_writer = csv.writer(self.data_file, delimiter=",")
+        elif data_file.endswith(".pkl"):
+            self.data_format = "pkl"
+            self.data_file = open(data_file, "ab+")
+            pickle.dump([], self.data_file)
+        else:
+            print("Unsupported data file format!")
+            raise NotImplementedError
         self.hint_log = dict([(a, []) for a in range(len(players))])
         self.action_log = dict([(a, []) for a in range(len(players))])
         self.http_player = http_player
+        self.print_game = print_game
 
         if self.format:
             print(self.deck)
@@ -53,7 +63,12 @@ class Game(object):
                 if i != http_player and hasattr(player, "debug"):
                     player.debug = True
 
+    def _print(self, *args):
+        if self.print_game:
+            print(*args)
+
     # returns blank array for player_nr's own hand if not httpui
+    # everything is guaranteed to be a copy
     def _make_game_state(self, player_nr, hinted_indices=[], card_changed=None):
         hands = []
 
@@ -61,28 +76,29 @@ class Game(object):
             if i == player_nr and i != self.http_player:
                 hands.append([])
             else:
-                hands.append(h)
+                hands.append(deepcopy(h))
 
         return GameState(
             self.current_player,
             hands,
-            self.trash,
-            self.played,
-            self.board,
+            deepcopy(self.trash),
+            deepcopy(self.played),
+            deepcopy(self.board),
             self.hits,
             self.valid_actions(),
             self.hints,
-            self.knowledge,
-            hinted_indices,
-            card_changed,
+            deepcopy(self.knowledge),
+            deepcopy(hinted_indices),
+            deepcopy(card_changed),
         )
 
+    # everything is guaranteed to be a copy
     def _make_player_model(self, player_nr):
         return BasePlayerModel(
             player_nr,
-            self.knowledge[player_nr],
-            self.hint_log[player_nr],
-            self.action_log,
+            deepcopy(self.knowledge[player_nr]),
+            deepcopy(self.hint_log[player_nr]),
+            deepcopy(self.action_log),
         )
 
     def make_hands(self):
@@ -111,7 +127,7 @@ class Game(object):
         hint_indices = []
         card_changed = None
         if format:
-            print(
+            self._print(
                 "\nMOVE:",
                 self.current_player,
                 action.type,
@@ -124,7 +140,7 @@ class Game(object):
 
         if action.type == HINT_COLOR:
             self.hints -= 1
-            print(
+            self._print(
                 self.players[self.current_player].name,
                 "hints",
                 self.players[action.pnr].name,
@@ -134,7 +150,7 @@ class Game(object):
                 "hints remaining:",
                 self.hints,
             )
-            print(
+            self._print(
                 self.players[action.pnr].name,
                 "has",
                 format_hand(self.hands[action.pnr]),
@@ -159,7 +175,7 @@ class Game(object):
 
         elif action.type == HINT_NUMBER:
             self.hints -= 1
-            print(
+            self._print(
                 self.players[self.current_player].name,
                 "hints",
                 self.players[action.pnr].name,
@@ -168,7 +184,7 @@ class Game(object):
                 "hints remaining:",
                 self.hints,
             )
-            print(
+            self._print(
                 self.players[action.pnr].name,
                 "has",
                 format_hand(self.hands[action.pnr]),
@@ -194,7 +210,7 @@ class Game(object):
         elif action.type == PLAY:
             (col, num) = self.hands[self.current_player][action.cnr]
             card_changed = (col, num)
-            print(
+            self._print(
                 self.players[self.current_player].name,
                 "plays",
                 format_card((col, num)),
@@ -208,16 +224,16 @@ class Game(object):
                     self.hints += 1
                     self.hints = min(self.hints, 8)
 
-                print("successfully! Board is now", format_hand(self.board))
+                self._print("successfully! Board is now", format_hand(self.board))
             else:
                 self.trash.append((col, num))
                 self.hits -= 1
-                print("and fails. Board was", format_hand(self.board))
+                self._print("and fails. Board was", format_hand(self.board))
 
             del self.hands[self.current_player][action.cnr]
             del self.knowledge[self.current_player][action.cnr]
             self.draw_card()
-            print(
+            self._print(
                 self.players[self.current_player].name,
                 "now has",
                 format_hand(self.hands[self.current_player]),
@@ -227,16 +243,16 @@ class Game(object):
             self.hints = min(self.hints, 8)
             card_changed = self.hands[self.current_player][action.cnr]
             self.trash.append(card_changed)
-            print(
+            self._print(
                 self.players[self.current_player].name,
                 "discards",
                 format_card(self.hands[self.current_player][action.cnr]),
             )
-            print("trash is now", format_hand(self.trash))
+            self._print("trash is now", format_hand(self.trash))
             del self.hands[self.current_player][action.cnr]
             del self.knowledge[self.current_player][action.cnr]
             self.draw_card()
-            print(
+            self._print(
                 self.players[self.current_player].name,
                 "now has",
                 format_hand(self.hands[self.current_player]),
@@ -267,44 +283,108 @@ class Game(object):
         while (not self.done()) and (turns < 0 or self.turn < turns):
             self.turn += 1
             self.single_turn()
-        print("Game done, hits left:", self.hits)
+        self._print("Game done, hits left:", self.hits)
         points = self.score()
-        print("Points:", points)
-        print("Board:", self.board)
-        print("Hands:", self.hands)
+        self._print("Points:", points)
+        self._print("Board:", self.board)
+        self._print("Hands:", self.hands)
         self.data_file.close()
         return points
 
     def score(self):
         return sum(map(lambda colnum: colnum[1], self.board))
 
+    # everything is guaranteed to be a copy
+    def _make_partner_knowledge_model(self, game_state):
+        partner_knowledge_model = {}
+        for possible_action in game_state.get_valid_actions():
+            if possible_action.type in [HINT_COLOR, HINT_NUMBER]:
+                partner_knowledge_model[possible_action] = apply_hint_to_knowledge(
+                    possible_action, self.hands, self.knowledge
+                )
+        return partner_knowledge_model
+
     def single_turn(self):
         game_state = self._make_game_state(self.current_player)
         player_model = self._make_player_model(self.current_player)
-        action = self.players[self.current_player].get_action(game_state, player_model)
+        partner_knowledge_model = self._make_partner_knowledge_model(game_state)
+        if hasattr(self.players[self.current_player], "is_behavior_clone"):
+            action = self.players[self.current_player].get_action(
+                game_state, player_model, partner_knowledge_model
+            )
+        else:
+            action = self.players[self.current_player].get_action(
+                game_state, player_model
+            )
+        if isinstance(action, tuple):  # workaround for experimental player
+            action = action[0]
 
         # Data collection
         if self.pickle_file:
             pickle.dump(["Action", game_state, player_model, action], self.pickle_file)
 
         # Process action
-        self.external_turn(action)
+        self.external_turn(action, partner_knowledge_model)
 
-    def external_turn(self, action):
+    def external_turn(self, action, partner_knowledge_model=None):
         if not self.done():
             if not self.deck:
                 self.extra_turns += 1
 
-            self.data_writer.writerow(
-                [
-                    self.current_player,
-                    action.type,
-                    self.board,
-                    self.trash,
-                    self.hints,
-                    self.knowledge[self.current_player],
-                ]
-            )
+            if self.data_format == "csv":
+                self.data_writer.writerow(
+                    [
+                        self.current_player,
+                        action.type,
+                        self.board,
+                        self.trash,
+                        self.hints,
+                        self.knowledge[self.current_player],
+                    ]
+                )
+            elif self.data_format == "pkl":
+                trash = [[0] * 5 for _ in range(5)]
+                for (col, num) in self.trash:
+                    trash[col][num - 1] += 1
+                partner_nr = 1 - self.current_player
+                try:
+                    last_action = self.action_log[partner_nr][-1]
+                except IndexError:
+                    last_action = None
+                extra = []
+                for k in self.knowledge[partner_nr]:
+                    extra.append(slot_playable_pct(k, self.board))
+                while len(extra) < 5:
+                    extra.append(0)
+                for k in self.knowledge[self.current_player]:
+                    extra.append(slot_playable_pct(k, self.board))
+                while len(extra) < 10:
+                    extra.append(0)
+                for k in self.knowledge[partner_nr]:
+                    extra.append(slot_discardable_pct(k, self.board, self.trash))
+                while len(extra) < 15:
+                    extra.append(0)
+                for k in self.knowledge[self.current_player]:
+                    extra.append(slot_discardable_pct(k, self.board, self.trash))
+                while len(extra) < 20:
+                    extra.append(0)
+                pickle.dump(
+                    encode_state(  # noqa F405
+                        self.hands[partner_nr],
+                        self.knowledge[partner_nr],
+                        self.knowledge[self.current_player],
+                        self.board,
+                        self.trash,
+                        self.hits,
+                        self.hints,
+                        last_action,
+                        action,
+                        partner_knowledge_model,
+                        self.current_player,
+                        extra,
+                    ),
+                    self.data_file,
+                )
 
             hint_indices, card_changed = self.perform(action)
 
@@ -317,8 +397,8 @@ class Game(object):
                 p.inform(
                     action,
                     self.current_player,
-                    game_state,
-                    player_model,
+                    deepcopy(game_state),
+                    deepcopy(player_model),
                 )
 
                 # Data collection
@@ -350,7 +430,7 @@ class Game(object):
 
     def finish(self):
         if self.format:
-            print("Score", self.score())
+            self._print("Score", self.score())
 
 
 class NullStream(object):

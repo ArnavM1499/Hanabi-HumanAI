@@ -56,7 +56,7 @@ def card_playable(card, board):
 
 def card_discardable(card, board, trash=None):
     col, nr = card
-    if board[col][1] >= card[1]:
+    if board[col][1] >= nr:
         return True
     if trash:
         for i in range(1, nr):
@@ -77,9 +77,10 @@ def slot_playable_pct(slot, board):
             total_combos += slot[col][num]
             if card_playable((col, num + 1), board):
                 playable_combos += slot[col][num]
+
     if total_combos < 1:
-        print(slot)
-        print(board)
+        return 0
+
     return playable_combos / total_combos
 
 
@@ -92,6 +93,10 @@ def slot_discardable_pct(slot, board, trash=None):
             total_combos += slot[col][num]
             if card_discardable((col, num + 1), board, trash):
                 discardable_combos += slot[col][num]
+
+    if total_combos < 1:
+        return 0
+
     return discardable_combos / total_combos
 
 
@@ -114,24 +119,28 @@ def target_possible(hint, target, knowledge, board):
     return False
 
 
-def get_target(hint, hand, exl=None):
+def get_target(hint, hand, exl=None, direction="right"):
     if exl is None:
         exl = []
     target = -1
     for i in range(len(hand)):
         if hint.type == HINT_COLOR and hand[i][0] == hint.col and i not in exl:
             target = i
+            if direction == "left":
+                return target
         elif hint.type == HINT_NUMBER and hand[i][1] == hint.num and i not in exl:
             target = i
+            if direction == "left":
+                return target
     return target
 
 
-def get_multi_target(hint, hand, knowledge, board, play_threshold, disc_threshold):
+def get_multi_target(hint, hand, knowledge, board, play_threshold, direction="right"):
     exl = []
     for i in range(len(hand)):
         if slot_playable_pct(knowledge[i], board) >= play_threshold:
             exl.append(i)
-    return get_target(hint, hand, exl)
+    return get_target(hint, hand, exl, direction)
 
 
 def hint_ambiguous(hint, hand, knowledge, board):

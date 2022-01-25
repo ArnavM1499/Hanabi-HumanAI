@@ -5,3 +5,4 @@ log/
 *.bak
 *.csv
 .idea/
+game_net/runs
