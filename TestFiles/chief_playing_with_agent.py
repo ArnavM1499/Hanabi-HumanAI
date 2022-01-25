@@ -37,9 +37,12 @@ def try_pickle(file):
 	except:
 		return None
 
+with open("resultlog", "a") as f:
+	print("clearing resultlog", file=sys.stderr)
+
 L = []
 
-for i in range(50):
+for i in range(200):
 	id_string = np.random.choice(pool_ids)
 	P1 = ChiefPlayer("CHIEF", 0, pool_ids)
 	P2 = from_dict("Teammate", 1, json_vals[id_string])
@@ -51,6 +54,14 @@ for i in range(50):
 	pickle_file.close()
 
 	L.append((id_string, json_vals[id_string]["player_class"], Result))
-	print(L[-1], file=sys.stderr)
 
-print(np.mean([a[1] for a in L]), file=sys.stderr)
+	print([a[2] for a in L], file=sys.stderr)
+	
+	with open("resultlog", "a") as f:
+		print(L[-1], file=f)
+		print(P1.move_tracking_table.loc[:,'agent distribution'], file=f)
+
+print(np.mean([a[2] for a in L]), file=sys.stderr)
+
+with open("CHIEF_RESULTS.pkl", "wb") as f:
+	pickle.dump(L, f)
