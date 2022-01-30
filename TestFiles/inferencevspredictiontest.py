@@ -1,3 +1,4 @@
+import pyximport; pyximport.install()
 from Agents.hardcode_player import HardcodePlayer2
 from Agents.value_player import ValuePlayer
 from Agents.experimental_player import ExperimentalPlayer

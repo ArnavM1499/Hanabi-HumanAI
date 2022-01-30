@@ -1,3 +1,4 @@
+import pyximport; pyximport.install()
 from Agents.ChiefAgent.chief_player import ChiefPlayer
 from Agents.behavior_clone_player import BehaviorPlayer
 import Agents
@@ -39,7 +40,7 @@ def try_pickle(file):
 
 L = []
 
-for i in range(50):
+for i in range(5):
 	id_string = np.random.choice(pool_ids)
 	P1 = ChiefPlayer("CHIEF", 0, pool_ids)
 	P2 = from_dict("Teammate", 1, json_vals[id_string])

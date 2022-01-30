@@ -1,3 +1,4 @@
+import pyximport; pyximport.install()
 import csv
 import fire
 import json
