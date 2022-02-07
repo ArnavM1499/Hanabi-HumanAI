@@ -1,3 +1,6 @@
+import pyximport
+
+pyximport.install()
 from Agents.ChiefAgent.chief_player import ChiefPlayer
 from Agents.behavior_clone_player import BehaviorPlayer
 import Agents
@@ -19,7 +22,18 @@ if len(args) == 2 and args[0] == "-seed":
 file_name = "blank.csv"
 pickle_file_name = "chief_testing"
 
-pool_ids = ["00001","00002","00003","00004","00005","10001","10002","10003","10004","10005"]
+pool_ids = [
+    "00001",
+    "00002",
+    "00003",
+    "00004",
+    "00005",
+    "10001",
+    "10002",
+    "10003",
+    "10004",
+    "10005",
+]
 
 
 def from_dict(name, pnr, json_dict):
@@ -31,37 +45,39 @@ def from_dict(name, pnr, json_dict):
 with open("Agents/configs/players.json", "r") as f:
     json_vals = json.load(f)
 
+
 def try_pickle(file):
-	try:
-		return pickle.load(file)
-	except:
-		return None
+    try:
+        return pickle.load(file)
+    except:
+        return None
+
 
 with open("resultlog", "a") as f:
-	print("clearing resultlog", file=sys.stderr)
+    print("clearing resultlog", file=sys.stderr)
 
 L = []
 
 for i in range(200):
-	id_string = np.random.choice(pool_ids)
-	P1 = ChiefPlayer("CHIEF", 0, pool_ids)
-	P2 = from_dict("Teammate", 1, json_vals[id_string])
-	
-	pickle_file = open(pickle_file_name, "wb")
-	pickle.dump(["NEW"], pickle_file)
-	G = hanabi.Game([P1, P2], file_name, pickle_file)
-	Result = G.run(100)
-	pickle_file.close()
+    id_string = np.random.choice(pool_ids)
+    P1 = ChiefPlayer("CHIEF", 0, pool_ids)
+    P2 = from_dict("Teammate", 1, json_vals[id_string])
 
-	L.append((id_string, json_vals[id_string]["player_class"], Result))
+    pickle_file = open(pickle_file_name, "wb")
+    pickle.dump(["NEW"], pickle_file)
+    G = hanabi.Game([P1, P2], file_name, pickle_file)
+    Result = G.run(100)
+    pickle_file.close()
 
-	print([a[2] for a in L], file=sys.stderr)
-	
-	with open("resultlog", "a") as f:
-		print(L[-1], file=f)
-		print(P1.move_tracking_table.loc[:,'agent distribution'], file=f)
+    L.append((id_string, json_vals[id_string]["player_class"], Result))
+
+    print([a[2] for a in L], file=sys.stderr)
+
+    with open("resultlog", "a") as f:
+        print(L[-1], file=f)
+        print(P1.move_tracking_table.loc[:, "agent distribution"], file=f)
 
 print(np.mean([a[2] for a in L]), file=sys.stderr)
 
 with open("CHIEF_RESULTS.pkl", "wb") as f:
-	pickle.dump(L, f)
+    pickle.dump(L, f)

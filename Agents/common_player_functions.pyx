@@ -68,9 +68,24 @@ def card_discardable(card, board, trash=None):
 # slot is one of the entries in the knowledge list: a 2D list w/ #'s of possible cards
 # ie slot[1][3] = 2 means the card in the slot could be color 1 and number 3
 # and there are 2 (1, 3) cards unseen so far
-def slot_playable_pct(slot, board):
-    total_combos = 0.0
-    playable_combos = 0.0
+cpdef float slot_playable_pct(list slot, list board):
+    cdef float total_combos = 0.0
+    cdef float playable_combos = 0.0
+    for col in range(len(slot)):
+        # there are 5 possible numbers
+        for num in range(5):
+            total_combos += slot[col][num]
+            if card_playable((col, num + 1), board):
+                playable_combos += slot[col][num]
+
+    if total_combos < 1:
+        return 0
+
+    return playable_combos / total_combos
+
+cpdef float int_slot_playable_pct(list slot, list board):
+    cdef int total_combos = 0
+    cdef int playable_combos = 0
     for col in range(len(slot)):
         # there are 5 possible numbers
         for num in range(5):
@@ -84,9 +99,9 @@ def slot_playable_pct(slot, board):
     return playable_combos / total_combos
 
 
-def slot_discardable_pct(slot, board, trash=None):
-    total_combos = 0
-    discardable_combos = 0
+cpdef float slot_discardable_pct(list slot, list board, list trash=[]):
+    cdef float total_combos = 0.0
+    cdef float discardable_combos = 0.0
     for col in range(len(slot)):
         # there are 5 possible numbers
         for num in range(5):
@@ -95,7 +110,22 @@ def slot_discardable_pct(slot, board, trash=None):
                 discardable_combos += slot[col][num]
 
     if total_combos < 1:
-        return 0
+        return 0.0
+
+    return discardable_combos / total_combos
+
+cpdef float int_slot_discardable_pct(list slot, list board, list trash=[]):
+    cdef int total_combos = 0
+    cdef int discardable_combos = 0
+    for col in range(len(slot)):
+        # there are 5 possible numbers
+        for num in range(5):
+            total_combos += slot[col][num]
+            if card_discardable((col, num + 1), board, trash):
+                discardable_combos += slot[col][num]
+
+    if total_combos < 1:
+        return 0.0
 
     return discardable_combos / total_combos
 
