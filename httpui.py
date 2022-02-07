@@ -1,4 +1,8 @@
+import pyximport
+
+pyximport.install()
 import http.server
+import json
 import socketserver
 import threading
 import time
@@ -8,16 +12,15 @@ import hanabi
 import Agents
 import random
 import hashlib
-import tutorial
 import sys
 import traceback
-import consent
-import threading
 from cgi import parse_header, parse_multipart
 from urllib.parse import parse_qs
-from serverconf import HOST_NAME, PORT_NUMBER
 
 from Agents.player import Player
+
+HOST_NAME = "127.0.0.1"
+PORT_NUMBER = 31337
 
 HAND = 0
 TRASH = 1
@@ -100,24 +103,11 @@ def format_board(game, show, gid):
         )
     title = "<h2>Board</h2>"
     if game.done():
-        if game.dopostsurvey:
-            title = (
-                "<h2>Game End<h2>Points: "
-                + str(game.score())
-                + '<br/><a href="/postsurvey/%s">Continue</a>' % gid
-            )
-        elif game.study:
-            title = (
-                "<h2>Game End<h2>Points: "
-                + str(game.score())
-                + '<br/><a href="/new/study/%s">Play again</a>' % gid
-            )
-        else:
-            title = (
-                "<h2>Game End<h2>Points: "
-                + str(game.score())
-                + '<br/><a href="/restart/">New game</a>'
-            )
+        title = (
+            "<h2>Game End<h2>Points: "
+            + str(game.score())
+            + '<br/><a href="/restart/">New game</a>'
+        )
 
     def make_board_image(card_with_index):
         (i, card) = card_with_index
@@ -150,22 +140,7 @@ def format_action(action_with_meta, gid, replay=None):
             result += hanabi.COLORNAMES[action.col] + " cards"
         else:
             result += str(action.num) + "s"
-    if i == 0:
-        link = ""
-        if debug:
-            if replay:
-                (gid, round, info) = replay
-                explainlink = (
-                    '<a href="/replay/%s/%d/explain" target="_blank">(Explain)</a>'
-                    % (gid, round)
-                )
-            else:
-                explainlink = (
-                    '<a href="/gid%s/explain" target="_blank">(Explain)</a>' % gid
-                )
-
-        return "<b>" + result + "</b>%s<br/><br/>" % explainlink
-    if i == 1:
+    if i in {1, 0}:
         return result + "<br/><br/>"
     return '<div style="color: gray;">' + result + "</div>"
 
@@ -476,7 +451,6 @@ class HTTPPlayer(Player):
             self.show = []
         card = None
         if action.type in [hanabi.PLAY, hanabi.DISCARD]:
-            card = game.hands[player][action.cnr]
             card = game.get_card_changed()
         self.actions.append((action, player, card))
         if player != self.pnr:
@@ -628,7 +602,9 @@ def format_score(sc):
 
 
 # AIClasses
-ais = {x: getattr(Agents, x) for x in dir(Agents) if x.endswith("Player")}
+pool_path = "Agents/configs/players.json"
+player_pool = Agents.PlayerPool("AI", 0, pool_path)
+json_pool = json.load(open(pool_path))
 
 
 class MyHandler(http.server.BaseHTTPRequestHandler):
@@ -685,7 +661,6 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             s.end_headers()
             return
 
-        # I honestly don't know why, but I already received a request for http://www.google.com
         if s.path.startswith("http://"):
             s.send_response(400)
             s.end_headers()
@@ -703,123 +678,31 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
         s.send_header("Content-type", "text/html")
         s.end_headers()
 
-        if path.startswith("/tutorial"):
-            gid = s.getgid()
-            todelete = []
-            participantslock.acquire()
-            try:
-                for g in participantstarts:
-                    if participantstarts[g] + 7200 < time.time():
-                        todelete.append(g)
-                for d in todelete:
-                    del participants[d]
-                    del participantstarts[d]
-            except Exception:
-                errlog.write("Error cleaning participants:\n")
-                errlog.write(traceback.format_exc())
-            participants[gid] = file("log/survey%s.log" % gid, "w")
-            participantstarts[gid] = time.time()
-            participantslock.release()
-            s.wfile.write(b"<html><head><title>Hanabi</title></head>")
-            s.wfile.write(b"<body><center>")
-            s.wfile.write((tutorial.intro).encode())
-            if not path.startswith("/tutorial/newtab"):
-                s.wfile.write(
-                    b'<br/>If you want to open this tutorial in a new tab for reference during the game, click here  <a href="/tutorial/newtab" target="_blank">here</a><br/>\n'
-                )
-                s.wfile.write(
-                    b'<form action="/tutorialdone" method="POST"><input type="hidden" value="%s" name="gid"/><input type="submit" value="Continue"/></form>\n'
-                    % (gid)
-                )
-
-            s.wfile.write((tutorial.summary).encode())
-
-            s.wfile.write(b"</center></body></html>")
-            return
-
         if s.path.startswith("/postsurvey/"):
             gid = s.path[12:]
             if gid in participants:
                 s.postsurvey(gid)
             return
 
-        if s.path.startswith("/consent"):
-            s.consentform()
-            return
-        doaction = True
-        replay = False
-        if path.startswith("/new/study/"):
-            oldgid = path[11:]
-            if s.invalid(oldgid):
-                s.wfile.write(b"<html><head><title>Hanabi</title></head>\n")
-                s.wfile.write(b"<body><h1>Invalid Game ID</h1>\n")
-                s.wfile.write(b"</body></html>")
-                return
-
-            gid = s.getgid()
-
-            treatments = [
-                ("intentional", 1),
-                ("intentional", 2),
-                ("intentional", 3),
-                ("intentional", 4),
-                ("intentional", 5),
-                ("outer", 1),
-                ("outer", 2),
-                ("outer", 3),
-                ("outer", 4),
-                ("outer", 5),
-                ("full", 1),
-                ("full", 2),
-                ("full", 3),
-                ("full", 4),
-                ("full", 5),
-            ]
-            random.seed(None)
-            t = random.choice(treatments)
-            nr = random.randint(6, 10000)
-            type = t[0]
-            t = (type, nr)
-            if type in ais:
-                ai = ais[type](type, 0)
-            turn = 1
-            player = HTTPPlayer("You", 1)
-            log = file("log/game%s.log" % gid, "w")
-            print("Old GID:", oldgid, file=log)
-            print("Treatment:", t, file=log)
-            random.seed(nr)
-            game = hanabi.Game([ai, player], log=log, format=1)
-            game.treatment = t
-            game.ping = time.time()
-            game.started = False
-            game.study = True
-            todelete = []
-            gameslock.acquire()
-            for g in games:
-                if games[g][0].ping + 3600 < time.time():
-                    todelete.append(g)
-            for g in todelete:
-                del games[g]
-            games[gid] = (game, player, turn)
-            gameslock.release()
-
         elif path.startswith("/new/") and debug:
 
-            type = s.path[5:]
-            if type in ais:
-                ai = ais[type](type, 0)
+            agent_type = s.path[5:]
+            if agent_type == "ChiefPlayer":
+                ai = Agents.ChiefPlayer(agent_type, 0, Agents.default_pool_ids)
             else:
-                print(type, "not found!")
+                ai = player_pool.from_dict(agent_type, 0, json_pool[agent_type])
+
             turn = 1
             player = HTTPPlayer("You", 1)
             nr = random.randint(6, 10000)
-            t = (type, nr)
+            t = (agent_type, nr)
             gid = s.getgid()
-            # log = open("log/game%s.log" % gid, "w")
-            # print("Treatment:", t, file=log)
             print("Treatment:", t)
             game = hanabi.Game(
-                [ai, player], "log/game%s.log" % gid, format=1, http_player=1
+                [ai, player],
+                "log/http_games/{}.pkl".format(gid),
+                format=1,
+                http_player=1,
             )
             game.treatment = t
             game.ping = time.time()
@@ -1190,10 +1073,15 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                 b"<body><h1>Welcome to Hanabi</h1> <p>To start, choose an AI:</p>\n"
             )
 
-            for name in ais.keys():
+            s.wfile.write(
+                '<li><a href="/new/{name}">{name}</a></li>\n'.format(
+                    name="ChiefPlayer"
+                ).encode()
+            )
+            for idx in Agents.default_pool_ids:
                 s.wfile.write(
-                    '<li><a href="/new/{name}">{name}</a></li>\n'.format(
-                        name=name
+                    '<li><a href="/new/{name}">{name}</a> / <a href="/new/{clone}">{clone}</a></li>\n'.format(
+                        name=idx, clone=idx[0] + "9" + idx[2:]
                     ).encode()
                 )
 
@@ -1239,7 +1127,7 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
         s.wfile.write(b"<html><head><title>Hanabi</title></head>")
         s.wfile.write(b"<body>")
 
-        s.wfile.write(show_game_state(game, player, turn, gid, replay).encode())
+        s.wfile.write(show_game_state(game, player, turn, gid).encode())
 
         s.wfile.write(b"</body></html>")
         if game.done() and gid is not None and gid in games:

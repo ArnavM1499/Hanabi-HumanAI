@@ -2,15 +2,30 @@ import Agents
 import json
 from copy import deepcopy
 
+default_pool_ids = [
+    "00001",
+    "00002",
+    "00003",
+    "00004",
+    "00005",
+    "10001",
+    "10002",
+    "10003",
+    "10004",
+    "10005",
+]
+
 
 # A way to interface with our player pool files
 class PlayerPool:
-    def __init__(self, name, pnr, json_file, pool_ids):
+    def __init__(self, name, pnr, json_file, pool_ids=None):
         with open(json_file, "r") as f:
             json_vals = json.load(f)
 
         filtered_vals = {
-            key: value for key, value in json_vals.items() if key in pool_ids
+            key: value
+            for key, value in json_vals.items()
+            if pool_ids is None or key in pool_ids
         }
 
         self.player_dict = {

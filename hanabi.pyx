@@ -327,6 +327,9 @@ class Game(object):
         self.external_turn(action, partner_knowledge_model)
 
     def external_turn(self, action, partner_knowledge_model=None):
+        if partner_knowledge_model is None:
+            game_state = self._make_game_state(self.current_player)
+            partner_knowledge_model = self._make_partner_knowledge_model(game_state)
         if not self.done():
             if not self.deck:
                 self.extra_turns += 1
