@@ -1,4 +1,4 @@
-import pyximport; pyximport.install()
+import pyximport; pyximport.install(language_level=3)
 from Agents.ChiefAgent.chief_player import ChiefPlayer
 from Agents.behavior_clone_player import BehaviorPlayer
 import Agents
