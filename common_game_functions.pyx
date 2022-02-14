@@ -158,10 +158,10 @@ def checkpoint(passed):
 
 
 def apply_hint_to_knowledge(action, hands, knowledges):
-    return_knowledge = deepcopy(knowledges)
+    return_knowledge = deepcopy(knowledges[action.pnr])
     if action.type == HINT_COLOR:
         for (col, num), knowledge in zip(
-            hands[action.pnr], return_knowledge[action.pnr]
+            hands[action.pnr], return_knowledge
         ):
             if col == action.col:
                 for i, k in enumerate(knowledge):
@@ -174,7 +174,7 @@ def apply_hint_to_knowledge(action, hands, knowledges):
     else:
         assert action.type == HINT_NUMBER
         for (col, num), knowledge in zip(
-            hands[action.pnr], return_knowledge[action.pnr]
+            hands[action.pnr], return_knowledge
         ):
             if num == action.num:
                 for k in knowledge:
@@ -184,7 +184,7 @@ def apply_hint_to_knowledge(action, hands, knowledges):
             else:
                 for k in knowledge:
                     k[action.num - 1] = 0
-    return return_knowledge[action.pnr]
+    return return_knowledge
 
 
 def encode_action_values(value_dict):

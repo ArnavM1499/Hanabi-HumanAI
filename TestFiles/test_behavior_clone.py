@@ -1,3 +1,4 @@
+import pyximport; pyximport.install()
 from copy import deepcopy
 from fire import Fire
 from itertools import product

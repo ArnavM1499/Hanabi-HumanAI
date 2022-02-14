@@ -1,3 +1,4 @@
+import pyximport; pyximport.install()
 import Agents
 import pickle
 import hanabi

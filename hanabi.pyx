@@ -353,19 +353,19 @@ class Game(object):
                     last_action = None
                 extra = []
                 for k in self.knowledge[partner_nr]:
-                    extra.append(slot_playable_pct(k, self.board))
+                    extra.append(int_slot_playable_pct(k, self.board))
                 while len(extra) < 5:
                     extra.append(0)
                 for k in self.knowledge[self.current_player]:
-                    extra.append(slot_playable_pct(k, self.board))
+                    extra.append(int_slot_playable_pct(k, self.board))
                 while len(extra) < 10:
                     extra.append(0)
                 for k in self.knowledge[partner_nr]:
-                    extra.append(slot_discardable_pct(k, self.board, self.trash))
+                    extra.append(int_slot_discardable_pct(k, self.board, self.trash))
                 while len(extra) < 15:
                     extra.append(0)
                 for k in self.knowledge[self.current_player]:
-                    extra.append(slot_discardable_pct(k, self.board, self.trash))
+                    extra.append(int_slot_discardable_pct(k, self.board, self.trash))
                 while len(extra) < 20:
                     extra.append(0)
                 pickle.dump(
