@@ -975,7 +975,7 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             )
             for idx in Agents.default_pool_ids:
                 s.wfile.write(
-                    '<li><a href="/new/{name}/{gid}">{name}</a> / <a href="/new/{clone}">{clone}</a></li>\n'.format(
+                    '<li><a href="/new/{name}/{gid}">{name}</a> / <a href="/new/{clone}/{gid}">{clone}</a></li>\n'.format(
                         name=idx, clone=idx[0] + "9" + idx[2:], gid=gid
                     ).encode()
                 )
