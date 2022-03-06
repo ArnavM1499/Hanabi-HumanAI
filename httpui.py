@@ -1,6 +1,7 @@
 import pyximport
 
 pyximport.install()
+import argparse
 import http.server
 import json
 import socketserver
@@ -19,8 +20,13 @@ from urllib.parse import parse_qs
 
 from Agents.player import Player
 
-HOST_NAME = "127.0.0.1"
-PORT_NUMBER = 31337
+parser = argparse.ArgumentParser()
+parser.add_argument("-o", "--host", type=str, default="127.0.0.1")
+parser.add_argument("-p", "--port", type=int, default=31337)
+args = parser.parse_args()
+
+HOST_NAME = args.host
+PORT_NUMBER = args.port
 
 HAND = 0
 TRASH = 1
@@ -31,9 +37,6 @@ debug = True
 
 
 errlog = sys.stdout
-if not debug:
-    errlog = file("hanabi.log", "w")
-
 
 template = """
 
@@ -106,7 +109,9 @@ def format_board(game, show, gid):
         title = (
             "<h2>Game End<h2>Points: "
             + str(game.score())
-            + '<br/><a href="/restart/">New game</a>'
+            + '<br/><a href="/postsurvey/{}">Complete Post-Game Survey Here</a>'.format(
+                gid
+            )
         )
 
     def make_board_image(card_with_index):
@@ -516,83 +521,6 @@ class HTTPPlayer(Player):
         if player != self.pnr and action.type in [hanabi.PLAY, hanabi.DISCARD]:
             del self.aiknows[action.cnr]
             self.aiknows.append(set())
-        print(self.knows)
-        print(self.aiknows)
-        print(self.show)
-
-
-class ReplayHTTPPlayer(HTTPPlayer):
-    def __init__(self, name, pnr):
-        super(ReplayHTTPPlayer, self).__init__(name, pnr)
-        self.actions = []
-
-    def get_action(
-        self, nr, hands, knowledge, trash, played, board, valid_actions, hints
-    ):
-        return self.actions.pop(0)
-
-
-class ReplayPlayer(Player):
-    def __init__(self, name, pnr):
-        super(ReplayPlayer, self).__init__(name, pnr)
-        self.actions = []
-        self.realplayer = None
-
-    def get_action(
-        self, nr, hands, knowledge, trash, played, board, valid_actions, hints
-    ):
-        if self.realplayer:
-            self.realplayer.get_action(
-                nr, hands, knowledge, trash, played, board, valid_actions, hints
-            )
-        return self.actions.pop(0)
-
-    def inform(self, action, player, game):
-        if self.realplayer:
-            self.realplayer.inform(action, player, game)
-
-    def get_explanation(self):
-        if self.realplayer:
-            return self.realplayer.get_explanation()
-        return []
-
-
-def get_replay_info(fname):
-    f = open(fname)
-    ai = None
-    deck = None
-    score = None
-    try:
-        for l in f:
-            if l.startswith("Treatment:"):
-                try:
-                    items = l.strip().split()
-                    ai = items[-2].strip("'(,")
-                    deck = int(items[-1].strip(")"))
-                except Exception:
-                    deck = None
-            elif l.startswith("Score"):
-                items = l.strip().split()
-                score = int(items[1])
-    except Exception:
-        f.close()
-        return (None, None, None)
-    f.close()
-
-    return (ai, deck, score)
-
-
-def get_replay_root(fname):
-    f = open(fname)
-    parent = None
-    for l in f:
-        if l.startswith("Old GID:"):
-            parent = l[8:].strip()
-            break
-    f.close()
-    if parent:
-        return get_replay_root("log/game%s.log" % parent)
-    return fname[8:24]
 
 
 def format_score(sc):
@@ -680,13 +608,12 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
 
         if s.path.startswith("/postsurvey/"):
             gid = s.path[12:]
-            if gid in participants:
-                s.postsurvey(gid)
+            s.postsurvey(gid)
             return
 
         elif path.startswith("/new/") and debug:
 
-            agent_type = s.path[5:]
+            _, _, agent_type, gid = s.path.split("/")
             if agent_type == "ChiefPlayer":
                 ai = Agents.ChiefPlayer(agent_type, 0, Agents.default_pool_ids)
             else:
@@ -696,11 +623,12 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             player = HTTPPlayer("You", 1)
             nr = random.randint(6, 10000)
             t = (agent_type, nr)
-            gid = s.getgid()
-            print("Treatment:", t)
+            # gid = s.getgid()
+            if not os.path.isdir("log/http_games/{}".format(gid)):
+                os.makedirs("log/http_games/{}".format(gid))
             game = hanabi.Game(
                 [ai, player],
-                "log/http_games/{}.pkl".format(gid),
+                "log/http_games/{}/game.pkl".format(gid),
                 format=1,
                 http_player=1,
             )
@@ -717,343 +645,6 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             games[gid] = (game, player, turn)
             gameslock.release()
 
-        elif path.startswith("/replay/") and debug:
-            gid = path[8:24]
-            rest = path[25:]
-
-            items = rest.split("/")
-            round = items[0]
-            if len(items) > 1 and items[1] == "explain":
-                path = "/explain"
-
-            fname = "log/game%s.log" % gid
-            try:
-                round = int(round)
-            except Exception:
-                import traceback
-
-                traceback.print_exc()
-                round = None
-            if "/" in gid or "\\" in gid or round is None or not os.path.exists(fname):
-                s.wfile.write(b"<html><head><title>Hanabi</title></head>\n")
-                s.wfile.write(b"<body><h1>Invalid Game ID</h1>\n")
-                s.wfile.write(b"</body></html>")
-                return
-
-            info = get_replay_info(fname)
-
-            replay = (gid, round, info)
-            f = open(fname)
-            players = [ReplayPlayer("AI", 0), ReplayHTTPPlayer("You", 1)]
-            i = 0
-
-            def convert(s):
-                if s == "None":
-                    return None
-                return int(s)
-
-            for l in f:
-                if l.startswith("Treatment:"):
-                    try:
-                        items = l.strip().split()
-                        ai = items[-2].strip("'(,")
-                        players[0].realplayer = ais[ai](ai, 0)
-                        deck = int(items[-1].strip(")"))
-
-                    except Exception:
-                        deck = None
-                elif l.startswith("MOVE:"):
-                    items = [s.strip() for s in l.strip().split()]
-                    const, pnum, type, cnr, pnr, col, num = items
-                    a = hanabi.Action(
-                        convert(type),
-                        convert(pnr),
-                        convert(col),
-                        convert(num),
-                        convert(cnr),
-                    )
-                    players[int(pnum)].actions.append(a)
-                    i += 1
-                if i >= round:
-                    break
-            if not deck:
-                s.wfile.write(b"<html><head><title>Hanabi</title></head>\n")
-                s.wfile.write(b"<body><h1>Invalid Game Log</h1>\n")
-                s.wfile.write(b"</body></html>")
-                return
-            player = players[1]
-            random.seed(deck)
-            game = hanabi.Game(players, log=hanabi.NullStream())
-            game.started = time.time()
-            for i in range(round):
-                game.single_turn()
-            doaction = False
-            turn = -1
-            gid = ""
-        elif path.startswith("/starttakeover/"):
-            items = [_f for _f in path.split("/") if _f]
-            if len(items) < 6:
-                s.wfile.write(b"<html><head><title>Hanabi</title></head>\n")
-                s.wfile.write(b"<body><h1>Invalid Game ID</h1>\n")
-                s.wfile.write(b"</body></html>")
-                return
-            gid, round, ai, action, arg = items[1:]
-            oldgid = gid
-            fname = "log/game%s.log" % gid
-            try:
-                round = int(round)
-            except Exception:
-                import traceback
-
-                traceback.print_exc()
-                round = None
-            if "/" in gid or "\\" in gid or round is None or not os.path.exists(fname):
-                s.wfile.write(b"<html><head><title>Hanabi</title></head>\n")
-                s.wfile.write(b"<body><h1>Invalid Game ID</h1>\n")
-                s.wfile.write(b"</body></html>")
-                return
-
-            info = get_replay_info(fname)
-            f = open(fname)
-            players = [ReplayPlayer(ai.capitalize(), 0), ReplayHTTPPlayer("You", 1)]
-            players[0].realplayer = ais[ai](ai.capitalize(), 0)
-            i = 0
-
-            def convert(s):
-                if s == "None":
-                    return None
-                return int(s)
-
-            for l in f:
-                if l.startswith("Treatment:"):
-                    try:
-                        items = l.strip().split()
-                        deck = int(items[-1].strip(")"))
-                    except Exception:
-                        deck = None
-                elif l.startswith("MOVE:"):
-                    items = [s.strip() for s in l.strip().split()]
-                    const, pnum, type, cnr, pnr, col, num = items
-                    a = hanabi.Action(
-                        convert(type),
-                        convert(pnr),
-                        convert(col),
-                        convert(num),
-                        convert(cnr),
-                    )
-                    players[int(pnum)].actions.append(a)
-                    i += 1
-                if i >= round:
-                    break
-            if not deck:
-                s.wfile.write(b"<html><head><title>Hanabi</title></head>\n")
-                s.wfile.write(b"<body><h1>Invalid Game Log</h1>\n")
-                s.wfile.write(b"</body></html>")
-                return
-            player = players[1]
-            random.seed(deck)
-            gid = s.getgid()
-            t = (ai, deck)
-            log = file("log/game%s.log" % gid, "w")
-            print("Original:", oldgid, file=log)
-            print("Treatment:", t, file=log)
-            game = hanabi.Game(players, log=log, format=1)
-            game.treatment = t
-            game.ping = time.time()
-            game.started = True
-            for i in range(round):
-                game.single_turn()
-            game.players[0] = game.players[0].realplayer
-            game.current_player = 1
-            doaction = False
-            turn = round + 1
-            gameslock.acquire()
-            games[gid] = (game, players[1], turn)
-            gameslock.release()
-            path = "/%d/%s/%s" % (turn, action, arg)
-
-        elif path.startswith("/showsurvey/"):
-            gid = path[12:28]
-            fname = "log/survey%s.log" % gid
-
-            if "/" in gid or "\\" in gid or not os.path.exists(fname):
-                s.wfile.write(b"<html><head><title>Hanabi</title></head>\n")
-                s.wfile.write(
-                    b"<body><h1>No survey answers recorded for this game ID</h1>\n"
-                )
-                s.wfile.write(b"</body></html>")
-                return
-            f = file(fname)
-            answers = {}
-            for l in f:
-                if l.strip():
-                    q, a = l.split(None, 1)
-                    answers[q.strip()] = a.strip()
-            f.close()
-            s.wfile.write(b"<html><head><title>Hanabi</title></head>\n")
-            s.wfile.write(b"<body><h1>Survey responses for %s</h1>\n" % gid)
-            s.presurvey_questions(answers)
-            if path.endswith("full"):
-                s.postsurvey_questions(answers)
-
-            s.wfile.write(b"</body></html>")
-            return
-        elif path.startswith("/selectreplay/"):
-            filters = path[14:].split("/")
-            filters = dict(list(zip(filters[::2], filters[1::2])))
-            s.wfile.write(b"<html><head><title>Hanabi</title></head>\n")
-            s.wfile.write(b"<body>")
-            s.wfile.write(b"<h1>Replay selection</h1>")
-            s.wfile.write(b"<h2>Filters:</h2>")
-
-            def format_filters(f):
-                result = ""
-                for k in f:
-                    result += "%s/%s/" % (k, f[k])
-                return result
-
-            def update_filters(f, k, v):
-                result = dict(f)
-                if v:
-                    result[k] = v
-                elif k in result:
-                    del result[k]
-                return result
-
-            s.wfile.write(b"<p>AI: ")
-
-            for i, (display, value) in enumerate(
-                [
-                    ("Outer State AI", "outer"),
-                    ("Intentional AI", "intentional"),
-                    ("Full AI", "full"),
-                ]
-            ):
-                s.wfile.write(
-                    b' <a href="/selectreplay/%s">%s</a> - '
-                    % (format_filters(update_filters(filters, "ai", value)), display)
-                )
-            s.wfile.write(
-                b' <a href="/selectreplay/%s">any</a></p>'
-                % (format_filters(update_filters(filters, "ai", "")))
-            )
-
-            s.wfile.write(b"<p>Score: ")
-
-            for i, (display, value) in enumerate(
-                [
-                    ("0-4", "0"),
-                    ("5-9", "1"),
-                    ("10-14", "2"),
-                    ("15-19", "3"),
-                    ("20-24", "4"),
-                    ("25", "5"),
-                ]
-            ):
-                s.wfile.write(
-                    b' <a href="/selectreplay/%s">%s</a> - '
-                    % (format_filters(update_filters(filters, "score", value)), display)
-                )
-            s.wfile.write(
-                b' <a href="/selectreplay/%s">any</a></p>'
-                % (format_filters(update_filters(filters, "score", "")))
-            )
-
-            s.wfile.write(b"<p>Deck: ")
-
-            for i, (display, value) in enumerate(
-                [
-                    ("1", "1"),
-                    ("2", "2"),
-                    ("3", "3"),
-                    ("4", "4"),
-                    ("5", "5"),
-                    ("other", "other"),
-                ]
-            ):
-                s.wfile.write(
-                    b' <a href="/selectreplay/%s">%s</a> - '
-                    % (format_filters(update_filters(filters, "deck", value)), display)
-                )
-            s.wfile.write(
-                b' <a href="/selectreplay/%s">any</a></p>'
-                % (format_filters(update_filters(filters, "deck", "")))
-            )
-
-            s.wfile.write(b"Select a replay to view:<br/><ul>")
-            replays = []
-
-            def match(f, ai, deck, score):
-                if "ai" in f and ai != f["ai"]:
-                    return False
-                if "score" in f and (score is None or score / 5 != int(f["score"])):
-                    return False
-                if "deck" in f and (
-                    (str(deck) != f["deck"] and f["deck"] != "other")
-                    or (f["deck"] == "other" and deck <= 5)
-                ):
-                    return False
-
-                return True
-
-            for f in os.listdir("log/"):
-                if f.startswith("game"):
-                    gid = f[4:20]
-                    fname = os.path.join("log", f)
-                    (ai, deck, score) = get_replay_info(fname)
-                    if ai and deck and match(filters, ai, deck, score):
-                        entry = (
-                            '<li><a href="/replay/%s/1">Game %s (%s AI, %s, deck %d)</a></li>\n'
-                            % (gid, gid, ai, format_score(score), deck)
-                        )
-                        replays.append(((score if score else -1), entry))
-            replays.sort(key=lambda s_e: -s_e[0])
-            for (score, entry) in replays:
-                s.wfile.write(entry.encode())
-            return
-        elif path.startswith("/takeover/"):
-            items = [_f for _f in path.split("/") if _f]
-
-            if len(items) < 5:
-                s.wfile.write(b"<html><head><title>Hanabi</title></head>\n")
-                s.wfile.write(b"<body><h1>Invalid Game ID</h1>\n")
-                s.wfile.write(b"</body></html>")
-                return
-            gid, round, action, arg = items[1:]
-            fname = "log/game%s.log" % gid
-            try:
-                round = int(round)
-            except Exception:
-                import traceback
-
-                traceback.print_exc()
-                round = None
-            if "/" in gid or "\\" in gid or round is None or not os.path.exists(fname):
-                s.wfile.write(b"<html><head><title>Hanabi</title></head>\n")
-                s.wfile.write(b"<body><h1>Invalid Game ID</h1>\n")
-                s.wfile.write(b"</body></html>")
-                return
-            (ai, deck, score) = get_replay_info(fname)
-            s.wfile.write(b"<html><head><title>Hanabi</title></head>\n")
-            s.wfile.write(b"<body><h1>Take over game</h1>\n")
-            s.wfile.write(
-                b"<p>If you continue, you will take over playing the game you were viewing from turn %d onward</p>"
-                % round
-            )
-            s.wfile.write(
-                b'<p>You may choose to use the same AI as the player that was playing the game by clicking <a href="/starttakeover/%s/%d/%s/%s/%s">here</a></p>\n'
-                % (gid, round + 1, ai, action, arg)
-            )
-            s.wfile.write(b"<p>You may also choose any AI to play with:</p><ul>")
-            for a in ais:
-                s.wfile.write(
-                    b'<li><a href="/starttakeover/%s/%d/%s/%s/%s">%s AI</a></li>'
-                    % (gid, round + 1, a, action, arg, a.capitalize())
-                )
-
-            s.wfile.write(b"</ul></p></body></html>")
-            return
-
         if gid is None or game is None or path.startswith("/restart/"):
             if not debug:
                 s.wfile.write(b"<html><head><title>Hanabi</title></head>\n")
@@ -1065,35 +656,22 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             gameslock.acquire()
             if gid is not None and gid in games:
                 del games[gid]
+            else:
+                gid = s.getgid()
             gameslock.release()
-            # AIList
-            # /new/<foo> will look up <foo> in the ais dictionary, so make sure the names match
-            s.wfile.write(b"<html><head><title>Hanabi</title></head>\n")
-            s.wfile.write(
-                b"<body><h1>Welcome to Hanabi</h1> <p>To start, choose an AI:</p>\n"
-            )
-
-            s.wfile.write(
-                '<li><a href="/new/{name}">{name}</a></li>\n'.format(
-                    name="ChiefPlayer"
-                ).encode()
-            )
-            for idx in Agents.default_pool_ids:
-                s.wfile.write(
-                    '<li><a href="/new/{name}">{name}</a> / <a href="/new/{clone}">{clone}</a></li>\n'.format(
-                        name=idx, clone=idx[0] + "9" + idx[2:]
-                    ).encode()
+            participantslock.acquire()
+            if gid not in participants:
+                if not os.path.isdir("log/http_games/{}".format(gid)):
+                    os.makedirs("log/http_games/{}".format(gid))
+                participants[gid] = open(
+                    "log/http_games/{}/survey.txt".format(gid), "w"
                 )
+                participantstarts[gid] = time.time()
+            participantslock.release()
+            s.presurvey(gid)
 
             s.wfile.write(b"</ul><br/>")
-            s.wfile.write(
-                b'<p>Or select a <a href="/selectreplay/">replay file to view</a></p>'
-            )
             s.wfile.write(b"</body></html>")
-            return
-
-        if path.startswith("/explain") and debug:
-            s.show_explanation(game)
             return
 
         if path.startswith("/start/"):
@@ -1138,37 +716,24 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             game.finish()
             del [gid]
 
-    def show_explanation(s, game):
-        s.wfile.write(b"<html><head><title>Hanabi - AI Explanation</title></head>")
-        s.wfile.write(b"<body>")
-
-        s.wfile.write(b'<table border="1">')
-        s.wfile.write(
-            b"<tr><th>Description</th><th>Card 1</th><th>Card 2</th><th>Card 3</th><th>Card 4</th><th>Card 5</th>\n"
-        )
-        for line in game.players[0].get_explanation():
-            s.wfile.write(b"<tr>\n")
-            for item in line:
-                s.wfile.write(b"\t<td>%s</td>\n" % (str(item).replace("\n", "<br/>")))
-            s.wfile.write(b"</tr>\n")
-        s.wfile.write(b"</table>\n")
-
-        s.wfile.write(b"</body></html>")
-
     def add_choice(s, name, question, answers, default=-1):
         s.wfile.write(b"<p>")
         s.wfile.write((question + "<br/>").encode())
-        s.wfile.write(b'<fieldset id="%s">\n' % name)
+        s.wfile.write(('<fieldset id="%s">\n' % name).encode())
         for i, (aname, text) in enumerate(answers):
             if i == default:
                 s.wfile.write(
-                    b'<input name="%s" type="radio" value="%s" id="%s%s" checked="checked"/><label for="%s%s">%s</label><br/>\n'
-                    % (name, aname, name, aname, name, aname, text)
+                    (
+                        '<input name="%s" type="radio" value="%s" id="%s%s" checked="checked"/><label for="%s%s">%s</label><br/>\n'
+                        % (name, aname, name, aname, name, aname, text)
+                    ).encode()
                 )
             else:
                 s.wfile.write(
-                    b'<input name="%s" type="radio" value="%s" id="%s%s"/><label for="%s%s">%s</label><br/>\n'
-                    % (name, aname, name, aname, name, aname, text)
+                    (
+                        '<input name="%s" type="radio" value="%s" id="%s%s"/><label for="%s%s">%s</label><br/>\n'
+                        % (name, aname, name, aname, name, aname, text)
+                    ).encode()
                 )
         s.wfile.write(b"</fieldset>\n")
         s.wfile.write(b"</p>")
@@ -1179,15 +744,15 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
         s.wfile.write(b'<input name="%s"/>\n' % name)
         s.wfile.write(b"</p>")
 
-    def presurvey(s, gid, warn=False):
+    def presurvey(s, gid, warn=False, redirect="/new/ChiefPlayer/"):
         s.wfile.write(
-            b"<center><h1>Finally, please answer some question about previous board game experience</h1>"
+            b"<center><h1>First, please answer some question about previous board game experience</h1>"
         )
         s.wfile.write(b'<table width="600px">\n<tr><td>')
-        s.wfile.write(b'<form action="/submitpost2" method="POST">')
+        s.wfile.write(b'<form action="/submitpre" method="POST">')
         s.presurvey_questions()
         s.wfile.write(b"<p>")
-        s.wfile.write(b'<input name="gid" type="hidden" value="%s"/>\n' % gid)
+        s.wfile.write(('<input name="gid" type="hidden" value="%s"/>\n' % gid).encode())
         s.wfile.write(b'<input type="submit" value="Finish"/>\n')
         s.wfile.write(b"</form></td></tr></table></center>")
 
@@ -1305,7 +870,7 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
         s.wfile.write(b'<form action="/submitpost" method="POST">')
         s.postsurvey_questions()
         s.wfile.write(b"<p>")
-        s.wfile.write(b'<input name="gid" type="hidden" value="%s"/>\n' % gid)
+        s.wfile.write(('<input name="gid" type="hidden" value="%s"/>\n' % gid).encode())
         s.wfile.write(b'<input type="submit" value="Continue"/>\n')
         s.wfile.write(b"</form></td></tr></table></center>")
 
@@ -1318,8 +883,8 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             ("5", "Always performed goal-directed actions"),
         ]
         default = -1
-        if "intention" in answers:
-            default = [a_b7[0] for a_b7 in responses].index(answers["intention"])
+        # if "intention" in answers:
+        #     default = [a_b7[0] for a_b7 in responses].index(answers["intention"])
         s.add_choice(
             "intention",
             "How intentional/goal-directed did you think this AI was playing?",
@@ -1378,98 +943,12 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
         vars = {}
         for v in tvars:
             vars[v] = tvars[v][0]
-        if s.path.startswith("/submitpost2"):
-            required = ["score", "age", "recent", "exp", "bgg", "gamer", "publish"]
+
+        if s.path.startswith("/submitpre"):
 
             gid = s.getgid()
-            if "gid" in vars and vars["gid"]:
-                gid = vars["gid"]
-
-            if gid not in participants:
-                print(gid, "not in participants", participants, file=errlog)
-                return s.presurvey(gid)
-
-            participantslock.acquire()
-            for r in required:
-                if r in vars:
-                    print(r, vars[r], file=participants[gid])
-            participants[gid].close()
-            del participants[gid]
-            del participantstarts[gid]
-            participantslock.release()
-            s.wfile.write(b"<html><head><title>Hanabi</title></head>")
-            s.wfile.write(b"<body><center>")
-            s.wfile.write(b"<h1>Thank you for your participation in this study!</h1>")
-
-            s.wfile.write(
-                b'<a href="/new/study/%s">Play again</a><br/>You can bookmark this link and play again at any later time. <br/>Any additional games you play will also be recorded for future analysis, and published if you agreed to publication.'
-                % (gid)
-            )
-
-            s.wfile.write(b"</body></html>")
-
-        elif s.path.startswith("/tutorialdone"):
-            gid = s.getgid()
-            if "gid" in vars and vars["gid"]:
-                gid = vars["gid"]
-            participantslock.acquire()
-            if gid not in participants:
-                participants[gid] = file("log/survey%s.log" % gid, "w")
-                participantstarts[gid] = time.time()
-            participantslock.release()
-            treatments = [
-                ("intentional", 1),
-                ("intentional", 2),
-                ("intentional", 3),
-                ("intentional", 4),
-                ("intentional", 5),
-                ("outer", 1),
-                ("outer", 2),
-                ("outer", 3),
-                ("outer", 4),
-                ("outer", 5),
-                ("full", 1),
-                ("full", 2),
-                ("full", 3),
-                ("full", 4),
-                ("full", 5),
-            ]
-            random.seed(None)
-            t = random.choice(treatments)
-            type = t[0]
-            if type in ais:
-                ai = ais[type](type, 0)
-            turn = 1
-            player = HTTPPlayer("You", 1)
-            log = file("log/game%s.log" % gid, "w")
-            print("Treatment:", t, file=log)
-            random.seed(t[1])
-            game = hanabi.Game([ai, player], log=log, format=1)
-            game.treatment = t
-            game.ping = time.time()
-            game.dopostsurvey = True
-            game.started = False
-            todelete = []
-            gameslock.acquire()
-            for g in games:
-                if games[g][0].ping + 3600 < time.time():
-                    todelete.append(g)
-            for g in todelete:
-                del games[g]
-            games[gid] = (game, player, turn)
-            gameslock.release()
-            s.wfile.write(b"<html><head><title>Hanabi</title></head>")
-            s.wfile.write(b"<body>")
-
-            s.wfile.write(show_game_state(game, player, turn, gid).encode())
-
-            s.wfile.write(b"</body></html>")
-        elif s.path.startswith("/submitpost"):
-            required = ["intention", "skill", "like"]
-
-            gid = s.getgid()
-            if "gid" in vars and vars["gid"]:
-                gid = vars["gid"]
+            if b"gid" in vars and vars[b"gid"]:
+                gid = vars[b"gid"].decode()
 
             if gid not in participants:
                 s.wfile.write(b"<html><head><title>Hanabi</title></head>")
@@ -1480,12 +959,49 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                 s.wfile.write(b"</body></html>")
                 return
             participantslock.acquire()
-            for r in required:
-                if r in vars:
-                    print(r, vars[r], file=participants[gid])
+            for r in vars:
+                print(r, vars[r], file=participants[gid])
             participants[gid].flush()
             participantslock.release()
-            s.presurvey(gid)
+            s.wfile.write(b"<html><head><title>Hanabi</title></head>\n")
+            s.wfile.write(
+                b"<body><h1>Welcome to Hanabi</h1> <p>To start, choose an AI:</p>\n"
+            )
+
+            s.wfile.write(
+                '<li><a href="/new/{name}/{gid}">{name}</a></li>\n'.format(
+                    name="ChiefPlayer", gid=gid
+                ).encode()
+            )
+            for idx in Agents.default_pool_ids:
+                s.wfile.write(
+                    '<li><a href="/new/{name}/{gid}">{name}</a> / <a href="/new/{clone}">{clone}</a></li>\n'.format(
+                        name=idx, clone=idx[0] + "9" + idx[2:], gid=gid
+                    ).encode()
+                )
+
+        elif s.path.startswith("/submitpost"):
+
+            gid = s.getgid()
+            if b"gid" in vars and vars[b"gid"]:
+                gid = vars[b"gid"].decode()
+
+            if gid not in participants:
+                s.wfile.write(b"<html><head><title>Hanabi</title></head>")
+                s.wfile.write(b"<body><center>")
+                s.wfile.write(
+                    b"<h1>Session timed out. Thank you for your time and participation</h1>"
+                )
+                s.wfile.write(b"</body></html>")
+                return
+            participantslock.acquire()
+            for r in vars:
+                print(r, vars[r], file=participants[gid])
+            participants[gid].flush()
+            participantslock.release()
+            s.wfile.write(b"<html><head><title>Hanabi</title></head>")
+            s.wfile.write(b"<body><center>")
+            s.wfile.write(b"<h1>Thank you for your participation in this study!</h1>")
 
     def consentform(s):
         s.wfile.write(b"<html><head><title>Hanabi</title></head>\n")
