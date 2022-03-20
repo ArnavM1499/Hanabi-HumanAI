@@ -575,6 +575,24 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             gameslock.release()
             path = s.path[20:]
 
+        if s.path.startswith("/play"):
+            s.send_response(200)
+            s.send_header("Content-type", "text/html")
+            s.end_headers()
+            game_url = "/new" + s.path[5:]
+            s.wfile.write(bytes(
+                """
+                <html style="width: 100%; height: 100%; margin: 0; padding: 0">
+                <body style="width: 100%; height: 100%; margin: 0; padding: 0">
+                <div style="display: flex; width: 100%; height: 100%; flex-direction: column; 
+                background-color: white; overflow: hidden;">
+                <iframe src='""" + game_url + """' style='flex-grow: 1; border:none; margin: 0; padding: 0;'></iframe>
+                </div>
+                </body>
+                </html>
+                """, "utf-8"))
+            return
+
         if s.path == "/hanabiui.png":
             f = open("hanabiui.png", "rb")
             s.send_response(200)
@@ -969,13 +987,13 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             )
 
             s.wfile.write(
-                '<li><a href="/new/{name}/{gid}">{name}</a></li>\n'.format(
+                '<li><a href="/play/{name}/{gid}">{name}</a></li>\n'.format(
                     name="ChiefPlayer", gid=gid
                 ).encode()
             )
             for idx in Agents.default_pool_ids:
                 s.wfile.write(
-                    '<li><a href="/new/{name}/{gid}">{name}</a> / <a href="/new/{clone}/{gid}">{clone}</a></li>\n'.format(
+                    '<li><a href="/play/{name}/{gid}">{name}</a> / <a href="/play/{clone}/{gid}">{clone}</a></li>\n'.format(
                         name=idx, clone=idx[0] + "9" + idx[2:], gid=gid
                     ).encode()
                 )
