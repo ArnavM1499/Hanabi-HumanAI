@@ -588,6 +588,15 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                 background-color: white; overflow: hidden;">
                 <iframe src='""" + game_url + """' style='flex-grow: 1; border:none; margin: 0; padding: 0;'></iframe>
                 </div>
+                <script type="text/javascript">
+                window.addEventListener('beforeunload',
+                                        function (e) {
+                    var message = "You have not finished the game. Are you sure you want to leave?";
+                    e.preventDefault();
+                    e.returnValue = message;
+                    return message;
+                });
+                </script>
                 </body>
                 </html>
                 """, "utf-8"))
@@ -724,6 +733,17 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
         s.wfile.write(b"<body>")
 
         s.wfile.write(show_game_state(game, player, turn, gid).encode())
+        #s.wfile.write(bytes("""
+        #<script type="text/javascript">
+        #        window.addEventListener('beforeunload',
+        #                                function (e) {
+        #            var message = "You have not finished the game. Are you sure you want to leave?";
+        #            e.preventDefault();
+        #            e.returnValue = message;
+        #            return message;
+        #        });
+        #        </script>
+        #""", "utf-8"))
 
         s.wfile.write(b"</body></html>")
         if game.done() and gid is not None and gid in games:
