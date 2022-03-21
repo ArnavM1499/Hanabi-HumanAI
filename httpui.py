@@ -1,6 +1,6 @@
 import pyximport
 
-pyximport.install()
+pyximport.install(language_level=3)
 import argparse
 import http.server
 import json
