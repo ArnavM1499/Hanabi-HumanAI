@@ -120,6 +120,7 @@ def format_board(game, show, gid):
 
     boardcards = list(map(make_board_image, enumerate(game.board)))
     args = tuple([title] + boardcards)
+    print("formating board: {}".format(show))
     return board_template % args
 
 
@@ -452,8 +453,7 @@ class HTTPPlayer(Player):
         self.show = []
 
     def inform(self, action, player, game, model):
-        if player == 1:
-            self.show = []
+        self.show = []
         card = None
         if action.type in [hanabi.PLAY, hanabi.DISCARD]:
             card = game.get_card_changed()
@@ -481,39 +481,16 @@ class HTTPPlayer(Player):
                         self.aiknows[i].add(str(num))
                         self.show.append((HAND, action.pnr, i))
 
-        if action.type in [hanabi.PLAY, hanabi.DISCARD] and player == 0:
-            newshow = []
-            for (where, who, what) in self.show:
-                if who == 0 and where == HAND:
-                    if what < action.cnr:
-                        newshow.append((where, who, what))
-                    elif what > action.cnr:
-                        newshow.append((where, who, what - 1))
-                else:
-                    newshow.append((where, who, what))
-            self.show = newshow
         if action.type == hanabi.DISCARD:
-            newshow = []
-            for (t, w1, w2) in self.show:
-                if t == TRASH:
-                    newshow.append((t, w1, w2 - 1))
-                else:
-                    newshow.append((t, w1, w2))
-            self.show = newshow
             self.show.append((TRASH, 0, -1))
 
         elif action.type == hanabi.PLAY:
-            (col, num) = game.hands[player][action.cnr]
-            if game.board[col][1] + 1 == num:
+            (col, num) = card
+            if game.board[col][1] == num:
+                print("successful play")
                 self.show.append((BOARD, 0, col))
             else:
-                newshow = []
-                for (t, w1, w2) in self.show:
-                    if t == TRASH:
-                        newshow.append((t, w1, w2 - 1))
-                    else:
-                        newshow.append((t, w1, w2))
-                self.show = newshow
+                print("bad play")
                 self.show.append((TRASH, 0, -1))
         if player == self.pnr and action.type in [hanabi.PLAY, hanabi.DISCARD]:
             del self.knows[action.cnr]
@@ -575,6 +552,44 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             gameslock.release()
             path = s.path[20:]
 
+        if s.path.startswith("/play"):
+            s.send_response(200)
+            s.send_header("Content-type", "text/html")
+            s.end_headers()
+            game_url = "/new" + s.path[5:]
+            s.wfile.write(
+                bytes(
+                    """
+                <html style="width: 100%; height: 100%; margin: 0; padding: 0">
+                <body style="width: 100%; height: 100%; margin: 0; padding: 0">
+                <div style="display: flex; width: 100%; height: 100%; flex-direction: column;
+                background-color: white; overflow: hidden;">
+                <iframe id="game_frame" src='"""
+                    + game_url
+                    + """' style='flex-grow: 1; border:none; margin: 0; padding: 0;'></iframe>
+                </div>
+                <script type="text/javascript">
+                window.addEventListener('beforeunload',
+                                        function (e) {
+                    var frame_content = document.getElementById("game_frame").contentWindow.document.body.innerHTML;
+                    // the frames we *don't* want them to close
+                    if (frame_content.search("Actions") != -1 || frame_content.search("Start") != -1
+                        || frame_content.search("rate the play skill") != -1) {
+                        var message = "You have not finished the study. Are you sure you want to leave?";
+                        e.preventDefault();
+                        e.returnValue = message;
+                        return message;
+                    }
+                });
+                </script>
+                </body>
+                </html>
+                """,
+                    "utf-8",
+                )
+            )
+            return
+
         if s.path == "/hanabiui.png":
             f = open("hanabiui.png", "rb")
             s.send_response(200)
@@ -623,9 +638,9 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             player = HTTPPlayer("You", 1)
             nr = random.randint(6, 10000)
             t = (agent_type, nr)
-            # gid = s.getgid()
             if not os.path.isdir("log/http_games/{}".format(gid)):
                 os.makedirs("log/http_games/{}".format(gid))
+            open("log/http_games/{}/agent.txt".format(gid), "w").write(agent_type)
             game = hanabi.Game(
                 [ai, player],
                 "log/http_games/{}/game.pkl".format(gid),
@@ -706,6 +721,17 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
         s.wfile.write(b"<body>")
 
         s.wfile.write(show_game_state(game, player, turn, gid).encode())
+        # s.wfile.write(bytes("""
+        # <script type="text/javascript">
+        #        window.addEventListener('beforeunload',
+        #                                function (e) {
+        #            var message = "You have not finished the game. Are you sure you want to leave?";
+        #            e.preventDefault();
+        #            e.returnValue = message;
+        #            return message;
+        #        });
+        #        </script>
+        # """, "utf-8"))
 
         s.wfile.write(b"</body></html>")
         if game.done() and gid is not None and gid in games:
@@ -744,7 +770,7 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
         s.wfile.write(b'<input name="%s"/>\n' % name)
         s.wfile.write(b"</p>")
 
-    def presurvey(s, gid, warn=False, redirect="/new/ChiefPlayer/"):
+    def presurvey(s, gid, warn=False):
         s.wfile.write(
             b"<center><h1>First, please answer some question about previous board game experience</h1>"
         )
@@ -852,7 +878,7 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
         )
 
         responses = [("yes", "Yes"), ("no", "No")]
-        default = 0
+        default = -1
         if "gamer" in answers:
             default = [a_b6[0] for a_b6 in responses].index(answers["publish"])
         s.add_choice(
@@ -963,22 +989,22 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                 print(r, vars[r], file=participants[gid])
             participants[gid].flush()
             participantslock.release()
-            s.wfile.write(b"<html><head><title>Hanabi</title></head>\n")
-            s.wfile.write(
-                b"<body><h1>Welcome to Hanabi</h1> <p>To start, choose an AI:</p>\n"
-            )
 
+            agent = random.choice(
+                ["ChiefPlayer"] + [str(x) for x in Agents.default_pool_ids]
+            )
+            redirect = "/play/{}/{}".format(agent, gid)
             s.wfile.write(
-                '<li><a href="/new/{name}/{gid}">{name}</a></li>\n'.format(
-                    name="ChiefPlayer", gid=gid
+                """<html><head><title>Hanabi</title><meta http-equiv="Refresh" content="0; url='{}'" /></head>\n""".format(
+                    redirect
                 ).encode()
             )
-            for idx in Agents.default_pool_ids:
-                s.wfile.write(
-                    '<li><a href="/new/{name}/{gid}">{name}</a> / <a href="/new/{clone}/{gid}">{clone}</a></li>\n'.format(
-                        name=idx, clone=idx[0] + "9" + idx[2:], gid=gid
-                    ).encode()
-                )
+            s.wfile.write(
+                b"<body><h1>Welcome to Hanabi</h1> <p>The game should start in 3 seconds. If not, please click here: </p>\n"
+            )
+            s.wfile.write(
+                '<li><a href="{}">Start Game</a></li>\n'.format(redirect).encode()
+            )
 
         elif s.path.startswith("/submitpost"):
 
