@@ -962,9 +962,14 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
         s.add_choice(
             "like", "How much did you enjoy playing with this AI?", responses, default
         )
+        s.wfile.write(bytes("""
+        <p> General Feedback </p>
+        <textarea rows="5" cols="150" name="feedback" id="feedback"></textarea>
+        """, "utf-8"))
 
     def parse_POST(self):
         ctype, pdict = parse_header(self.headers["content-type"])
+        print(pdict)
         if ctype == "multipart/form-data":
             postvars = parse_multipart(self.rfile, pdict)
         elif ctype == "application/x-www-form-urlencoded":
