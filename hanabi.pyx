@@ -58,11 +58,6 @@ class Game(object):
         if self.format:
             print(self.deck)
 
-        if http_player != -1:
-            for i, player in enumerate(self.players):
-                if i != http_player and hasattr(player, "debug"):
-                    player.debug = True
-
     def _print(self, *args):
         if self.print_game:
             print(*args)
