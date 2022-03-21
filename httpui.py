@@ -575,6 +575,38 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             gameslock.release()
             path = s.path[20:]
 
+        if s.path.startswith("/play"):
+            s.send_response(200)
+            s.send_header("Content-type", "text/html")
+            s.end_headers()
+            game_url = "/new" + s.path[5:]
+            s.wfile.write(bytes(
+                """
+                <html style="width: 100%; height: 100%; margin: 0; padding: 0">
+                <body style="width: 100%; height: 100%; margin: 0; padding: 0">
+                <div style="display: flex; width: 100%; height: 100%; flex-direction: column; 
+                background-color: white; overflow: hidden;">
+                <iframe id="game_frame" src='""" + game_url + """' style='flex-grow: 1; border:none; margin: 0; padding: 0;'></iframe>
+                </div>
+                <script type="text/javascript">
+                window.addEventListener('beforeunload',
+                                        function (e) {
+                    var frame_content = document.getElementById("game_frame").contentWindow.document.body.innerHTML;
+                    // the frames we *don't* want them to close
+                    if (frame_content.search("Actions") != -1 || frame_content.search("Start") != -1 
+                        || frame_content.search("rate the play skill") != -1) {
+                        var message = "You have not finished the study. Are you sure you want to leave?";
+                        e.preventDefault();
+                        e.returnValue = message;
+                        return message;
+                    }
+                });
+                </script>
+                </body>
+                </html>
+                """, "utf-8"))
+            return
+
         if s.path == "/hanabiui.png":
             f = open("hanabiui.png", "rb")
             s.send_response(200)
@@ -706,6 +738,17 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
         s.wfile.write(b"<body>")
 
         s.wfile.write(show_game_state(game, player, turn, gid).encode())
+        #s.wfile.write(bytes("""
+        #<script type="text/javascript">
+        #        window.addEventListener('beforeunload',
+        #                                function (e) {
+        #            var message = "You have not finished the game. Are you sure you want to leave?";
+        #            e.preventDefault();
+        #            e.returnValue = message;
+        #            return message;
+        #        });
+        #        </script>
+        #""", "utf-8"))
 
         s.wfile.write(b"</body></html>")
         if game.done() and gid is not None and gid in games:
@@ -969,13 +1012,13 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             )
 
             s.wfile.write(
-                '<li><a href="/new/{name}/{gid}">{name}</a></li>\n'.format(
+                '<li><a href="/play/{name}/{gid}">{name}</a></li>\n'.format(
                     name="ChiefPlayer", gid=gid
                 ).encode()
             )
             for idx in Agents.default_pool_ids:
                 s.wfile.write(
-                    '<li><a href="/new/{name}/{gid}">{name}</a> / <a href="/new/{clone}/{gid}">{clone}</a></li>\n'.format(
+                    '<li><a href="/play/{name}/{gid}">{name}</a> / <a href="/play/{clone}/{gid}">{clone}</a></li>\n'.format(
                         name=idx, clone=idx[0] + "9" + idx[2:], gid=gid
                     ).encode()
                 )
