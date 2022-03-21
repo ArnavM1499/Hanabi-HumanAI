@@ -586,15 +586,20 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                 <body style="width: 100%; height: 100%; margin: 0; padding: 0">
                 <div style="display: flex; width: 100%; height: 100%; flex-direction: column; 
                 background-color: white; overflow: hidden;">
-                <iframe src='""" + game_url + """' style='flex-grow: 1; border:none; margin: 0; padding: 0;'></iframe>
+                <iframe id="game_frame" src='""" + game_url + """' style='flex-grow: 1; border:none; margin: 0; padding: 0;'></iframe>
                 </div>
                 <script type="text/javascript">
                 window.addEventListener('beforeunload',
                                         function (e) {
-                    var message = "You have not finished the game. Are you sure you want to leave?";
-                    e.preventDefault();
-                    e.returnValue = message;
-                    return message;
+                    var frame_content = document.getElementById("game_frame").contentWindow.document.body.innerHTML;
+                    // the frames we *don't* want them to close
+                    if (frame_content.search("Actions") != -1 || frame_content.search("Start") != -1 
+                        || frame_content.search("rate the play skill") != -1) {
+                        var message = "You have not finished the study. Are you sure you want to leave?";
+                        e.preventDefault();
+                        e.returnValue = message;
+                        return message;
+                    }
                 });
                 </script>
                 </body>
