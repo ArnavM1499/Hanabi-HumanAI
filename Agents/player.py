@@ -1,4 +1,5 @@
 import random
+import pickle
 from common_game_functions import *
 import Agents
 
@@ -35,13 +36,6 @@ class Action(object):
 
     def __eq__(self, other):
         return isinstance(other, Action) and (self.encode() == other.encode())
-        # return (self.type, self.pnr, self.col, self.num, self.cnr) == (
-        #     other.type,
-        #     other.pnr,
-        #     other.col,
-        #     other.num,
-        #     other.cnr,
-        # )
 
     def __hash__(self):
         return hash(str(self))
@@ -101,3 +95,7 @@ class Player(object):
 
     def new_game(self, hands):  # All the hands visible to the player
         pass
+
+    def snapshot(self, data_file=None):
+        if data_file:
+            pickle.dump(self.__dict__, open(data_file, "wb"))

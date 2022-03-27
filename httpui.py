@@ -58,7 +58,6 @@ template = """
 %s
 </td></tr>
 </table>
-%s
 </td>
 <td>
 <center>
@@ -106,12 +105,8 @@ def format_board(game, show, gid):
         )
     title = "<h2>Board</h2>"
     if game.done():
-        title = (
-            "<h2>Game End<h2>Points: "
-            + str(game.score())
-            + '<br/><a href="/postsurvey/{}">Complete Post-Game Survey Here</a>'.format(
-                gid
-            )
+        title = '<h2>Game End<h2>Points: {}<br/><a href="/postsurvey/{}">Please complete Post-Game Survey Here</a>'.format(
+            game.score(), gid
         )
 
     def make_board_image(card_with_index):
@@ -120,11 +115,10 @@ def format_board(game, show, gid):
 
     boardcards = list(map(make_board_image, enumerate(game.board)))
     args = tuple([title] + boardcards)
-    print("formating board: {}".format(show))
     return board_template % args
 
 
-def format_action(action_with_meta, gid, replay=None):
+def format_action(action_with_meta, gid):
     (i, (action, pnr, card)) = action_with_meta
     result = "You "
     other = "the AI"
@@ -151,7 +145,7 @@ def format_action(action_with_meta, gid, replay=None):
     return '<div style="color: gray;">' + result + "</div>"
 
 
-def show_game_state(game, player, turn, gid, replay=False):
+def show_game_state(game, player, turn, gid):
     def make_ai_card(card_with_index, highlight):
 
         (i, (col, num)) = card_with_index
@@ -159,12 +153,6 @@ def show_game_state(game, player, turn, gid, replay=False):
             ("Hint Rank", "/gid%s/%d/hintrank/%d" % (gid, turn, i)),
             ("Hint Color", "/gid%s/%d/hintcolor/%d" % (gid, turn, i)),
         ]
-        if replay:
-            (pgid, round, info) = replay
-            hintlinks = [
-                ("Hint Rank", "/takeover/%s/%d/hintrank/%d" % (pgid, round, i)),
-                ("Hint Color", "/takeover/%s/%d/hintcolor/%d" % (pgid, round, i)),
-            ]
         if game.hints == 0 or game.done() or not game.started:
             hintlinks = []
             highlight = False
@@ -184,12 +172,6 @@ def show_game_state(game, player, turn, gid, replay=False):
             ("Play", "/gid%s/%d/play/%d" % (gid, turn, i)),
             ("Discard", "/gid%s/%d/discard/%d" % (gid, turn, i)),
         ]
-        if replay:
-            (pgid, round, info) = replay
-            playlinks = [
-                ("Play", "/takeover/%s/%d/play/%d" % (pgid, round, i)),
-                ("Discard", "/takeover/%s/%d/discard/%d" % (pgid, round, i)),
-            ]
         if game.done() or not game.started:
             playlinks = []
         return unknown_card_image(playlinks, highlight)
@@ -273,62 +255,16 @@ def show_game_state(game, player, turn, gid, replay=False):
         cardsleft = (
             '<div style="font-weight: bold; font-size: 20pt">%d</div>' % cardsleft
         )
-    replaycontrol = ""
-    if replay:
-        (gid, round, info) = replay
-        replaycontrol = "<br/><br/><br/><br/>"
-        if not foundtrash:
-            replaycontrol += "<br/><br/><br/>"
-        replaycontrol += '<table style="font-size:14pt" width="100%" border="1">'
-        replaycontrol += '<tr><td colspan="3">Replay of game ' + gid + "</td></tr>\n"
-        replaycontrol += '<tr><td width="33%">'
-        if round > 2:
-            replaycontrol += '<a href="/replay/%s/%d">&lt;&lt;&lt;</a>' % (
-                gid,
-                round - 2,
-            )
-        else:
-            replaycontrol += "&lt;&lt;&lt;"
-        replaycontrol += '</td><td width="33%" align="center">'
-        replaycontrol += " Turn " + str(round)
-        replaycontrol += '</td><td width="33%" align="right">'
-        if game.done():
-            replaycontrol += "&gt;&gt;&gt;"
-        else:
-            replaycontrol += '<a href="/replay/%s/%d">&gt;&gt;&gt;</a>' % (
-                gid,
-                round + 2,
-            )
-        replaycontrol += "</td></tr>"
-        ai, deck, score = info
-
-        replaycontrol += (
-            '<tr><td colspan="3" align="center">%s AI, %s, deck %d</td></tr>'
-            % (ai, format_score(score), deck)
-        )
-        root = get_replay_root("log/game%s.log" % gid)
-        if root == gid:
-            replaycontrol += (
-                '<tr><td colspan="3" align="center"><a href="/showsurvey/%s/full" target="_blank">Show survey answers</a></td></tr>'
-                % root
-            )
-        else:
-            replaycontrol += (
-                '<tr><td colspan="3" align="center"><a href="/showsurvey/%s" target="_blank">Show survey answers</a></td></tr>'
-                % root
-            )
-        replaycontrol += "</table>"
     args = tuple(
         [str(hints), str(mistakes), str(cardsleft)]
         + trash
-        + [replaycontrol]
         + aicards
         + [board]
         + yourcards
         + [
             "\n".join(
                 [
-                    format_action(x, gid, replay)
+                    format_action(x, gid)
                     for x in enumerate(list(reversed(player.actions))[:15])
                 ]
             )
@@ -621,6 +557,30 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
         s.send_header("Content-type", "text/html")
         s.end_headers()
 
+        if s.path.startswith("/tutorial-start"):
+            _, _, gid = s.path.split("/")
+            return
+        elif s.path.startswith("/tutorial-end"):
+            _, _, gid = s.path.split("/")
+            print(s.path.split("/"))
+            agent = random.choice(
+                ["ChiefPlayer"] + [str(x) for x in Agents.default_pool_ids]
+            )
+            redirect = "/play/{}/{}".format(agent, gid)
+            s.wfile.write(
+                """<html><head><title>Hanabi</title><meta http-equiv="Refresh" content="0; url='{}'" /></head>\n""".format(
+                    redirect
+                ).encode()
+            )
+            s.wfile.write(
+                b"<body><h1>Welcome to Hanabi</h1> <p>The game should start in 3 seconds. If not, please click here: </p>\n"
+            )
+            s.wfile.write(
+                '<li><a href="{}">Start Game</a></li>\n'.format(redirect).encode()
+            )
+            s.wfile.write(b"</body></html>")
+            return
+
         if s.path.startswith("/postsurvey/"):
             gid = s.path[12:]
             s.postsurvey(gid)
@@ -640,12 +600,12 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             t = (agent_type, nr)
             if not os.path.isdir("log/http_games/{}".format(gid)):
                 os.makedirs("log/http_games/{}".format(gid))
-            open("log/http_games/{}/agent.txt".format(gid), "w").write(agent_type)
             game = hanabi.Game(
                 [ai, player],
-                "log/http_games/{}/game.pkl".format(gid),
+                "log/http_games/{}".format(gid),
                 format=1,
                 http_player=1,
+                print_game=False,
             )
             game.treatment = t
             game.ping = time.time()
@@ -721,17 +681,6 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
         s.wfile.write(b"<body>")
 
         s.wfile.write(show_game_state(game, player, turn, gid).encode())
-        # s.wfile.write(bytes("""
-        # <script type="text/javascript">
-        #        window.addEventListener('beforeunload',
-        #                                function (e) {
-        #            var message = "You have not finished the game. Are you sure you want to leave?";
-        #            e.preventDefault();
-        #            e.returnValue = message;
-        #            return message;
-        #        });
-        #        </script>
-        # """, "utf-8"))
 
         s.wfile.write(b"</body></html>")
         if game.done() and gid is not None and gid in games:
@@ -750,14 +699,14 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             if i == default:
                 s.wfile.write(
                     (
-                        '<input name="%s" type="radio" value="%s" id="%s%s" checked="checked"/><label for="%s%s">%s</label><br/>\n'
+                        '<input required name="%s" type="radio" value="%s" id="%s%s" checked="checked"/><label for="%s%s">%s</label><br/>\n'
                         % (name, aname, name, aname, name, aname, text)
                     ).encode()
                 )
             else:
                 s.wfile.write(
                     (
-                        '<input name="%s" type="radio" value="%s" id="%s%s"/><label for="%s%s">%s</label><br/>\n'
+                        '<input required name="%s" type="radio" value="%s" id="%s%s"/><label for="%s%s">%s</label><br/>\n'
                         % (name, aname, name, aname, name, aname, text)
                     ).encode()
                 )
@@ -785,10 +734,12 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
     def presurvey_questions(s, answers={}):
 
         responses = [
+            ("10s", "less than 18 years"),
             ("20s", "18-29 years"),
             ("30s", "30-39 years"),
             ("40s", "40-49 years"),
-            ("50s", "50-64 years"),
+            ("50s", "50-59 years"),
+            ("60s", "greater than 60 years"),
             ("na", "Prefer not to answer"),
         ]
         default = -1
@@ -897,7 +848,7 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
         s.postsurvey_questions()
         s.wfile.write(b"<p>")
         s.wfile.write(('<input name="gid" type="hidden" value="%s"/>\n' % gid).encode())
-        s.wfile.write(b'<input type="submit" value="Continue"/>\n')
+        s.wfile.write(b'<input type="submit" value="Finish"/>\n')
         s.wfile.write(b"</form></td></tr></table></center>")
 
     def postsurvey_questions(s, answers={}):
@@ -989,21 +940,17 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                 print(r, vars[r], file=participants[gid])
             participants[gid].flush()
             participantslock.release()
-
-            agent = random.choice(
-                ["ChiefPlayer"] + [str(x) for x in Agents.default_pool_ids]
-            )
-            redirect = "/play/{}/{}".format(agent, gid)
+            redirect = "/tutorial-end/{}".format(gid)
             s.wfile.write(
                 """<html><head><title>Hanabi</title><meta http-equiv="Refresh" content="0; url='{}'" /></head>\n""".format(
                     redirect
                 ).encode()
             )
             s.wfile.write(
-                b"<body><h1>Welcome to Hanabi</h1> <p>The game should start in 3 seconds. If not, please click here: </p>\n"
+                b"<body><h1>Welcome to Hanabi</h1> <p>The tutorial should start in 3 seconds. If not, please click here: </p>\n"
             )
             s.wfile.write(
-                '<li><a href="{}">Start Game</a></li>\n'.format(redirect).encode()
+                '<li><a href="{}">Start Tutorial</a></li>\n'.format(redirect).encode()
             )
 
         elif s.path.startswith("/submitpost"):

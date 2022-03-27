@@ -1,4 +1,5 @@
 import csv
+import os
 import pickle
 from common_game_functions import *
 from Agents.common_player_functions import *
@@ -39,6 +40,7 @@ class Game(object):
         self.turn = 1
         self.format = format
         self.pickle_file = pickle_file
+        self.save_snapshots = None
         if data_file.endswith(".csv"):
             self.data_format = "csv"
             self.data_file = open(data_file, "a+")
@@ -47,6 +49,11 @@ class Game(object):
             self.data_format = "pkl"
             self.data_file = open(data_file, "ab+")
             pickle.dump([], self.data_file)
+        elif os.path.isdir(data_file):
+            self.data_format = "pkl"
+            self.data_file = open(os.path.join(data_file, "game.pkl"), "ab+")
+            pickle.dump([], self.data_file)
+            self.save_snapshots = data_file
         else:
             print("Unsupported data file format!")
             raise NotImplementedError
@@ -56,7 +63,7 @@ class Game(object):
         self.print_game = print_game
 
         if self.format:
-            print(self.deck)
+            self._print(self.deck)
 
     def _print(self, *args):
         if self.print_game:
@@ -427,6 +434,10 @@ class Game(object):
         return True
 
     def finish(self):
+        if self.save_snapshots:
+            for i, p in enumerate(self.players):
+                p.snapshot(os.path.join(self.save_snapshots, "{}_{}.pkl".format(p.name, i)))
+
         if self.format:
             self._print("Score", self.score())
 

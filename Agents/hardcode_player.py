@@ -1,6 +1,7 @@
 from contextlib import contextmanager
 from copy import deepcopy
 from itertools import permutations, product
+import pickle
 from pprint import pprint
 from random import random, sample
 from time import time
@@ -31,7 +32,6 @@ class HardcodePlayer2(Player):
         self.value_wrap = True
         self.action_classes = ["_execute", "_hint", "_discard"]
         self.discard_internal = False
-        self.partner_cache = True
 
         # TOFIX Hardcoded for 2 players
         self.partner_nr = 1 - self.pnr
@@ -807,3 +807,14 @@ class HardcodePlayer2(Player):
         key = key // 3
         self.decision_permutation = key
         self._convert_parameter()
+
+    def snapshot(self, data_file=None):
+        if data_file:
+            pickle.dump(
+                {
+                    k: v
+                    for k, v in self.__dict__.items()
+                    if k != "decision_protocol" and not k.endswith("order")
+                },
+                open(data_file, "wb"),
+            )
