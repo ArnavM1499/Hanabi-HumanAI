@@ -1,4 +1,5 @@
 import pyximport
+from typing import Tuple
 
 pyximport.install(language_level=3)
 import argparse
@@ -13,6 +14,7 @@ import hanabi
 import Agents
 import random
 import hashlib
+import pickle
 import sys
 import traceback
 from cgi import parse_header, parse_multipart
@@ -402,7 +404,7 @@ def unknown_card_image(links=[], highlight=False):
     ly = 130
     linktext = ""
     for (text, target) in links:
-        linktext += """<a xlink:href="%s">
+        linktext += """<a class="move" xlink:href="%s">
                            <text x="8" y="%d" fill="blue" font-family="Arial" font-size="12" text-decoration="underline">%s</text>
                        </a>
                        """ % (
@@ -489,9 +491,14 @@ def format_score(sc):
 pool_path = "Agents/configs/players.json"
 player_pool = Agents.PlayerPool("AI", 0, pool_path)
 json_pool = json.load(open(pool_path))
-
+global_info = {}
 
 class MyHandler(http.server.BaseHTTPRequestHandler):
+
+    def __init__(self, request: bytes, client_address: Tuple[str, int], server: socketserver.BaseServer):
+        super().__init__(request, client_address, server)
+        self.info = None
+
     def do_HEAD(s):
         s.send_response(200)
         s.send_header("Content-type", "text/html")
@@ -514,6 +521,34 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             return True
         return False
 
+    def write_game(s, gid):
+        s.wfile.write(b"<html><head><title>Hanabi</title></head>")
+        s.wfile.write(b"<body>")
+        if os.path.exists(gid + ".temp"):
+            with open(gid + ".temp", "rb") as f:
+                game_html = f.read()
+                s.wfile.write(game_html)
+                f.close()
+        s.wfile.write(bytes("""
+        <style>
+        .loader {
+              border: 4px solid #f3f3f3; /* Light grey */
+              border-top: 4px solid #3498db; /* Blue */
+              border-radius: 50%;
+              width: 30px;
+              height: 30px;
+              animation: spin 2s linear infinite;
+            }
+            
+            @keyframes spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+        }
+        </style>
+        <div class="loader"></div>
+        """, "utf-8"))
+        s.wfile.write(b"</body></html>")
+
     def perform_response(s):
         """Respond to a GET request."""
         global games
@@ -531,6 +566,14 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             gameslock.release()
             path = s.path[20:]
 
+        if s.path.startswith("/read"):
+            s.send_response(200)
+            s.send_header("Content-type", "text/html")
+            s.end_headers()
+            # sends gid to the path
+            s.write_game(s.path.split('/')[3])
+            return
+
         if s.path.startswith("/play"):
             s.send_response(200)
             s.send_header("Content-type", "text/html")
@@ -541,8 +584,12 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                     """
                 <html style="width: 100%; height: 100%; margin: 0; padding: 0">
                 <body style="width: 100%; height: 100%; margin: 0; padding: 0">
-                <div id="testblock" style="display: block">
+                <!-- <div id="testblock" style="display: block">
                 <p id="dummy"> Loading... </p>
+                </div> -->
+                <div id="testblock" style="display: flex; width: 100%; height: 100%; flex-direction: column;
+                background-color: white; overflow: hidden;">
+                <iframe id="loadframe" src="/read""" + s.path[5:] + """" style='flex-grow: 1; border:none; margin: 0; padding: 0;'></iframe>
                 </div>
                 <div style="display: flex; width: 100%; height: 100%; flex-direction: column;
                 background-color: white; overflow: hidden;">
@@ -579,7 +626,8 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                 }
                 
                 function showPrev() {
-                    document.getElementById("testblock").style.display = "block";
+                    document.getElementById("loadframe").src = document.getElementById("loadframe").src;
+                    document.getElementById("testblock").style.display = "flex";
                 }
                 // var iframe = document.getElementById("game_frame");
                 // iframe.contentDocument.addEventListener('click',
@@ -688,7 +736,7 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             _, _, gid = s.path.split("/")
             s.wfile.write(b"<html><head><title>Hanabi</title></head>")
             s.wfile.write(b"<body>")
-            instruction_other = """Now that your partner played green 1, a new card is delt from the right"""
+            instruction_other = """Now that your partner played green 1, a new card is dealt from the right"""
             instruction_board = """<br>The board will be shown here. Your partner's successful play will be highlighted in red.<br><a href="/tutorial-yourhand/{}"> Click Here </a> to continue""".format(
                 gid
             )
@@ -826,10 +874,9 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
         elif s.path.startswith("/tutorial-end"):
             _, _, gid = s.path.split("/")
             print(s.path.split("/"))
-            agent = random.choice(["ChiefPlayer"])
-            #agent = random.choice(
-            #    ["ChiefPlayer"] + [str(x) for x in Agents.default_pool_ids]
-            #)
+            agent = random.choice(
+               ["ChiefPlayer"] + [str(x) for x in Agents.default_pool_ids]
+            )
             redirect = "/play/{}/{}".format(agent, gid)
             s.wfile.write(
                 """<html><head><title>Hanabi</title><meta http-equiv="Refresh" content="5; url='{}'" /></head>\n""".format(
@@ -941,10 +988,20 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                 game.external_turn(action)
                 game.single_turn()
 
+        # s.wfile.write(b"<html><head><title>Hanabi</title></head>")
+        # s.wfile.write(b"<body>")
+        #
+        # s.wfile.write(show_game_state(game, player, turn, gid).encode())
+        #
+        # s.wfile.write(b"</body></html>")
+        s.info = game, player, turn, gid
         s.wfile.write(b"<html><head><title>Hanabi</title></head>")
         s.wfile.write(b"<body>")
-
-        s.wfile.write(show_game_state(game, player, turn, gid).encode())
+        game_state_html = show_game_state(game, player, turn, gid).encode()
+        with open(gid + ".temp", "wb") as f:
+            f.write(game_state_html)
+            f.close()
+        s.wfile.write(game_state_html)
 
         s.wfile.write(b"</body></html>")
         if game.done() and gid is not None and gid in games:
