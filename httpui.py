@@ -40,67 +40,108 @@ errlog = sys.stdout
 
 template = """
 
-<table width="100%%">
-<tr><td width="15%%" valign="top"><br/>
+<table width="100%%" style="font-size:14pt;"> <tr>
 
+<td width="15%%" valign="top"> <br>
 <table style="font-size:14pt" width="100%%">
-<tr><td>
-<table width="100%%" style="font-size:14pt">
-<tr><td width="85%%"><b>Hint tokens left:</b></td><td> %s</td></tr>
-<tr><td><b>Mistakes made so far:</b></td><td> %s</td></tr>
-<tr><td><b>Cards left in deck:</b></td><td> %s</td></tr>
-</table>
+<tr><td> %s </td></tr> <!-- basic info -->
 
-</td>
-</tr>
-<tr><td>
-<center><h2>Discarded</h2></center>
-%s
-</td></tr>
+<tr><td> %s </td></tr> <!-- discard -->
 </table>
 </td>
+
 <td>
 <center>
-<h2> Other player </h2>
-<table>
-<tr><td>%s<br/>%s</td>
-    <td>%s<br/>%s</td>
-    <td>%s<br/>%s</td>
-    <td>%s<br/>%s</td>
-    <td>%s<br/>%s</td>
-</tr>
-%s
-<tr><td colspan="5"><center><h2>You</h2></center></td></tr>
-<tr><td>%s<br/>%s</td>
-    <td>%s<br/>%s</td>
-    <td>%s<br/>%s</td>
-    <td>%s<br/>%s</td>
-    <td>%s<br/>%s</td>
-</tr>
-</table>
+<div> %s </div> <!-- other hand -->
+<div> %s </div> <!-- board -->
+<div> %s </div> <!-- your hand -->
 </center>
 </td>
-<td width="15%%" valign="top"><center> <h2>Actions</h2> </center><br/>
-<div style="font-size:14pt">
+
+<td width="15%%" valign="top">
 %s
-</div></td>
+</td> <!-- actions -->
+
+</tr> </table>
+"""
+
+info_template = """
+%s
+<table width="100%%" style="font-size:14pt; border:solid 5px %s;">
+  <tr><td width="85%%"><b>Hint tokens left:</b></td><td> %s</td></tr>
+  <tr><td><b>Mistakes made so far:</b></td><td> %s</td></tr>
+  <tr><td><b>Cards left in deck:</b></td><td> %s</td></tr>
+</table>
+"""
+
+discard_template = """
+%s
+<table width="100%%" style="font-size:14pt; border:solid 5px %s;">
+<tr><td><center><h2>Discarded</h2></center></td></tr>
+<tr><td> %s </td></tr>
+</table>
+"""
+
+hand_template = """
+%s
+<table style="border:solid 5px %s; ">
+<tr> <td colspan="5"><center><h2>%s</h2></center></td></tr>
+<tr>
+  <td>%s<br/>%s</td>
+  <td>%s<br/>%s</td>
+  <td>%s<br/>%s</td>
+  <td>%s<br/>%s</td>
+  <td>%s<br/>%s</td>
 </tr>
 </table>
 """
 
-board_template = """<tr><td colspan="5"><center>%s</center></td></tr>
-<tr><td>%s</td>
-    <td>%s</td>
-    <td>%s</td>
-    <td>%s</td>
-    <td>%s</td>
-</tr>"""
+board_template = """
+%s
+<table style="border:solid 5px %s; ">
+<tr> <td colspan="5"><center>%s</center></td> </tr>
+<tr>
+  <td>%s</td>
+  <td>%s</td>
+  <td>%s</td>
+  <td>%s</td>
+  <td>%s</td>
+</tr>
+</table>
+"""
+
+action_template = """
+%s
+<table style="border:solid 5px %s; ">
+  <tr><td><center><h2>Actions</h2></center><br></td></tr>
+  <tr><td><div style="font-size:14pt">%s</div></td></tr>
+</table>
+"""
+
+
+def format_info(hint, hits, cards, highlight=False, message=""):
+    return info_template % (
+        message,
+        "#FF0000" if highlight else "#FFFFFF",
+        hint,
+        hits,
+        cards,
+    )
+
+
+def format_hand(cards, title, highlight=False, message=""):
+    return hand_template % (
+        message,
+        "#FF0000" if highlight else "#FFFFFF",
+        title,
+        *cards,
+    )
 
 
 def format_board(game, show, gid):
     if not game.started:
         return (
-            '<tr><td colspan="5"><center><h1><a href="/gid%s/start/">Start Game</a></h1></center></td></tr>'
+            '<table><tr><td colspan="5"><center><h1><a href="/gid%s/start/">Start Game</a></h1></center></td></tr><table>'
             % gid
         )
     title = "<h2>Board</h2>"
@@ -114,11 +155,25 @@ def format_board(game, show, gid):
         return make_card_image(card, [], (BOARD, 0, i) in show)
 
     boardcards = list(map(make_board_image, enumerate(game.board)))
-    args = tuple([title] + boardcards)
-    return board_template % args
+    return board_template % ("", "#FFFFFF", title, *boardcards)
 
 
-def format_action(action_with_meta, gid):
+def format_all_actions(actions, highlight=False, message=""):
+    if isinstance(actions, list):
+        return action_template % (
+            message,
+            "#FF0000" if highlight else "#FFFFFF",
+            "\n".join(format_action(x) for x in actions[:15]),
+        )
+    else:
+        return action_template % (
+            message,
+            "#FF0000" if highlight else "#FFFFFF",
+            actions,
+        )
+
+
+def format_action(action_with_meta):
     (i, (action, pnr, card)) = action_with_meta
     result = "You "
     other = "the AI"
@@ -141,8 +196,56 @@ def format_action(action_with_meta, gid):
         else:
             result += str(action.num) + "s"
     if i in {1, 0}:
-        return result + "<br/><br/>"
+        return result + "<br><br>"
     return '<div style="color: gray;">' + result + "</div>"
+
+
+def format_trash(trash, show=[], highlight=False, message=""):
+    trash.sort()
+    foundtrash = []
+    discarded = {}
+    trashhtml = '<table width="100%%" style="border-collapse: collapse"><tr>\n'
+    for i, c in enumerate(hanabi.ALL_COLORS):
+        style = "border-bottom: 1px solid #000"
+        if i > 0:
+            style += "; border-left: 1px solid #000"
+        trashhtml += (
+            '<td valign="top" align="center" style="%s" width="20%%">%s</td>\n'
+            % (style, hanabi.COLORNAMES[c])
+        )
+        discarded[c] = []
+        for (col, num) in trash:
+            if col == c:
+                if (
+                    (TRASH, 0, -1) in show
+                    and (col, num) == trash[-1]
+                    and (col, num) not in foundtrash
+                ):
+                    foundtrash.append((col, num))
+                    discarded[c].append('<div style="color: red;">%d</div>' % (num))
+                elif (
+                    (TRASH, 0, -2) in show
+                    and (col, num) == trash[-2]
+                    and (col, num) not in foundtrash
+                ):
+                    foundtrash.append((col, num))
+                    discarded[c].append('<div style="color: red;">%d</div>' % (num))
+                else:
+                    discarded[c].append("<div>%d</div>" % num)
+        discarded[c].sort()
+    trashhtml += '</tr><tr style="height: 150pt">\n'
+    for i, c in enumerate(hanabi.ALL_COLORS):
+        style = ' style="vertical-align:top"'
+        if i > 0:
+            style = ' style="border-left: 1px solid #000; vertical-align:top"'
+        trashhtml += '<td valigh="top" align="center" %s>%s</td>\n' % (
+            style,
+            "\n".join(discarded[c]),
+        )
+    trashhtml += "</tr></table><br/>"
+    if foundtrash:
+        trashhtml += 'Cards written in <font color="red">red</font> have been discarded or misplayed since your last turn.'
+    return discard_template % (message, "#FF0000" if highlight else "#FFFFF", trashhtml)
 
 
 def show_game_state(game, player, turn, gid):
@@ -162,9 +265,9 @@ def show_game_state(game, player, turn, gid):
     for i, c in enumerate(game.hands[0]):
         aicards.append(make_ai_card((i, c), (HAND, 0, i) in player.show))
         aicards.append(", ".join(player.aiknows[i]))
-
     while len(aicards) < 10:
         aicards.append("")
+    aicards = format_hand(aicards, "Other Player")
 
     def make_your_card(card_with_index, highlight):
         (i, (col, num)) = card_with_index
@@ -185,65 +288,13 @@ def show_game_state(game, player, turn, gid):
         yourcards.append(", ".join(player.knows[i]))
     while len(yourcards) < 10:
         yourcards.append("")
+    yourcards = format_hand(yourcards, "You")
+
     board = format_board(game, player.show, gid)
-    foundtrash = []
-
-    def format_trash(c):
-        result = hanabi.format_card(c)
-        if (TRASH, 0, -1) in player.show and c == game.trash[-1] and not foundtrash[0]:
-            foundtrash[0] = True
-            return result + "<b>(just discarded)</b>"
-        if (TRASHP, 0, -1) in player.show and c == game.trash[-1] and not foundtrash[0]:
-            foundtrash[0] = True
-            return result + "<b>(just played)</b>"
-        return result
-
     localtrash = game.trash[:]
-    localtrash.sort()
-    discarded = {}
-    trashhtml = '<table width="100%%" style="border-collapse: collapse"><tr>\n'
-    for i, c in enumerate(hanabi.ALL_COLORS):
-        style = "border-bottom: 1px solid #000"
-        if i > 0:
-            style += "; border-left: 1px solid #000"
-        trashhtml += (
-            '<td valign="top" align="center" style="%s" width="20%%">%s</td>\n'
-            % (style, hanabi.COLORNAMES[c])
-        )
-        discarded[c] = []
-        for (col, num) in game.trash:
-            if col == c:
-                if (
-                    (TRASH, 0, -1) in player.show
-                    and (col, num) == game.trash[-1]
-                    and (col, num) not in foundtrash
-                ):
-                    foundtrash.append((col, num))
-                    discarded[c].append('<div style="color: red;">%d</div>' % (num))
-                elif (
-                    (TRASH, 0, -2) in player.show
-                    and (col, num) == game.trash[-2]
-                    and (col, num) not in foundtrash
-                ):
-                    foundtrash.append((col, num))
-                    discarded[c].append('<div style="color: red;">%d</div>' % (num))
-                else:
-                    discarded[c].append("<div>%d</div>" % num)
-        discarded[c].sort()
-    trashhtml += '</tr><tr style="height: 150pt">\n'
-    for i, c in enumerate(hanabi.ALL_COLORS):
-        style = ' style="vertical-align:top"'
-        if i > 0:
-            style = ' style="border-left: 1px solid #000; vertical-align:top"'
-        trashhtml += '<td valigh="top" align="center" %s>%s</td>\n' % (
-            style,
-            "\n".join(discarded[c]),
-        )
-    trashhtml += "</tr></table><br/>"
-    if foundtrash:
-        trashhtml += 'Cards written in <font color="red">red</font> have been discarded or misplayed since your last turn.'
+    trash = format_trash(localtrash, player.show)
+    actions = format_all_actions(list(enumerate(reversed(player.actions))))
 
-    trash = [trashhtml]  # ["<br/>".join(map(format_trash, localtrash))]
     hints = game.hints
     if hints == 0:
         hints = '<div style="font-weight: bold; font-size: 20pt">0</div>'
@@ -255,22 +306,16 @@ def show_game_state(game, player, turn, gid):
         cardsleft = (
             '<div style="font-weight: bold; font-size: 20pt">%d</div>' % cardsleft
         )
-    args = tuple(
-        [str(hints), str(mistakes), str(cardsleft)]
-        + trash
-        + aicards
-        + [board]
-        + yourcards
-        + [
-            "\n".join(
-                [
-                    format_action(x, gid)
-                    for x in enumerate(list(reversed(player.actions))[:15])
-                ]
-            )
-        ]
+    info = format_info(hints, mistakes, cardsleft)
+
+    return template % (
+        info,
+        trash,
+        aicards,
+        board,
+        yourcards,
+        actions,
     )
-    return template % args
 
 
 def make_circle(x, y, col):
@@ -332,7 +377,7 @@ def make_card_image(card, links=[], highlight=False):
     )
     highlighttext = ""
     if highlight:
-        highlighttext = ' stroke="red" stroke-width="4"'
+        highlighttext = ' stroke="red" stroke-width="8"'
     return image % (
         highlighttext,
         hanabi.COLORNAMES[col],
@@ -423,10 +468,8 @@ class HTTPPlayer(Player):
         elif action.type == hanabi.PLAY:
             (col, num) = card
             if game.board[col][1] == num:
-                print("successful play")
                 self.show.append((BOARD, 0, col))
             else:
-                print("bad play")
                 self.show.append((TRASH, 0, -1))
         if player == self.pnr and action.type in [hanabi.PLAY, hanabi.DISCARD]:
             del self.knows[action.cnr]
@@ -599,7 +642,187 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
 
         if s.path.startswith("/tutorial-start"):
             _, _, gid = s.path.split("/")
+            s.wfile.write(b"<html><head><title>Hanabi</title></head>")
+            s.wfile.write(b"<body>")
+            instruction = """Your partner's hand will be shown here. You can click on "Hint Rank" / "Hint Color" to give a hint <br>of the rank/color shown on the card. For this tutorial, try to hint your partner all the 1's"""
+
+            links = [[("Hint Rank", s.path), ("Hint Color", s.path)] for i in range(5)]
+            links[-2] = [
+                ("Hint Rank", "/tutorial-board/{}".format(gid)),
+                ("Hint Color", s.path),
+            ]
+            aicards = [(1, 2), (0, 4), (4, 3), (0, 1), (2, 3)]
+            aicards = [
+                make_card_image(cd, lks, False) for cd, lks in zip(aicards, links)
+            ]
+            aicards = sum((list(x) for x in zip(aicards, [""] * 5)), [])
+            aicards = format_hand(aicards, "Other Player", True, instruction)
+            board = [make_card_image((i, 0), [], False) for i in range(5)]
+            board = board_template % ("", "#FFFFFF", "<h2>Board</h2", *board)
+            links = [[("Play", s.path), ("Discard", s.path)] for i in range(5)]
+            yourcards = [unknown_card_image(lks, False) for lks in links]
+            yourcards = sum((list(x) for x in zip(yourcards, [""] * 5)), [])
+            yourcards = format_hand(yourcards, "You", False, "")
+            trash = format_trash([], [])
+            info = format_info(8, 0, 40)
+            actions = format_all_actions("")
+
+            s.wfile.write(
+                (
+                    template
+                    % (
+                        info,
+                        trash,
+                        aicards,
+                        board,
+                        yourcards,
+                        actions,
+                    )
+                ).encode()
+            )
+
+            s.wfile.write(b"</body></html>")
             return
+
+        elif s.path.startswith("/tutorial-board"):
+            _, _, gid = s.path.split("/")
+            s.wfile.write(b"<html><head><title>Hanabi</title></head>")
+            s.wfile.write(b"<body>")
+            instruction_other = """Now that your partner played green 1, a new card is delt from the right"""
+            instruction_board = """<br>The board will be shown here. Your partner's successful play will be highlighted in red.<br><a href="/tutorial-yourhand/{}"> Click Here </a> to continue""".format(
+                gid
+            )
+            instruction_info = """Basic information will be reflected here"""
+            instruction_action = (
+                """The most recent action history will be displayed here"""
+            )
+
+            links = [[("Hint Rank", s.path), ("Hint Color", s.path)] for i in range(5)]
+            aicards = [(1, 2), (0, 4), (4, 3), (2, 3), (3, 5)]
+            aicards = [
+                make_card_image(cd, lks, False) for cd, lks in zip(aicards, links)
+            ]
+            aicards = sum((list(x) for x in zip(aicards, [""] * 5)), [])
+            aicards = format_hand(aicards, "Other Player", True, instruction_other)
+            board = [make_card_image((0, 1), [], True)]
+            board += [make_card_image((i, 0), [], False) for i in range(1, 5)]
+            board = board_template % (
+                instruction_board,
+                "#FF0000",
+                "<h2>Board</h2",
+                *board,
+            )
+            links = [[("Play", s.path), ("Discard", s.path)] for i in range(5)]
+            yourcards = [unknown_card_image(lks, False) for lks in links]
+            yourcards = sum((list(x) for x in zip(yourcards, [""] * 5)), [])
+            yourcards = format_hand(yourcards, "You", False, "")
+            trash = format_trash([], [])
+            info = format_info(7, 0, 39, True, instruction_info)
+            actions = format_all_actions(
+                "AI just played green 1", True, instruction_action
+            )
+
+            s.wfile.write(
+                (template % (info, trash, aicards, board, yourcards, actions)).encode()
+            )
+
+            s.wfile.write(b"</body></html>")
+            return
+
+        elif s.path.startswith("/tutorial-yourhand"):
+            _, _, gid = s.path.split("/")
+            s.wfile.write(b"<html><head><title>Hanabi</title></head>")
+            s.wfile.write(b"<body>")
+            instruction_other = """Suppose your partner did not play the card immediately. Your past hints will be shown beneath the card """
+            instruction_your = """Your hand will be shown here. If your partner hint at you, it will be shown beneath the cards. <br>You can Play/Discard your own card by clicking the corresponding link. Now try to discard the 4"""
+
+            links = [[("Hint Rank", s.path), ("Hint Color", s.path)] for i in range(5)]
+            aicards = [(1, 2), (0, 4), (4, 3), (0, 1), (2, 3)]
+            aicards = [
+                make_card_image(cd, lks, False) for cd, lks in zip(aicards, links)
+            ]
+            aicards = sum((list(x) for x in zip(aicards, [""] * 5)), [])
+            aicards[-3] = "1"
+            aicards = format_hand(aicards, "Other Player", True, instruction_other)
+            board = [make_card_image((i, 0), [], False) for i in range(5)]
+            board = board_template % ("", "#FFFFFF", "<h2>Board</h2", *board)
+            links = [[("Play", s.path), ("Discard", s.path)] for i in range(5)]
+            links[0] = [
+                ("Play", s.path),
+                ("Discard", "/tutorial-discard/{}".format(gid)),
+            ]
+            yourcards = [unknown_card_image(lks, False) for lks in links]
+            yourcards = sum((list(x) for x in zip(yourcards, [""] * 5)), [])
+            yourcards[1] = "4"
+            yourcards = format_hand(yourcards, "You", True, instruction_your)
+            trash = format_trash([], [])
+            info = format_info(6, 0, 39)
+            actions = format_all_actions("")
+
+            s.wfile.write(
+                (
+                    template
+                    % (
+                        info,
+                        trash,
+                        aicards,
+                        board,
+                        yourcards,
+                        actions,
+                    )
+                ).encode()
+            )
+
+            s.wfile.write(b"</body></html>")
+            return
+
+        elif s.path.startswith("/tutorial-discard"):
+            _, _, gid = s.path.split("/")
+            s.wfile.write(b"<html><head><title>Hanabi</title></head>")
+            s.wfile.write(b"<body>")
+            instruction = """The card discarded will be shown here. <a href="/tutorial-end/{}"> Click Here </a> to continue """.format(
+                gid
+            )
+
+            links = [[("Hint Rank", s.path), ("Hint Color", s.path)] for i in range(5)]
+            aicards = [(1, 2), (0, 4), (4, 3), (0, 1), (2, 3)]
+            aicards = [
+                make_card_image(cd, lks, False) for cd, lks in zip(aicards, links)
+            ]
+            aicards = sum((list(x) for x in zip(aicards, [""] * 5)), [])
+            aicards[-3] = "1"
+            aicards = format_hand(aicards, "Other Player")
+            board = [make_card_image((i, 0), [], False) for i in range(5)]
+            board = board_template % ("", "#FFFFFF", "<h2>Board</h2", *board)
+            links = [[("Play", s.path), ("Discard", s.path)] for i in range(5)]
+            links[0] = [
+                ("Play", s.path),
+                ("Discard", "/tutorial-discard/{}".format(gid)),
+            ]
+            yourcards = [unknown_card_image(lks, False) for lks in links]
+            yourcards = sum((list(x) for x in zip(yourcards, [""] * 5)), [])
+            yourcards = format_hand(yourcards, "You")
+            trash = format_trash([(3, 4)], [], True, instruction)
+            info = format_info(6, 0, 38)
+            actions = format_all_actions("")
+
+            s.wfile.write(
+                (
+                    template
+                    % (
+                        info,
+                        trash,
+                        aicards,
+                        board,
+                        yourcards,
+                        actions,
+                    )
+                ).encode()
+            )
+
+            s.wfile.write(b"</body></html>")
+            return
+
         elif s.path.startswith("/tutorial-end"):
             _, _, gid = s.path.split("/")
             print(s.path.split("/"))
@@ -609,12 +832,12 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             #)
             redirect = "/play/{}/{}".format(agent, gid)
             s.wfile.write(
-                """<html><head><title>Hanabi</title><meta http-equiv="Refresh" content="0; url='{}'" /></head>\n""".format(
+                """<html><head><title>Hanabi</title><meta http-equiv="Refresh" content="5; url='{}'" /></head>\n""".format(
                     redirect
                 ).encode()
             )
             s.wfile.write(
-                b"<body><h1>Welcome to Hanabi</h1> <p>The game should start in 3 seconds. If not, please click here: </p>\n"
+                b"<body><h1>You have finished the Tutorial!</h1> <p>You should be redirected to the game in 5 seconds. If not, please click here: </p>\n"
             )
             s.wfile.write(
                 '<li><a href="{}">Start Game</a></li>\n'.format(redirect).encode()
@@ -894,18 +1117,46 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
 
     def postsurvey_questions(s, answers={}):
         responses = [
-            ("1", "Never performed goal-directed actions"),
-            ("2", "Rarely performed goal-directed actions"),
-            ("3", "Sometimes performed goal-directed actions"),
-            ("4", "Often performed goal-directed actions"),
-            ("5", "Always performed goal-directed actions"),
+            ("1", "The AI never take reasonable action"),
+            ("2", "The AI rarely take reasonable action"),
+            ("3", "The AI sometimes take reasonable action"),
+            ("4", "The AI often take reasonable action"),
+            ("5", "The AI always take reasonable action"),
         ]
         default = -1
-        # if "intention" in answers:
-        #     default = [a_b7[0] for a_b7 in responses].index(answers["intention"])
         s.add_choice(
-            "intention",
-            "How intentional/goal-directed did you think this AI was playing?",
+            "reasonable",
+            "Do you think the AI's actions are reasonable?",
+            responses,
+            default,
+        )
+
+        responses = [
+            ("1", "I can never predict the AI's action"),
+            ("2", "I can rarely predict the AI's action"),
+            ("3", "I can sometimes predict the AI's action"),
+            ("4", "I can often predict the AI's action"),
+            ("5", "I can always predict the AI's action"),
+        ]
+        default = -1
+        s.add_choice(
+            "predictable",
+            "Do you think you can predict the AI's actions?",
+            responses,
+            default,
+        )
+
+        responses = [
+            ("1", "The AI never understand my intention"),
+            ("2", "The AI rarely understand my intention"),
+            ("3", "The AI sometimes understand my intention"),
+            ("4", "The AI often understand my intention"),
+            ("5", "The AI always understand my intention"),
+        ]
+        default = -1
+        s.add_choice(
+            "interpret",
+            "Do you think you the AI can understand your intention?",
             responses,
             default,
         )
@@ -986,14 +1237,14 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                 print(r, vars[r], file=participants[gid])
             participants[gid].flush()
             participantslock.release()
-            redirect = "/tutorial-end/{}".format(gid)
+            redirect = "/tutorial-start/{}".format(gid)
             s.wfile.write(
-                """<html><head><title>Hanabi</title><meta http-equiv="Refresh" content="0; url='{}'" /></head>\n""".format(
+                """<html><head><title>Hanabi</title><meta http-equiv="Refresh" content="5; url='{}'" /></head>\n""".format(
                     redirect
                 ).encode()
             )
             s.wfile.write(
-                b"<body><h1>Welcome to Hanabi</h1> <p>The tutorial should start in 3 seconds. If not, please click here: </p>\n"
+                b"<body><h1>Welcome to Hanabi</h1> <p>First let's go through a toturial to get you familiar with the interface. The tutorial should start in 5 seconds. If not, please click here: </p>"
             )
             s.wfile.write(
                 '<li><a href="{}">Start Tutorial</a></li>\n'.format(redirect).encode()
