@@ -303,7 +303,7 @@ def make_card_image(card, links=[], highlight=False):
     ly = 130
     linktext = ""
     for (text, target) in links:
-        linktext += """<a xlink:href="%s">
+        linktext += """<a class="move" xlink:href="%s">
                            <text x="8" y="%d" fill="blue" font-family="Arial" font-size="12" text-decoration="underline">%s</text>
                        </a>
                        """ % (
@@ -498,13 +498,53 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                     """
                 <html style="width: 100%; height: 100%; margin: 0; padding: 0">
                 <body style="width: 100%; height: 100%; margin: 0; padding: 0">
+                <div id="testblock" style="display: block">
+                <p id="dummy"> Loading... </p>
+                </div>
                 <div style="display: flex; width: 100%; height: 100%; flex-direction: column;
                 background-color: white; overflow: hidden;">
-                <iframe id="game_frame" src='"""
+                <iframe id="game_frame" onload="hidePrev()" src='"""
                     + game_url
                     + """' style='flex-grow: 1; border:none; margin: 0; padding: 0;'></iframe>
                 </div>
                 <script type="text/javascript">
+                function hidePrev() {
+                    console.log("calling hideprev");
+                    var iframe = document.getElementById("game_frame");
+                    if (iframe == null) {
+                        // iframe hasn't loaded yet, try again in 500ms
+                        window.setTimeout(hidePrev, 500);
+                        console.log("frame not loaded yet");
+                    } else {
+                        console.log("frame loaded");
+                        // iframe.contentDocument.addEventListener('click',
+                        //                 function (e) {
+                        //     console.log("calling showprev");
+                        //     showPrev();
+                        // }, true);
+                        var links = iframe.contentDocument.getElementsByClassName("move");
+                        for (var i = 0; i < links.length; i++) {
+                            links[i].addEventListener('click', function (e) {
+                                console.log("calling showprev");
+                                showPrev();
+                            });
+                        }
+                        // hide the other frame
+                        document.getElementById("testblock").style.display = "none";
+                        // window.setTimeout(showPrev, 3000);
+                    }
+                }
+                
+                function showPrev() {
+                    document.getElementById("testblock").style.display = "block";
+                }
+                // var iframe = document.getElementById("game_frame");
+                // iframe.contentDocument.addEventListener('click',
+                //                         function (e) {
+                //     console.log("calling showprev");
+                //     showPrev();
+                // }, true);
+                
                 window.addEventListener('beforeunload',
                                         function (e) {
                     var frame_content = document.getElementById("game_frame").contentWindow.document.body.innerHTML;
@@ -563,9 +603,10 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
         elif s.path.startswith("/tutorial-end"):
             _, _, gid = s.path.split("/")
             print(s.path.split("/"))
-            agent = random.choice(
-                ["ChiefPlayer"] + [str(x) for x in Agents.default_pool_ids]
-            )
+            agent = random.choice(["ChiefPlayer"])
+            #agent = random.choice(
+            #    ["ChiefPlayer"] + [str(x) for x in Agents.default_pool_ids]
+            #)
             redirect = "/play/{}/{}".format(agent, gid)
             s.wfile.write(
                 """<html><head><title>Hanabi</title><meta http-equiv="Refresh" content="0; url='{}'" /></head>\n""".format(
