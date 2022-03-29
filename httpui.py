@@ -493,9 +493,14 @@ player_pool = Agents.PlayerPool("AI", 0, pool_path)
 json_pool = json.load(open(pool_path))
 global_info = {}
 
-class MyHandler(http.server.BaseHTTPRequestHandler):
 
-    def __init__(self, request: bytes, client_address: Tuple[str, int], server: socketserver.BaseServer):
+class MyHandler(http.server.BaseHTTPRequestHandler):
+    def __init__(
+        self,
+        request: bytes,
+        client_address: Tuple[str, int],
+        server: socketserver.BaseServer,
+    ):
         super().__init__(request, client_address, server)
         self.info = None
 
@@ -529,7 +534,9 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                 game_html = f.read()
                 s.wfile.write(game_html)
                 f.close()
-        s.wfile.write(bytes("""
+        s.wfile.write(
+            bytes(
+                """
         <style>
         .loader {
               border: 4px solid #f3f3f3; /* Light grey */
@@ -539,14 +546,17 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
               height: 30px;
               animation: spin 2s linear infinite;
             }
-            
+
             @keyframes spin {
               0% { transform: rotate(0deg); }
               100% { transform: rotate(360deg); }
         }
         </style>
         <div class="loader"></div>
-        """, "utf-8"))
+        """,
+                "utf-8",
+            )
+        )
         s.wfile.write(b"</body></html>")
 
     def perform_response(s):
@@ -571,7 +581,7 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             s.send_header("Content-type", "text/html")
             s.end_headers()
             # sends gid to the path
-            s.write_game(s.path.split('/')[3])
+            s.write_game(s.path.split("/")[3])
             return
 
         if s.path.startswith("/play"):
@@ -589,7 +599,9 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                 </div> -->
                 <div id="testblock" style="display: flex; width: 100%; height: 100%; flex-direction: column;
                 background-color: white; overflow: hidden;">
-                <iframe id="loadframe" src="/read""" + s.path[5:] + """" style='flex-grow: 1; border:none; margin: 0; padding: 0;'></iframe>
+                <iframe id="loadframe" src="/read"""
+                    + s.path[5:]
+                    + """" style='flex-grow: 1; border:none; margin: 0; padding: 0;'></iframe>
                 </div>
                 <div style="display: flex; width: 100%; height: 100%; flex-direction: column;
                 background-color: white; overflow: hidden;">
@@ -624,7 +636,7 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                         // window.setTimeout(showPrev, 3000);
                     }
                 }
-                
+
                 function showPrev() {
                     document.getElementById("loadframe").src = document.getElementById("loadframe").src;
                     document.getElementById("testblock").style.display = "flex";
@@ -635,7 +647,7 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                 //     console.log("calling showprev");
                 //     showPrev();
                 // }, true);
-                
+
                 window.addEventListener('beforeunload',
                                         function (e) {
                     var frame_content = document.getElementById("game_frame").contentWindow.document.body.innerHTML;
@@ -873,9 +885,8 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
 
         elif s.path.startswith("/tutorial-end"):
             _, _, gid = s.path.split("/")
-            print(s.path.split("/"))
             agent = random.choice(
-               ["ChiefPlayer"] + [str(x) for x in Agents.default_pool_ids]
+                ["ChiefPlayer"] + [str(x) for x in Agents.default_pool_ids]
             )
             redirect = "/play/{}/{}".format(agent, gid)
             s.wfile.write(
@@ -1245,14 +1256,18 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
         s.add_choice(
             "like", "How much did you enjoy playing with this AI?", responses, default
         )
-        s.wfile.write(bytes("""
+        s.wfile.write(
+            bytes(
+                """
         <p> General Feedback </p>
         <textarea rows="5" cols="150" name="feedback" id="feedback"></textarea>
-        """, "utf-8"))
+        """,
+                "utf-8",
+            )
+        )
 
     def parse_POST(self):
         ctype, pdict = parse_header(self.headers["content-type"])
-        print(pdict)
         if ctype == "multipart/form-data":
             postvars = parse_multipart(self.rfile, pdict)
         elif ctype == "application/x-www-form-urlencoded":
@@ -1280,6 +1295,14 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             gid = s.getgid()
             if b"gid" in vars and vars[b"gid"]:
                 gid = vars[b"gid"].decode()
+            if vars.get(b"age", b"10s") == b"10s":
+                s.wfile.write(b"<html><head><title>Hanabi</title></head>")
+                s.wfile.write(b"<body><center>")
+                s.wfile.write(
+                    b"<h1>Unfortunately you are not old enough for the study. Thank you for your time and participation</h1>"
+                )
+                s.wfile.write(b"</body></html>")
+                return
 
             if gid not in participants:
                 s.wfile.write(b"<html><head><title>Hanabi</title></head>")
