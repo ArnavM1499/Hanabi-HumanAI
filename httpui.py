@@ -1317,17 +1317,69 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                 print(r, vars[r], file=participants[gid])
             participants[gid].flush()
             participantslock.release()
-            redirect = "/tutorial-start/{}".format(gid)
+            # s.wfile.write(
+            #     """<html><head><title>Hanabi</title><meta http-equiv="Refresh" content="5; url='{}'" /></head>\n""".format(
+            #         redirect
+            #     ).encode()
+            # )
+            # s.wfile.write(
+            #     b"<body><h1>Welcome to Hanabi</h1> <p>First let's go through a toturial to get you familiar with the interface. The tutorial should start in 5 seconds. If not, please click here: </p>"
+            # )
             s.wfile.write(
-                """<html><head><title>Hanabi</title><meta http-equiv="Refresh" content="5; url='{}'" /></head>\n""".format(
-                    redirect
+                """
+                <div style="margin-left: 100px; margin-right: 100px; margin-bottom: 50px;">
+                <center>
+                <h1> A brief intro to Hanabi </h1>
+                <h4> (adopted from hanabi.cards) </h4>
+                <a href="/tutorial-start/{gid}">I already know the rules!</a>
+                </center>
+                <h2> Objective </h2>
+                <p>Hanabi is a card game created by Antoine Bauza. It's cooperative, which means that players are not against each other but assemble to reach a common goal. They incarn here distracted pyrotechnists who - by inattention - mixed their powder, wicks and rockets for a large fireworks display. The show will begin soon and the situation is a bit chaotic. They will need to help each other to prevent the show turning to disaster.</p>
+                <p>The goal of the pyrotechnics team is to build 5 fireworks, one of each color (white, red, blue, yellow, green) by combining increasing value cards (1,2,3,4,5) of the same color.</p>
+                <h2> Setup </h2>
+                <p>At the beginning of a game, you will have 8 hint tokens and 3 strike tokens.</p>
+                <p>The deck is composed of 50 cards, 10 of each color with numbers 1, 1, 1, 2, 2, 3, 3, 4, 4, 5.</p>
+                <p>In a 2 player game, each player will be dealt 5 cards.</p>
+                <p>As you will see, players are not allowed to look at their own cards!</p>
+                <h2> Playing the game </h2>
+                <p>On each player's turn, they take one (and only one) of the three following actions. You are not allowed to pass.</p>
+                <ol>
+                <li> Give information to another player.</li>
+                <li> Discard a card.</li>
+                <li> Play a card.</li>
+                </ol>
+                <p>Players are not allowed to give hints or suggestions on other player's turns!</p>
+                <h3> 1. Give information to another player. </h3>
+                <p>When you give information, it will remove a hint token. Note: If you have no more hint tokens, you cannot choose to give information and must pick a different action.</p>
+                <p>You then give information to a fellow player about the cards in that player's hand by clicking on it. You can tell the player either about one (and only one) color, or one (and only one) value of card.</p>
+                <h3> 2. Discard a card </h3>
+                <p>Discarding a card returns a hint token. You discard a card from your hand by tapping it. You then draw a new card from the deck and it will be added to your hand.</p>
+                <p>Note: If you have all 8 hint tokens, you cannot discard cards and must pick a different action.</p>
+                <p>You can consult discarded cards at anytime.</p>
+                <h3> 3. Play a card </h3>
+                <p>At your turn, to play a card, take a card from your hand and play it. One of two things happen:</p
+                <ol>
+                <li>If the card begins or adds to a firework, it will be added to that firework pile</li>
+                <li>If the card does not add to a firework, it will be discarded the card and add a red strike token</li
+                </ol>
+                <p>Then you will draw a replacement card from the deck.</p>
+                <p>When a player finishes a firework by playing a value 5 card on it, it will return one blue token to the lid of the box as a bonus. If all the blue tokens are in the box lid, you do not get the bonus.</p>
+                <h2> End of the game </h2>
+                <p> Hanabi can end in three ways: </p>
+                <ol>
+                <li>If you get the third red token, you lose the game as the display goes up in flames!</li>
+                <li>If the team completes all five colors of firework with a value of 5, the team makes a spectacular victorydisplay and obtains the maximum score of 25 points.</li>
+                <li>If a player draws the last card from deck, the game is almost over. Each player gets one more turn,including the player who drew the last card. Players cannot draw more cards during these final turns.</li>
+                </ol>
+                <p>The players then score their performance based on the fireworks they assembled.</p>
+                <center>
+                <h2> Here's a tutorial that will walk you through our interface </h2>
+                <a href="/tutorial-start/{gid}">Start Tutorial</a>
+                </center>
+                </div>
+                """.format(
+                    gid=gid
                 ).encode()
-            )
-            s.wfile.write(
-                b"<body><h1>Welcome to Hanabi</h1> <p>First let's go through a toturial to get you familiar with the interface. The tutorial should start in 5 seconds. If not, please click here: </p>"
-            )
-            s.wfile.write(
-                '<li><a href="{}">Start Tutorial</a></li>\n'.format(redirect).encode()
             )
 
         elif s.path.startswith("/submitpost"):
