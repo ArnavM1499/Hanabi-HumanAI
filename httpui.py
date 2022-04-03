@@ -1080,17 +1080,17 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
         s.add_choice("age", "What is your age?", responses, default)
 
         responses = [
-            ("new", "I never play board or card games"),
-            ("dabbling", "I rarely play board or card games"),
-            ("intermediate", "I sometimes play board or card games"),
-            ("expert", "I often play board or card games"),
+            ("new", "less than once in two months"),
+            ("dabbling", "once a month"),
+            ("intermediate", "once in two weeks"),
+            ("expert", "more than once a week"),
         ]
         default = -1
         if "bgg" in answers:
             default = [a_b1[0] for a_b1 in responses].index(answers["bgg"])
         s.add_choice(
             "bgg",
-            "How familiar are you with the board and card games in general?",
+            "How often do you play board and/or card games?",
             responses,
             default,
         )
