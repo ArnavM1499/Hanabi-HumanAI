@@ -151,38 +151,38 @@ class HardcodePlayer2(Player):
         trash = new_state.get_trash()
         knowledge = self.knowledge
 
-        if action.type in [cgf.HINT_COLOR, cgf.HINT_NUMBER]:
+        with timer("interpret hints", self.timer):
 
-            with timer("interpret hints", self.timer):
+            if self.discard_internal:
+                hinted_indices = list(range(self.card_nr))
+                self.index_play = []
+                self.index_play_candidate = []
+                self.index_discard = []
+                self.index_protect = []
+            else:
+                hinted_indices = sorted(new_state.get_hinted_indices())
 
-                if self.discard_internal:
-                    hinted_indices = list(range(self.card_nr))
-                    self.index_play = []
-                    self.index_play_candidate = []
-                    self.index_discard = []
-                    self.index_protect = []
-                else:
-                    hinted_indices = sorted(new_state.get_hinted_indices())
+            (
+                self.index_play,
+                self.index_play_candidate,
+                self.index_discard,
+                self.index_protect,
+            ) = self._interpret(
+                hinted_indices
+                if action.type in [cgf.HINT_COLOR, cgf.HINT_NUMBER]
+                else [],
+                knowledge,
+                board,
+                trash,
+                self.index_play,
+                self.index_play_candidate,
+                self.index_discard,
+                self.index_protect,
+            )
 
-                (
-                    self.index_play,
-                    self.index_play_candidate,
-                    self.index_discard,
-                    self.index_protect,
-                ) = self._interpret(
-                    hinted_indices,
-                    knowledge,
-                    board,
-                    trash,
-                    self.index_play,
-                    self.index_play_candidate,
-                    self.index_discard,
-                    self.index_protect,
-                )
-
-                if self.debug:
-                    pprint(self.__dict__)
-                    print("\n\n\n")
+            if self.debug:
+                pprint(self.__dict__)
+                print("\n\n\n")
 
     def _interpret(
         self,
@@ -224,13 +224,25 @@ class HardcodePlayer2(Player):
                     if board[col][1] >= num:
                         need_protect = False
                         break
+                    elif trash.count((col, num)) < cgf.COUNTS[num - 1] - 1:
+                        need_protect = False
+                        break
                     else:
                         for n in range(board[col][1] + 1, num):
                             if trash.count((col, n)) == cgf.COUNTS[n - 1]:
                                 need_protect = False
                                 break
                 if need_protect:
-                    self.index_protect.append(i)
+                    protect.append(i)
+
+                # playable = True
+                # for col, num in cpf.get_possible(k):
+                #     if board[col][1] != num - 1:
+                #         playable = False
+                #         break
+                # if playable:
+                #     flag = True
+                #     play.append(i)
 
             if not flag and hinted_indices != []:
                 newest = max(hinted_indices, key=self.self_hint_order)
@@ -250,9 +262,9 @@ class HardcodePlayer2(Player):
 
             for i, card in enumerate(knowledge):
                 if playable_pct[i] > 0.98:
-                    self.index_play.append(i)
+                    play.append(i)
                 elif discardable_pct[i] > 0.98:
-                    self.index_discard.append(i)
+                    discard.append(i)
 
         with timer("interpret postprocess", self.timer):
             play = [
@@ -261,17 +273,17 @@ class HardcodePlayer2(Player):
             play_candidate = [
                 i
                 for i in range(len(knowledge))
-                if i in play_candidate and playable_pct[i] > 0.02
+                if i in set(play_candidate) and playable_pct[i] > 0.02
             ]
             discard = [
                 i
                 for i in range(len(knowledge))
-                if i in discard and discardable_pct[i] > 0.02
+                if i in set(discard) and discardable_pct[i] > 0.02
             ]
             protect = [
                 i
                 for i in range(len(knowledge))
-                if i in protect and discardable_pct[i] < 0.5
+                if i in set(protect) and discardable_pct[i] < 0.5
             ]
 
         return play, play_candidate, discard, protect
@@ -279,7 +291,7 @@ class HardcodePlayer2(Player):
     def get_action(self, state, model):
         def _wrapper(value_dict, best=None):
             if self.return_value and self.value_wrap:
-                if not best:
+                if best is None:
                     best = max(value_dict.keys(), key=lambda k: value_dict[k])
                 if self.debug:
                     print("value_wrap enabled:")
@@ -320,7 +332,7 @@ class HardcodePlayer2(Player):
 
         self._update_state(state, model)
 
-        # Pattern matcing [self._decide() in version 1]
+        # Pattern matching
         chosen_action = None
         chosen_action_name = None
         for i, (func, action) in enumerate(self.decision_protocol):
@@ -401,8 +413,6 @@ class HardcodePlayer2(Player):
                 else:
                     return action
 
-        # TODO add more conditions for more aggressive play
-
         with timer("execute postprocess", self.timer):
             if (
                 (self.return_value and not order) or not self.return_value
@@ -478,10 +488,10 @@ class HardcodePlayer2(Player):
                     return action
 
         if self.return_value:
-            if order:
+            if order != []:
                 value_dict = {}
                 for i, action in enumerate(order):
-                    value_dict[action] = 1 - 0.1 * i
+                    value_dict.setdefault(action, 1 - 0.1 * i)
                 for i in range(self.card_nr):
                     A = Action(cgf.DISCARD, cnr=i)
                     if A not in value_dict.keys():
