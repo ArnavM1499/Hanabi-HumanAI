@@ -539,12 +539,15 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                 """
         <style>
         .loader {
-              border: 4px solid #f3f3f3; /* Light grey */
-              border-top: 4px solid #3498db; /* Blue */
+              position: absolute;
+              top: 600px;
+              right: 200px;
+              border: 12px solid #f3f3f3; /* Light grey */
+              border-top: 12px solid #3498db; /* Blue */
               border-radius: 50%;
-              width: 30px;
-              height: 30px;
-              animation: spin 2s linear infinite;
+              width: 120px;
+              height: 120px;
+              animation: spin 1.5s linear infinite;
             }
 
             @keyframes spin {
@@ -594,9 +597,6 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                     """
                 <html style="width: 100%; height: 100%; margin: 0; padding: 0">
                 <body style="width: 100%; height: 100%; margin: 0; padding: 0">
-                <!-- <div id="testblock" style="display: block">
-                <p id="dummy"> Loading... </p>
-                </div> -->
                 <div id="testblock" style="display: flex; width: 100%; height: 100%; flex-direction: column;
                 background-color: white; overflow: hidden;">
                 <iframe id="loadframe" src="/read"""
