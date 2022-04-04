@@ -65,6 +65,7 @@ template = """
 </td> <!-- actions -->
 
 </tr> </table>
+<a href="/rules" target="_blank" rel="noreferrer noopener" style="font-size: 21px">Rules</a>
 """
 
 info_template = """
@@ -699,6 +700,12 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
         s.send_response(200)
         s.send_header("Content-type", "text/html")
         s.end_headers()
+
+        if s.path.startswith("/rules"):
+            with open("rules.html", "rb") as f:
+                doc = f.read()
+                s.wfile.write(doc)
+                f.close()
 
         if s.path.startswith("/tutorial-start"):
             _, _, gid = s.path.split("/")
