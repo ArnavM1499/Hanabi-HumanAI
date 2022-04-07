@@ -1080,6 +1080,17 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
         s.add_choice("age", "What is your age?", responses, default)
 
         responses = [
+            ("male", "Male"),
+            ("female", "Female"),
+            ("non binary", "Non binary"),
+            ("na", "Prefer not to answer"),
+        ]
+        default = -1
+        if "gender" in answers:
+            default = [a_b[0] for a_b in responses].index(answers["age"])
+        s.add_choice("gender", "What is your gender?", responses, default)
+
+        responses = [
             ("new", "less than once in two months"),
             ("dabbling", "once a month"),
             ("intermediate", "once in two weeks"),
