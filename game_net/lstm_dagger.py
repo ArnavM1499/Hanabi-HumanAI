@@ -1,3 +1,7 @@
+import pyximport
+
+pyximport.install(language_level=3)
+
 from glob import glob
 import multiprocessing
 import numpy as np
@@ -34,10 +38,10 @@ WRITER_PATH = "runs/dagger_{}".format(os.path.basename(MODEL_PATH).replace(".pth
 BATCH_SIZE = 512
 EPOCH = 50
 
-ROUNDS = 8
+ROUNDS = 6
 INCREMENT = 20000
 MAX_GAMES = 100000
-TEST_GAME = 500
+TEST_GAME = 200
 THREADS = multiprocessing.cpu_count()
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -240,7 +244,7 @@ def train():
                 collate_fn=pack_games,
             )
         for e in range(EPOCH):
-            val(count, include_cat=True, run_game=(e % 5 == 1))
+            val(count, include_cat=True, run_game=(e % 10 == 9))
             for i, (states, actions, lengths) in enumerate(
                 tqdm(trainset, desc="epoch: {}".format(e))
             ):
