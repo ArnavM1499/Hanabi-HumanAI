@@ -65,6 +65,7 @@ template = """
 </td> <!-- actions -->
 
 </tr> </table>
+<a href="/rules" target="_blank" rel="noreferrer noopener" style="font-size: 21px">Rules</a>
 """
 
 info_template = """
@@ -539,12 +540,15 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                 """
         <style>
         .loader {
-              border: 4px solid #f3f3f3; /* Light grey */
-              border-top: 4px solid #3498db; /* Blue */
+              position: absolute;
+              top: 600px;
+              right: 200px;
+              border: 12px solid #f3f3f3; /* Light grey */
+              border-top: 12px solid #3498db; /* Blue */
               border-radius: 50%;
-              width: 30px;
-              height: 30px;
-              animation: spin 2s linear infinite;
+              width: 120px;
+              height: 120px;
+              animation: spin 1.5s linear infinite;
             }
 
             @keyframes spin {
@@ -594,9 +598,6 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                     """
                 <html style="width: 100%; height: 100%; margin: 0; padding: 0">
                 <body style="width: 100%; height: 100%; margin: 0; padding: 0">
-                <!-- <div id="testblock" style="display: block">
-                <p id="dummy"> Loading... </p>
-                </div> -->
                 <div id="testblock" style="display: flex; width: 100%; height: 100%; flex-direction: column;
                 background-color: white; overflow: hidden;">
                 <iframe id="loadframe" src="/read"""
@@ -700,11 +701,17 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
         s.send_header("Content-type", "text/html")
         s.end_headers()
 
+        if s.path.startswith("/rules"):
+            with open("rules.html", "rb") as f:
+                doc = f.read()
+                s.wfile.write(doc)
+                f.close()
+
         if s.path.startswith("/tutorial-start"):
             _, _, gid = s.path.split("/")
             s.wfile.write(b"<html><head><title>Hanabi</title></head>")
             s.wfile.write(b"<body>")
-            instruction = """Your partner's hand will be shown here. You can click on "Hint Rank" / "Hint Color" to give a hint <br>of the rank/color shown on the card. For this tutorial, try to hint your partner all the 1's"""
+            instruction = """Your partner's hand will be shown here. You can click on "Hint Rank" / "Hint Color" to give a hint <br>of the rank/color shown on the card. For this tutorial, try to hint the 1's to your partner."""
 
             links = [[("Hint Rank", s.path), ("Hint Color", s.path)] for i in range(5)]
             links[-2] = [
@@ -752,9 +759,9 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             instruction_board = """<br>The board will be shown here. Your partner's successful play will be highlighted in red.<br><a href="/tutorial-yourhand/{}"> Click Here </a> to continue""".format(
                 gid
             )
-            instruction_info = """Basic information will be reflected here"""
+            instruction_info = """Basic information will be reflected here."""
             instruction_action = (
-                """The most recent action history will be displayed here"""
+                """Recent action history will be displayed here."""
             )
 
             links = [[("Hint Rank", s.path), ("Hint Color", s.path)] for i in range(5)]
@@ -793,8 +800,8 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             _, _, gid = s.path.split("/")
             s.wfile.write(b"<html><head><title>Hanabi</title></head>")
             s.wfile.write(b"<body>")
-            instruction_other = """Suppose your partner did not play the card immediately. Your past hints will be shown beneath the card """
-            instruction_your = """Your hand will be shown here. If your partner hint at you, it will be shown beneath the cards. <br>You can Play/Discard your own card by clicking the corresponding link. Now try to discard the 4"""
+            instruction_other = """Suppose your partner did not play the card immediately. Your past hints will be shown beneath the card."""
+            instruction_your = """Your hand will be shown here. If your partner hints at you, it will be shown beneath the cards. <br>You can play or discard your cards by clicking the corresponding link. Now try to discard the 4."""
 
             links = [[("Hint Rank", s.path), ("Hint Color", s.path)] for i in range(5)]
             aicards = [(1, 2), (0, 4), (4, 3), (0, 1), (2, 3)]
@@ -840,7 +847,7 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             _, _, gid = s.path.split("/")
             s.wfile.write(b"<html><head><title>Hanabi</title></head>")
             s.wfile.write(b"<body>")
-            instruction = """The card discarded will be shown here. <a href="/tutorial-end/{}"> Click Here </a> to continue """.format(
+            instruction = """The discard pile will be shown here. <a href="/tutorial-end/{}"> Click Here </a> to continue """.format(
                 gid
             )
 
@@ -1053,7 +1060,7 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
 
     def presurvey(s, gid, warn=False):
         s.wfile.write(
-            b"<center><h1>First, please answer some question about previous board game experience</h1>"
+            b"<center><h1>Pre-Game Survey</h1>"
         )
         s.wfile.write(b'<table width="600px">\n<tr><td>')
         s.wfile.write(b'<form action="/submitpre" method="POST">')
@@ -1093,7 +1100,7 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
         responses = [
             ("new", "less than once in two months"),
             ("dabbling", "once a month"),
-            ("intermediate", "once in two weeks"),
+            ("intermediate", "once every two weeks"),
             ("expert", "more than once a week"),
         ]
         default = -1
@@ -1196,11 +1203,11 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
 
     def postsurvey_questions(s, answers={}):
         responses = [
-            ("1", "The AI never take reasonable action"),
-            ("2", "The AI rarely take reasonable action"),
-            ("3", "The AI sometimes take reasonable action"),
-            ("4", "The AI often take reasonable action"),
-            ("5", "The AI always take reasonable action"),
+            ("1", "The AI never takes reasonable actions"),
+            ("2", "The AI rarely takes reasonable actions"),
+            ("3", "The AI sometimes takes reasonable actions"),
+            ("4", "The AI often takes reasonable actions"),
+            ("5", "The AI always takes reasonable actions"),
         ]
         default = -1
         s.add_choice(
