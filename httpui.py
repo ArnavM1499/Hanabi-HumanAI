@@ -706,6 +706,7 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                 doc = f.read()
                 s.wfile.write(doc)
                 f.close()
+            return
 
         if s.path.startswith("/tutorial-start"):
             _, _, gid = s.path.split("/")
@@ -1350,14 +1351,14 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                 </center>
                 <h2> Objective </h2>
                 <p>Hanabi is a card game created by Antoine Bauza. It's cooperative, which means that players are not against each other but assemble to reach a common goal. They incarn here distracted pyrotechnists who - by inattention - mixed their powder, wicks and rockets for a large fireworks display. The show will begin soon and the situation is a bit chaotic. They will need to help each other to prevent the show turning to disaster.</p>
-                <p>The goal of the pyrotechnics team is to build 5 fireworks, one of each color (white, red, blue, yellow, green) by combining increasing value cards (1,2,3,4,5) of the same color.</p>
+                <p>The goal of the pyrotechnics team is to build 5 fireworks, one of each color (white, red, blue, yellow, green) by combining increasing value cards (1, 2, 3, 4, 5) of the same color.</p>
                 <h2> Setup </h2>
                 <p>At the beginning of a game, you will have 8 hint tokens and 3 strike tokens.</p>
                 <p>The deck is composed of 50 cards, 10 of each color with numbers 1, 1, 1, 2, 2, 3, 3, 4, 4, 5.</p>
                 <p>In a 2 player game, each player will be dealt 5 cards.</p>
                 <p>As you will see, players are not allowed to look at their own cards!</p>
                 <h2> Playing the game </h2>
-                <p>On each player's turn, they take one (and only one) of the three following actions. You are not allowed to pass.</p>
+                <p>On each player's turn, they take excatly one of the three following actions. You are not allowed to pass.</p>
                 <ol>
                 <li> Give information to another player.</li>
                 <li> Discard a card.</li>
@@ -1368,7 +1369,7 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                 <p>When you give information, it will remove a hint token. Note: If you have no more hint tokens, you cannot choose to give information and must pick a different action.</p>
                 <p>You then give information to a fellow player about the cards in that player's hand by clicking on it. You can tell the player either about one (and only one) color, or one (and only one) value of card.</p>
                 <h3> 2. Discard a card </h3>
-                <p>Discarding a card returns a hint token. You discard a card from your hand by tapping it. You then draw a new card from the deck and it will be added to your hand.</p>
+                <p>Discarding a card returns a hint token. You discard a card from your hand by clicking on the correspoding link (you will see this later in the toturial). You then draw a new card from the deck and it will be added to your hand.</p>
                 <p>Note: If you have all 8 hint tokens, you cannot discard cards and must pick a different action.</p>
                 <p>You can consult discarded cards at anytime.</p>
                 <h3> 3. Play a card </h3>
@@ -1378,11 +1379,11 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                 <li>If the card does not add to a firework, it will be discarded the card and add a red strike token</li
                 </ol>
                 <p>Then you will draw a replacement card from the deck.</p>
-                <p>When a player finishes a firework by playing a value 5 card on it, it will return one blue token to the lid of the box as a bonus. If all the blue tokens are in the box lid, you do not get the bonus.</p>
+                <p>When a player finishes a firework by playing a value 5 card on it, it will return one bonus hint token. If you already have 8 tokens, you do not get the bonus hint token.</p>
                 <h2> End of the game </h2>
                 <p> Hanabi can end in three ways: </p>
                 <ol>
-                <li>If you get the third red token, you lose the game as the display goes up in flames!</li>
+                <li>If you get the third strike, you lose the game as the display goes up in flames!</li>
                 <li>If the team completes all five colors of firework with a value of 5, the team makes a spectacular victorydisplay and obtains the maximum score of 25 points.</li>
                 <li>If a player draws the last card from deck, the game is almost over. Each player gets one more turn,including the player who drew the last card. Players cannot draw more cards during these final turns.</li>
                 </ol>
