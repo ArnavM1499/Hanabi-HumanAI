@@ -760,9 +760,7 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                 gid
             )
             instruction_info = """Basic information will be reflected here."""
-            instruction_action = (
-                """Recent action history will be displayed here."""
-            )
+            instruction_action = """Recent action history will be displayed here."""
 
             links = [[("Hint Rank", s.path), ("Hint Color", s.path)] for i in range(5)]
             aicards = [(1, 2), (0, 4), (4, 3), (2, 3), (3, 5)]
@@ -935,6 +933,7 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                 format=1,
                 http_player=1,
                 print_game=False,
+                log_timestamps=True,
             )
             game.treatment = t
             game.ping = time.time()
@@ -1059,9 +1058,7 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
         s.wfile.write(b"</p>")
 
     def presurvey(s, gid, warn=False):
-        s.wfile.write(
-            b"<center><h1>Pre-Game Survey</h1>"
-        )
+        s.wfile.write(b"<center><h1>Pre-Game Survey</h1>")
         s.wfile.write(b'<table width="600px">\n<tr><td>')
         s.wfile.write(b'<form action="/submitpre" method="POST">')
         s.presurvey_questions()

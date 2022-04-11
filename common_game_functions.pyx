@@ -226,6 +226,7 @@ def encode_state(
     partner_knowledge_model,
     pnr,
     extras=[],
+    timestamp=None,
 ):
     state = []
     state.extend([(col * 6 + num) for col, num in sorted(board)])
@@ -259,7 +260,7 @@ def encode_state(
         state.append(20)
     state.append(action.encode())
     state.append(pnr)
-    return state
+    return {timestamp: state} if timestamp else state
 
 
 def decode_state(state):

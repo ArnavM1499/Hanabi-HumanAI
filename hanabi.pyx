@@ -1,4 +1,5 @@
 import csv
+from datetime import datetime
 import os
 import pickle
 from common_game_functions import *
@@ -24,6 +25,7 @@ class Game(object):
         format=0,
         http_player=-1,
         print_game=True,
+        log_timestamps=False,
     ):
         self.players = players
         self.hits = 3
@@ -41,6 +43,7 @@ class Game(object):
         self.format = format
         self.pickle_file = pickle_file
         self.save_snapshots = None
+        self.log_timestamps = log_timestamps
         if data_file.endswith(".csv"):
             self.data_format = "csv"
             self.data_file = open(data_file, "a+")
@@ -387,6 +390,7 @@ class Game(object):
                         partner_knowledge_model,
                         self.current_player,
                         extra,
+                        timestamp=str(datetime.now()) if self.log_timestamps else None,
                     ),
                     self.data_file,
                 )
