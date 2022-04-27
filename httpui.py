@@ -708,6 +708,13 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                 f.close()
             return
 
+        if s.path.startswith("/consent"):
+            with open("constent.html", "rb") as f:
+                doc = f.read()
+                s.wfile.write(doc)
+                f.close()
+            return
+
         if s.path.startswith("/tutorial-start"):
             _, _, gid = s.path.split("/")
             s.wfile.write(b"<html><head><title>Hanabi</title></head>")
@@ -1096,10 +1103,10 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
         s.add_choice("gender", "What is your gender?", responses, default)
 
         responses = [
-            ("new", "less than once in two months"),
-            ("dabbling", "once a month"),
-            ("intermediate", "once every two weeks"),
-            ("expert", "more than once a week"),
+            ("new", "Less than once in two months"),
+            ("dabbling", "Once a month"),
+            ("intermediate", "Once every two weeks"),
+            ("expert", "More than once a week"),
         ]
         default = -1
         if "bgg" in answers:
@@ -1183,6 +1190,15 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
         s.add_choice(
             "publish",
             "For this study we have recorded your answers to this survey, as well as a log of actions that you performed in the game. We have <b>not</b> recorded your IP address or any other information that could be linked back to you. Do you agree that we make your answers to the survey and the game log publicly available for future research?",
+            responses,
+            default,
+        )
+
+        responses = [("yes", "Yes")]
+        default = -1
+        s.add_choice(
+            "consent",
+            'You have read and understand the <a href="/consent" target="_blank" rel="noreferrer noopener">Online Consent Form</a>, and agree to participate in this study',
             responses,
             default,
         )
@@ -1347,7 +1363,7 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                 <center>
                 <h1> A brief intro to Hanabi </h1>
                 <h4> (adopted from hanabi.cards) </h4>
-                <a href="/tutorial-start/{gid}">I already know the rules!</a>
+                <a href="/tutorial-start/{gid}">I already know the rules! show me the interface</a>
                 </center>
                 <h2> Objective </h2>
                 <p>Hanabi is a card game created by Antoine Bauza. It's cooperative, which means that players are not against each other but assemble to reach a common goal. They incarn here distracted pyrotechnists who - by inattention - mixed their powder, wicks and rockets for a large fireworks display. The show will begin soon and the situation is a bit chaotic. They will need to help each other to prevent the show turning to disaster.</p>
@@ -1420,15 +1436,6 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             s.wfile.write(b"<html><head><title>Hanabi</title></head>")
             s.wfile.write(b"<body><center>")
             s.wfile.write(b"<h1>Thank you for your participation in this study!</h1>")
-
-    def consentform(s):
-        s.wfile.write(b"<html><head><title>Hanabi</title></head>\n")
-        s.wfile.write(b"<body>\n")
-        s.wfile.write((consent.consent).encode())
-        s.wfile.write(
-            b'<center><font size="12"><a href="/tutorial">By clicking here I agree to participate in the study</a></font></center><br/><br/><br/>'
-        )
-        s.wfile.write(b"</body></html>")
 
 
 class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
