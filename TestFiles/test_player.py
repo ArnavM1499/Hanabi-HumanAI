@@ -1,21 +1,82 @@
+import pyximport; pyximport.install()
 import csv
 import fire
 import json
 from multiprocessing import Pool
 import os
+import pickle
 from pprint import pprint
 import random
+from subprocess import Popen, DEVNULL
+from signal import SIGTERM
 import sys
 import time
 import threading
 from tqdm import tqdm
+
 from hanabi import Game
 from Agents.player import Player
 from Agents.ChiefAgent.player_pool import PlayerPool
 from Agents.value_player import ValuePlayer
 
-player_pool = json.load(open("Agents/configs/players.json"))
-dummy_pool = PlayerPool("dummy", 0, "Agents/configs/players.json")
+base_path = os.path.abspath(__file__).replace("TestFiles/test_player.py", "")
+pool_path = os.path.abspath(__file__).replace(
+    "TestFiles/test_player.py", "Agents/configs/players.json"
+)
+player_pool = json.load(open(pool_path))
+# pool_ids = ["00001","00002","00003","00004","00005","10001","10002","10003","10004","10005"]
+pool_ids = ["10001"]
+dummy_pool = PlayerPool("dummy", 0, pool_path, pool_ids)
+
+
+def try_pickle(file):
+    try:
+        return pickle.load(file)
+    except:  # noqa
+        return None
+
+
+def relabel_run(original_filename, relabeler, game_log_filename, output_filename):
+    new_rows = []
+    relabeled_actions = []
+
+    # simulate relabeler on game to get new actions
+    with open(game_log_filename, "rb") as f:
+        row = try_pickle(f)
+        cnt = [0, 0, 0]
+
+        while row is not None:
+            if row[0] == "Action" and row[1].get_current_player() == relabeler.pnr:
+                relabeled_actions.append(relabeler.get_action(row[1], row[2]))
+                cnt[0] += 1
+
+            if row[0] == "Inform" and row[4] == relabeler.pnr:
+                relabeler.inform(row[3], row[5], row[1], row[2])
+                if row[5] == relabeler.pnr:
+                    cnt[1] += 1
+                else:
+                    cnt[2] += 1
+
+            row = try_pickle(f)
+
+    # create new rows for file with relabeled actions
+    with open(original_filename, "rb") as f:
+        row = try_pickle(f)
+        idx = 0
+
+        while row is not None:
+            if row != [] and row[-1] == relabeler.pnr:
+                # replacing encoded action
+                new_rows.append(row[:-2] + [relabeled_actions[idx].encode()] + row[-1:])
+                idx += 1
+            else:
+                new_rows.append(row)
+            row = try_pickle(f)
+
+    # update file so that the top-level training scripts get the relabeled version
+    with open(output_filename, "ab+") as f:
+        for r in new_rows:
+            pickle.dump(r, f)
 
 
 def run_single(
@@ -26,7 +87,8 @@ def run_single(
     key2=None,
     clean=False,
     print_game=True,
-    print_data=False
+    print_data=False,
+    relabeler=None,
 ):
 
     if not player2:
@@ -40,6 +102,14 @@ def run_single(
         P2 = player2
     else:
         P2 = dummy_pool.from_dict("Bob", 1, player_pool[str(player2)])
+    if relabeler is None:
+        RELABEL = None
+    elif isinstance(relabeler, Player):
+        RELABEL = relabeler
+    else:
+        RELABEL = dummy_pool.from_dict(
+            "Relabeler", int(str(relabeler)[-1]), player_pool[str(relabeler)[:-1]]
+        )
     if (key is not None) and hasattr(P1, "set_from_key"):
         P1.set_from_key(key)
     elif print_data:
@@ -48,13 +118,35 @@ def run_single(
         P2.set_from_key(key2)
     elif print_data:
         print("player2 key not set")
-    G = Game([P1, P2], file_name, print_game=print_game)
+
+    if RELABEL is None:
+        gamelog_file = None
+        original_output_file = file_name
+    else:
+        gamelog_file_name = file_name[:-4] + "LOG.pkl"
+        gamelog_file = open(gamelog_file_name, "wb")
+        original_output_file = file_name[:-4] + "ORG.pkl"
+
+    G = Game(
+        [P1, P2], original_output_file, print_game=print_game, pickle_file=gamelog_file
+    )
+
     score = G.run(100)
     hints = G.hints
     hits = G.hits
     turns = G.turn
+    print(turns)
+    if RELABEL is not None:
+        gamelog_file.close()
+        relabel_run(original_output_file, RELABEL, gamelog_file_name, file_name)
+        os.remove(gamelog_file_name)
+        os.remove(original_output_file)
+
     if clean:
-        os.remove(file_name)
+        try:
+            os.remove(file_name)
+        except FileNotFoundError:
+            pass
     return score, hints, hits, turns
 
 
@@ -159,7 +251,7 @@ def test_player(
         ]
         results = [list(x) for x in zip(*res)]
     else:
-        p = Pool(min(16, iters))
+        p = Pool(min(24, iters))
         res = p.starmap_async(
             run_single,
             [
@@ -182,20 +274,15 @@ def test_player(
     hints = sum(results[1]) / iters
     hits = sum(results[2]) / iters
     turns = sum(results[3]) / iters
+    full = results[0].count(25) / iters
     print(
-        "{} games: avg: {}, min: {}, max: {}, median: {}, mode: {}".format(
-            iters,
-            avg,
-            smin,
-            smax,
-            smid,
-            smod,
+        "{} games: avg: {}, min: {}, max: {}, median: {}, mode: {}, full: {}".format(
+            iters, avg, smin, smax, smid, smod, full
         )
     )
     print(
         "average: hints left: {}, hits left: {}, turns: {}".format(hints, hits, turns)
     )
-    return sum(results[0]) / iters
 
     if print_details:
         pprint(list(zip(*results)))
@@ -203,41 +290,88 @@ def test_player(
     return iters, avg, smin, smax, smid, smod, hints, hits, turns
 
 
-def sequential_test(player, player2=None, iters=5000, seed=0, save_pkl_dir=None, tid=0):
+def sequential_test(
+    player, player2=None, iters=5000, seed=0, save_pkl_dir=None, tid=0, relabeler=None
+):
     random.seed(seed)
     iters = int(iters)
     if isinstance(save_pkl_dir, str):
-        print("saving into ", os.path.abspath(save_pkl_dir))
         if not os.path.isdir(save_pkl_dir):
             os.makedirs(save_pkl_dir)
         save_file = os.path.join(
-            save_pkl_dir, "{}_{}_{}.pkl".format(player, player2, seed)
+            save_pkl_dir, "{}_{}_{}.pkl".format(player, player2, str(seed).zfill(4))
         )
+        print("saving into ", os.path.abspath(save_file))
         if os.path.isfile(save_file):
             # remove previous data
             f = open(save_file, "w")
             f.close()
         if tid == 0:
             for i in tqdm(range(iters)):
-                run_single(save_file, player, player2, clean=False, print_game=False)
+                run_single(
+                    save_file,
+                    player,
+                    player2,
+                    clean=False,
+                    print_game=False,
+                    relabeler=relabeler,
+                )
         else:
             for i in range(iters):
-                run_single(save_file, player, player2, clean=False, print_game=False)
+                run_single(
+                    save_file,
+                    player,
+                    player2,
+                    clean=False,
+                    print_game=False,
+                    relabeler=relabeler,
+                )
     else:
+        print(save_pkl_dir, "is not a str")
         for i in tqdm(range(iters)):
             run_single(
-                "sink_{}.csv".format(i), player, player2, clean=True, print_game=False
+                "sink_{}.csv".format(i),
+                player,
+                player2,
+                clean=True,
+                print_game=False,
+                relabeler=relabeler,
             )
 
 
-def generate_data(player, save_pkl_dir, iters=20000, threads=16, method="thread"):
+########################################################
+# Generating data for LSTMs:
+# player and player2 may be passed in as id strings
+# relabeler will be passed in as an id string with the
+#           pnr appended to the id string
+########################################################
+def generate_data(
+    player,
+    save_pkl_dir,
+    player2=None,
+    iters=20000,
+    threads=16,
+    method="thread",
+    seed=0,
+    relabeler=None,
+):
+    if player2 is None:
+        player2 = player
     if method == "thread":
         tds = []
         print("using {} threads".format(threads))
         for i in range(threads):
             thread = threading.Thread(
                 target=sequential_test,
-                args=(player, player, iters / threads, i, save_pkl_dir, i),
+                args=(
+                    player,
+                    player2,
+                    iters / threads,
+                    seed + i,
+                    save_pkl_dir,
+                    1,
+                    relabeler,
+                ),
             )
             tds.append(thread)
 
@@ -250,13 +384,59 @@ def generate_data(player, save_pkl_dir, iters=20000, threads=16, method="thread"
         P = Pool(threads)
         for i in range(threads):
             P.apply_async(
-                sequential_test, (player, player, iters // threads, i, save_pkl_dir, i)
+                sequential_test,
+                (
+                    player,
+                    player2,
+                    iters // threads,
+                    seed + i,
+                    save_pkl_dir,
+                    1,
+                    relabeler,
+                ),
             )
         P.close()
         P.join()
     elif method == "single":
-        sequential_test(player, player, iters, 0, save_pkl_dir, 0)
+        sequential_test(player, player2, iters, 0, save_pkl_dir, 0, relabeler)
+    elif method == "subprocess":
+        processes = []
+        for i in range(threads):
+            processes.append(
+                Popen(
+                    " ".join(
+                        [
+                            "cd {}; ".format(base_path),
+                            "python3 -m TestFiles.test_player sequential_test",
+                            "--player=" + str(player),
+                            "--player2=" + str(player2),
+                            "--iters=" + str(iters),
+                            "--seed=" + str(i + seed),
+                            "--save_pkl_dir=" + save_pkl_dir,
+                            "--tid=1",
+                            "--relabeler=" + str(relabeler),
+                        ]
+                    ),
+                    shell=True,
+                    stdout=DEVNULL,
+                    preexec_fn=os.setsid,
+                )
+            )
+        try:
+            for p in processes:
+                p.wait()
+                try:
+                    os.killpg(os.getpgid(p.pid), SIGTERM)
+                except ProcessLookupError:
+                    pass
+        except KeyboardInterrupt:
+            for p in processes:
+                try:
+                    os.killpg(os.getpgid(p.pid), SIGTERM)
+                except ProcessLookupError:
+                    pass
     else:
+        print("method {} not found".format(method))
         raise NotImplementedError
 
 

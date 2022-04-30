@@ -1,3 +1,4 @@
+from glob import glob
 import numpy as np
 import os
 import torch
@@ -8,8 +9,8 @@ from lstm_net import LSTMNet, default_config
 from Agents.player import Action
 
 
-MODEL_DIR = "game_net/models"
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+MODEL_DIR = os.path.abspath(__file__).replace("behavior_clone.py", "models")
+DEVICE = "cpu"  # "cuda" if torch.cuda.is_available() else "cpu"
 
 
 class BehaviorCloneBase:
@@ -18,13 +19,16 @@ class BehaviorCloneBase:
 
     def _load_model(self, agent_id):
         model = LSTMNet(**default_config)
-        model_path = os.path.join(MODEL_DIR, "model_lstm_{}.pth".format(agent_id))
+        model_path = max(
+            glob(os.path.join(MODEL_DIR, "model_lstm_{}*.pth".format(agent_id)))
+        )
         model.load_state_dict(
             torch.load(
                 model_path,
                 map_location=DEVICE,
             )
         )
+        model.eval()
         self.models[agent_id] = model
 
     def predict(
@@ -51,41 +55,42 @@ class BehaviorCloneBase:
         partner_knowledge_models,
         return_dict=True,
     ) -> Action:
-        if agent_id not in self.models.keys():
-            self._load_model(agent_id)
+        with torch.no_grad():
+            if agent_id not in self.models.keys():
+                self._load_model(agent_id)
 
-        state_list = []
+            state_list = []
 
-        for game_state, player_model, partner_knowledge_model in zip(
-            game_states, player_models, partner_knowledge_models
-        ):
-            current_player, encoded_state = self._convert_game_state(
-                game_state, player_model, partner_knowledge_model
-            )
-            state_list.append(encoded_state)
+            for game_state, player_model, partner_knowledge_model in zip(
+                game_states, player_models, partner_knowledge_models
+            ):
+                current_player, encoded_state = self._convert_game_state(
+                    game_state, player_model, partner_knowledge_model
+                )
+                state_list.append(encoded_state)
 
-        game_net_input = (
-            torch.tensor(np.array([state_list]), dtype=torch.float32) * 0.333
-        )  # with rough normalization
-        try:
-            pred = self.models[agent_id](
-                torch.transpose(game_net_input, 0, 1), [len(state_list)]
-            ).data[-1]
-        except RuntimeError:
-            import pdb
+            game_net_input = (
+                torch.tensor(np.array([state_list]), dtype=torch.float32) * 0.333
+            )  # with rough normalization
+            try:
+                pred = self.models[agent_id](
+                    torch.transpose(game_net_input, 0, 1), [len(state_list)]
+                ).data[-1]
+            except RuntimeError:
+                import pdb
 
-            pdb.set_trace()
-        # action = int(tf.math.argmax(pred, axis=1).numpy()[-1])
-        ret = dict()
-        pred = torch.nn.functional.softmax(pred, dim=0)
+                pdb.set_trace()
+            # action = int(tf.math.argmax(pred, axis=1).numpy()[-1])
+            ret = dict()
+            pred = torch.nn.functional.softmax(pred, dim=0)
 
-        for i, p in enumerate(pred):
-            ret[Action.from_encoded(i, pnr=current_player)] = p
+            for i, p in enumerate(pred):
+                ret[Action.from_encoded(i, pnr=current_player)] = p
 
-        if return_dict:
-            return ret
-        else:
-            return max(ret.keys(), key=lambda x: ret[x])
+            if return_dict:
+                return ret
+            else:
+                return max(ret.keys(), key=lambda x: ret[x])
 
     def _convert_game_state(
         self,
