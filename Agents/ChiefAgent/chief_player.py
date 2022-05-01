@@ -56,6 +56,8 @@ class ChiefPlayer(Player):
                 self.sequential_playermodels_chief_persp = []
                 self.sequential_partnerknowledgemodels_chief_persp = []
 
+                self.thesis_logger = []
+
         def get_action(self, game_state, player_model, action_default=None):
                 print("Starting get action")
 
@@ -98,6 +100,16 @@ class ChiefPlayer(Player):
 
 
                 return action
+
+        def _log_results(self, action):
+                agent_weights = deepcopy(self.move_tracking_table.loc[:,"agent distribution"])
+                conditionals = deepcopy(self.move_tracking_table.loc[:,"conditional probabilities"])
+
+                self.thesis_logger.append({"action":action, "confidences":agent_weights, "conditionals": conditionals})
+
+        def get_result_log(self):
+                return self.thesis_logger
+
 
         def inform(self, action, player, game_state, player_model):
                 print("Starting inform")
@@ -261,7 +273,7 @@ class ChiefPlayer(Player):
                         self.move_tracking_table.at[self.move_idx,"MLE probabilities"] = (new_conditional + prior2*self.move_idx)/(self.move_idx + 1)
 
                 self.move_idx += 1
-
+                self._log_results(action)
 
         
         def _get_action_helper(self):
@@ -278,6 +290,8 @@ class ChiefPlayer(Player):
                         agent_weights = self.move_tracking_table.iloc[-1]["agent distribution"]
                 else:
                         agent_weights = np.ones(len(agent_ids))
+
+                agent_weights = self._makeprob(agent_weights)
 
                 for i, agent_id in enumerate(agent_ids):
                         bc_output = BehaviorClone.sequential_predict(agent_id,

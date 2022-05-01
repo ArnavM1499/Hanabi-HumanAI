@@ -41,28 +41,38 @@ def try_pickle(file):
 with open("resultlog", "a") as f:
 	print("clearing resultlog", file=sys.stderr)
 
-L = []
+def run_n_games(n, number_of_samples, avoid_knowledge_rollback):
+	thesis_log = []
 
-for i in range(200):
-	id_string = np.random.choice(pool_ids)
-	P1 = ChiefPlayer("CHIEF", 0, pool_ids)
-	P2 = from_dict("Teammate", 1, json_vals[id_string])
+	for i in range(n):
+		id_string = np.random.choice(pool_ids)
+		
+		if np.random.rand() < 0.5:
+			chief_idx = 0
+			P1 = ChiefPlayer("CHIEF", 0, pool_ids, num_samples=number_of_samples, avoid_knowledge_rollback=avoid_knowledge_rollback)
+			P2 = from_dict("Teammate", 1, json_vals[id_string])
+		else:
+			chief_idx = 1
+			P1 = from_dict("Teammate", 0, json_vals[id_string])
+			P2 = ChiefPlayer("CHIEF", 1, pool_ids, num_samples=number_of_samples, avoid_knowledge_rollback=avoid_knowledge_rollback)
+		
+		pickle_file = open(pickle_file_name, "wb")
+		pickle.dump(["NEW"], pickle_file)
+		G = hanabi.Game([P1, P2], file_name, pickle_file)
+		Result = G.run(100)
+		pickle_file.close()
+
+		thesis_log.append({"details":[P1,P2][chief_idx].get_result_log(), "score":Result, "teammate": id_string})
+
+	return thesis_log
+
+params = {'n': [1,20,20,20,20,20,20], 'num_samples': [1,1,2,5,10,10,10], 'akr': [False,False,False,False,False,False,True]}
+
+for i in range(7):
+	print(i, file=sys.stderr)
+	PER_PARAM_LOG = run_n_games(params['n'][i], params['num_samples'][i], params['akr'][i])
 	
-	pickle_file = open(pickle_file_name, "wb")
-	pickle.dump(["NEW"], pickle_file)
-	G = hanabi.Game([P1, P2], file_name, pickle_file)
-	Result = G.run(100)
-	pickle_file.close()
-
-	L.append((id_string, json_vals[id_string]["player_class"], Result))
-
-	print([a[2] for a in L], file=sys.stderr)
-	
-	with open("resultlog", "a") as f:
-		print(L[-1], file=f)
-		print(P1.move_tracking_table.loc[:,'agent distribution'], file=f)
-
-print(np.mean([a[2] for a in L]), file=sys.stderr)
-
-with open("CHIEF_RESULTS.pkl", "wb") as f:
-	pickle.dump(L, f)
+	with open("thesis_results/full_info" + str(i), "wb") as f:
+		pickle.dump([(k,params[k][i]) for k in params.keys()], f)
+		pickle.dump(PER_PARAM_LOG, f)
+		print("thesis_results/full_info" + str(i) + " generated", file=sys.stderr)
