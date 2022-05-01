@@ -716,14 +716,13 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             return
 
         if s.path.startswith("/tutorial-start"):
-            _, _, gid = s.path.split("/")
             s.wfile.write(b"<html><head><title>Hanabi</title></head>")
             s.wfile.write(b"<body>")
             instruction = """Your partner's hand will be shown here. You can click on "Hint Rank" / "Hint Color" to give a hint <br>of the rank/color shown on the card. For this tutorial, try to hint the 1's to your partner."""
 
             links = [[("Hint Rank", s.path), ("Hint Color", s.path)] for i in range(5)]
             links[-2] = [
-                ("Hint Rank", "/tutorial-board/{}".format(gid)),
+                ("Hint Rank", "/tutorial-board/"),
                 ("Hint Color", s.path),
             ]
             aicards = [(1, 2), (0, 4), (4, 3), (0, 1), (2, 3)]
@@ -760,13 +759,10 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             return
 
         elif s.path.startswith("/tutorial-board"):
-            _, _, gid = s.path.split("/")
             s.wfile.write(b"<html><head><title>Hanabi</title></head>")
             s.wfile.write(b"<body>")
             instruction_other = """Now that your partner played green 1, a new card is dealt from the right"""
-            instruction_board = """<br>The board will be shown here. Your partner's successful play will be highlighted in red.<br><a href="/tutorial-yourhand/{}"> Click Here </a> to continue""".format(
-                gid
-            )
+            instruction_board = """<br>The board will be shown here. Your partner's successful play will be highlighted in red.<br><a href="/tutorial-yourhand/"> Click Here </a> to continue"""
             instruction_info = """Basic information will be reflected here."""
             instruction_action = """Recent action history will be displayed here."""
 
@@ -803,7 +799,6 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             return
 
         elif s.path.startswith("/tutorial-yourhand"):
-            _, _, gid = s.path.split("/")
             s.wfile.write(b"<html><head><title>Hanabi</title></head>")
             s.wfile.write(b"<body>")
             instruction_other = """Suppose your partner did not play the card immediately. Your past hints will be shown beneath the card."""
@@ -822,7 +817,7 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             links = [[("Play", s.path), ("Discard", s.path)] for i in range(5)]
             links[0] = [
                 ("Play", s.path),
-                ("Discard", "/tutorial-discard/{}".format(gid)),
+                ("Discard", "/tutorial-discard/"),
             ]
             yourcards = [unknown_card_image(lks, False) for lks in links]
             yourcards = sum((list(x) for x in zip(yourcards, [""] * 5)), [])
@@ -850,12 +845,9 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             return
 
         elif s.path.startswith("/tutorial-discard"):
-            _, _, gid = s.path.split("/")
             s.wfile.write(b"<html><head><title>Hanabi</title></head>")
             s.wfile.write(b"<body>")
-            instruction = """The discard pile will be shown here. <a href="/tutorial-end/{}"> Click Here </a> to continue """.format(
-                gid
-            )
+            instruction = """The discard pile will be shown here. <a href="/tutorial-end/"> Click Here </a> to continue """
 
             links = [[("Hint Rank", s.path), ("Hint Color", s.path)] for i in range(5)]
             aicards = [(1, 2), (0, 4), (4, 3), (0, 1), (2, 3)]
@@ -868,10 +860,6 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             board = [make_card_image((i, 0), [], False) for i in range(5)]
             board = board_template % ("", "#FFFFFF", "<h2>Board</h2", *board)
             links = [[("Play", s.path), ("Discard", s.path)] for i in range(5)]
-            links[0] = [
-                ("Play", s.path),
-                ("Discard", "/tutorial-discard/{}".format(gid)),
-            ]
             yourcards = [unknown_card_image(lks, False) for lks in links]
             yourcards = sum((list(x) for x in zip(yourcards, [""] * 5)), [])
             yourcards = format_hand(yourcards, "You")
@@ -897,21 +885,17 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             return
 
         elif s.path.startswith("/tutorial-end"):
-            _, _, gid = s.path.split("/")
-            agent = random.choice(
-                ["ChiefPlayer"] + [str(x) for x in Agents.default_pool_ids]
-            )
-            redirect = "/play/{}/{}".format(agent, gid)
+            redirect = "/presurvey/"
             s.wfile.write(
                 """<html><head><title>Hanabi</title><meta http-equiv="Refresh" content="5; url='{}'" /></head>\n""".format(
                     redirect
                 ).encode()
             )
             s.wfile.write(
-                b"<body><h1>You have finished the Tutorial!</h1> <p>You should be redirected to the game in 5 seconds. If not, please click here: </p>\n"
+                b"<body><h1>Thank you for completing the tutorial!</h1> <p>You should be redirected to a pre game survey in 5 seconds. If not, please click here: </p>\n"
             )
             s.wfile.write(
-                '<li><a href="{}">Start Game</a></li>\n'.format(redirect).encode()
+                '<li><a href="{}">Start Survey</a></li>\n'.format(redirect).encode()
             )
             s.wfile.write(b"</body></html>")
             return
@@ -921,7 +905,7 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             s.postsurvey(gid)
             return
 
-        elif path.startswith("/new/") and debug:
+        elif path.startswith("/new/"):
 
             _, _, agent_type, gid = s.path.split("/")
             if agent_type == "ChiefPlayer":
@@ -956,20 +940,8 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             games[gid] = (game, player, turn)
             gameslock.release()
 
-        if gid is None or game is None or path.startswith("/restart/"):
-            if not debug:
-                s.wfile.write(b"<html><head><title>Hanabi</title></head>\n")
-                s.wfile.write(b"<body><h1>Invalid Game ID</h1>\n")
-                s.wfile.write(b"</body></html>")
-                return
-            if game is not None:
-                del game
-            gameslock.acquire()
-            if gid is not None and gid in games:
-                del games[gid]
-            else:
-                gid = s.getgid()
-            gameslock.release()
+        if path.startswith("/presurvey/"):
+            gid = s.getgid()
             participantslock.acquire()
             if gid not in participants:
                 if not os.path.isdir("log/http_games/{}".format(gid)):
@@ -983,6 +955,63 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
 
             s.wfile.write(b"</ul><br/>")
             s.wfile.write(b"</body></html>")
+            return
+
+        if gid is None or game is None or path.startswith("/restart/"):
+            s.wfile.write(
+                b"""
+                <div style="margin-left: 100px; margin-right: 100px; margin-bottom: 50px;">
+                <center>
+                <h1> A brief intro to Hanabi </h1>
+                <h4> (adopted from hanabi.cards) </h4>
+                <a href="/tutorial-start/">I already know the rules! show me the interface</a>
+                </center>
+                <h2> Objective </h2>
+                <p>Hanabi is a card game created by Antoine Bauza. It's cooperative, which means that players are not against each other but assemble to reach a common goal. They incarn here distracted pyrotechnists who - by inattention - mixed their powder, wicks and rockets for a large fireworks display. The show will begin soon and the situation is a bit chaotic. They will need to help each other to prevent the show turning to disaster.</p>
+                <p>The goal of the pyrotechnics team is to build 5 fireworks, one of each color (white, red, blue, yellow, green) by combining increasing value cards (1, 2, 3, 4, 5) of the same color.</p>
+                <h2> Setup </h2>
+                <p>At the beginning of a game, you will have 8 hint tokens and 3 strike tokens.</p>
+                <p>The deck is composed of 50 cards, 10 of each color with numbers 1, 1, 1, 2, 2, 3, 3, 4, 4, 5.</p>
+                <p>In a 2 player game, each player will be dealt 5 cards.</p>
+                <p>As you will see, players are not allowed to look at their own cards!</p>
+                <h2> Playing the game </h2>
+                <p>On each player's turn, they take excatly one of the three following actions. You are not allowed to pass.</p>
+                <ol>
+                <li> Give information to another player.</li>
+                <li> Discard a card.</li>
+                <li> Play a card.</li>
+                </ol>
+                <p>Players are not allowed to give hints or suggestions on other player's turns!</p>
+                <h3> 1. Give information to another player. </h3>
+                <p>When you give information, it will remove a hint token. Note: If you have no more hint tokens, you cannot choose to give information and must pick a different action.</p>
+                <p>You then give information to a fellow player about the cards in that player's hand by clicking on it. You can tell the player either about one (and only one) color, or one (and only one) value of card.</p>
+                <h3> 2. Discard a card </h3>
+                <p>Discarding a card returns a hint token. You discard a card from your hand by clicking on the correspoding link (you will see this later in the toturial). You then draw a new card from the deck and it will be added to your hand.</p>
+                <p>Note: If you have all 8 hint tokens, you cannot discard cards and must pick a different action.</p>
+                <p>You can consult discarded cards at anytime.</p>
+                <h3> 3. Play a card </h3>
+                <p>At your turn, to play a card, take a card from your hand and play it. One of two things happen:</p
+                <ol>
+                <li>If the card begins or adds to a firework, it will be added to that firework pile</li>
+                <li>If the card does not add to a firework, it will be discarded the card and add a red strike token</li
+                </ol>
+                <p>Then you will draw a replacement card from the deck.</p>
+                <p>When a player finishes a firework by playing a value 5 card on it, it will return one bonus hint token. If you already have 8 tokens, you do not get the bonus hint token.</p>
+                <h2> End of the game </h2>
+                <p> Hanabi can end in three ways: </p>
+                <ol>
+                <li>If you get the third strike, you lose the game as the display goes up in flames!</li>
+                <li>If the team completes all five colors of firework with a value of 5, the team makes a spectacular victorydisplay and obtains the maximum score of 25 points.</li>
+                <li>If a player draws the last card from deck, the game is almost over. Each player gets one more turn,including the player who drew the last card. Players cannot draw more cards during these final turns.</li>
+                </ol>
+                <p>The players then score their performance based on the fireworks they assembled.</p>
+                <center>
+                <h2> Here's a tutorial that will walk you through our interface </h2>
+                <a href="/tutorial-start/">Start Tutorial</a>
+                </center>
+                </div>
+                """
+            )
             return
 
         if path.startswith("/start/"):
@@ -1013,12 +1042,6 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                 game.external_turn(action)
                 game.single_turn()
 
-        # s.wfile.write(b"<html><head><title>Hanabi</title></head>")
-        # s.wfile.write(b"<body>")
-        #
-        # s.wfile.write(show_game_state(game, player, turn, gid).encode())
-        #
-        # s.wfile.write(b"</body></html>")
         s.info = game, player, turn, gid
         s.wfile.write(b"<html><head><title>Hanabi</title></head>")
         s.wfile.write(b"<body>")
@@ -1344,75 +1367,31 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                 )
                 s.wfile.write(b"</body></html>")
                 return
+
+            agent = random.choice(
+                ["ChiefPlayer"] + [str(x) for x in Agents.default_pool_ids]
+            )
+            redirect = "/play/{}/{}".format(agent, gid)
+            s.wfile.write(
+                """<html><head><title>Hanabi</title><meta http-equiv="Refresh" content="5; url='{}'" /></head>\n""".format(
+                    redirect
+                ).encode()
+            )
+            s.wfile.write(
+                b"<body><h1>Thank you for filling the pre-game survey!</h1> <p>You should be redirected to the game in 5 seconds. If not, please click here: </p>\n"
+            )
+            s.wfile.write(
+                '<li><a href="{}">Start Game</a></li>\n'.format(redirect).encode()
+            )
+            s.wfile.write(b"</body></html>")
+
             participantslock.acquire()
             for r in vars:
                 print(r, vars[r], file=participants[gid])
             participants[gid].flush()
             participantslock.release()
-            # s.wfile.write(
-            #     """<html><head><title>Hanabi</title><meta http-equiv="Refresh" content="5; url='{}'" /></head>\n""".format(
-            #         redirect
-            #     ).encode()
-            # )
-            # s.wfile.write(
-            #     b"<body><h1>Welcome to Hanabi</h1> <p>First let's go through a toturial to get you familiar with the interface. The tutorial should start in 5 seconds. If not, please click here: </p>"
-            # )
-            s.wfile.write(
-                """
-                <div style="margin-left: 100px; margin-right: 100px; margin-bottom: 50px;">
-                <center>
-                <h1> A brief intro to Hanabi </h1>
-                <h4> (adopted from hanabi.cards) </h4>
-                <a href="/tutorial-start/{gid}">I already know the rules! show me the interface</a>
-                </center>
-                <h2> Objective </h2>
-                <p>Hanabi is a card game created by Antoine Bauza. It's cooperative, which means that players are not against each other but assemble to reach a common goal. They incarn here distracted pyrotechnists who - by inattention - mixed their powder, wicks and rockets for a large fireworks display. The show will begin soon and the situation is a bit chaotic. They will need to help each other to prevent the show turning to disaster.</p>
-                <p>The goal of the pyrotechnics team is to build 5 fireworks, one of each color (white, red, blue, yellow, green) by combining increasing value cards (1, 2, 3, 4, 5) of the same color.</p>
-                <h2> Setup </h2>
-                <p>At the beginning of a game, you will have 8 hint tokens and 3 strike tokens.</p>
-                <p>The deck is composed of 50 cards, 10 of each color with numbers 1, 1, 1, 2, 2, 3, 3, 4, 4, 5.</p>
-                <p>In a 2 player game, each player will be dealt 5 cards.</p>
-                <p>As you will see, players are not allowed to look at their own cards!</p>
-                <h2> Playing the game </h2>
-                <p>On each player's turn, they take excatly one of the three following actions. You are not allowed to pass.</p>
-                <ol>
-                <li> Give information to another player.</li>
-                <li> Discard a card.</li>
-                <li> Play a card.</li>
-                </ol>
-                <p>Players are not allowed to give hints or suggestions on other player's turns!</p>
-                <h3> 1. Give information to another player. </h3>
-                <p>When you give information, it will remove a hint token. Note: If you have no more hint tokens, you cannot choose to give information and must pick a different action.</p>
-                <p>You then give information to a fellow player about the cards in that player's hand by clicking on it. You can tell the player either about one (and only one) color, or one (and only one) value of card.</p>
-                <h3> 2. Discard a card </h3>
-                <p>Discarding a card returns a hint token. You discard a card from your hand by clicking on the correspoding link (you will see this later in the toturial). You then draw a new card from the deck and it will be added to your hand.</p>
-                <p>Note: If you have all 8 hint tokens, you cannot discard cards and must pick a different action.</p>
-                <p>You can consult discarded cards at anytime.</p>
-                <h3> 3. Play a card </h3>
-                <p>At your turn, to play a card, take a card from your hand and play it. One of two things happen:</p
-                <ol>
-                <li>If the card begins or adds to a firework, it will be added to that firework pile</li>
-                <li>If the card does not add to a firework, it will be discarded the card and add a red strike token</li
-                </ol>
-                <p>Then you will draw a replacement card from the deck.</p>
-                <p>When a player finishes a firework by playing a value 5 card on it, it will return one bonus hint token. If you already have 8 tokens, you do not get the bonus hint token.</p>
-                <h2> End of the game </h2>
-                <p> Hanabi can end in three ways: </p>
-                <ol>
-                <li>If you get the third strike, you lose the game as the display goes up in flames!</li>
-                <li>If the team completes all five colors of firework with a value of 5, the team makes a spectacular victorydisplay and obtains the maximum score of 25 points.</li>
-                <li>If a player draws the last card from deck, the game is almost over. Each player gets one more turn,including the player who drew the last card. Players cannot draw more cards during these final turns.</li>
-                </ol>
-                <p>The players then score their performance based on the fireworks they assembled.</p>
-                <center>
-                <h2> Here's a tutorial that will walk you through our interface </h2>
-                <a href="/tutorial-start/{gid}">Start Tutorial</a>
-                </center>
-                </div>
-                """.format(
-                    gid=gid
-                ).encode()
-            )
+
+            return
 
         elif s.path.startswith("/submitpost"):
 
