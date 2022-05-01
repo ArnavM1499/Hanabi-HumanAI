@@ -33,7 +33,7 @@ class Sample(object):
                 return True
 
 class ChiefPlayer(Player):
-        def __init__(self, name, pnr, pool_ids, num_samples=10, avoid_knowledge_rollback=False):
+        def __init__(self, name, pnr, pool_ids, num_samples=10, avoid_knowledge_rollback=False, general=False):
                 self.name = name
                 self.pnr = pnr
                 self.pool_ids = pool_ids
@@ -57,6 +57,7 @@ class ChiefPlayer(Player):
                 self.sequential_partnerknowledgemodels_chief_persp = []
 
                 self.thesis_logger = []
+                self.general = general
 
         def get_action(self, game_state, player_model, action_default=None):
                 print("Starting get action")
@@ -286,7 +287,7 @@ class ChiefPlayer(Player):
                 action_to_play = np.zeros(20)
                 agent_ids = sorted(self.pool_ids)
 
-                if len(self.move_tracking_table) > 0:
+                if len(self.move_tracking_table) > 0 and not self.general:
                         agent_weights = self.move_tracking_table.iloc[-1]["agent distribution"]
                 else:
                         agent_weights = np.ones(len(agent_ids))
