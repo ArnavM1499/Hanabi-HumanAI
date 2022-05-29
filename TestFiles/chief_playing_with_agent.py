@@ -45,7 +45,9 @@ def run_n_games(n, number_of_samples, avoid_knowledge_rollback):
 	thesis_log = []
 
 	for i in range(n):
-		id_string = np.random.choice(pool_ids)
+		# id_string = np.random.choice(pool_ids)
+		id_string = "00001"
+		print(i)
 		
 		if np.random.rand() < 0.5:
 			chief_idx = 0
@@ -66,13 +68,13 @@ def run_n_games(n, number_of_samples, avoid_knowledge_rollback):
 
 	return thesis_log
 
-params = {'n': [1,20,20,20,20,20,20], 'num_samples': [1,1,2,5,10,10,10], 'akr': [False,False,False,False,False,False,True]}
+params = {'n': [1,50,50,50,50,50,50], 'num_samples': [1,1,2,5,10,2,2], 'akr': [False,False,False,False,False,False,True]}
 
-for i in range(7):
+for i in range(5,7):
 	print(i, file=sys.stderr)
 	PER_PARAM_LOG = run_n_games(params['n'][i], params['num_samples'][i], params['akr'][i])
 	
-	with open("thesis_results/full_info" + str(i), "wb") as f:
+	with open("thesis_results/fixed_teammate_" + str(i), "wb") as f:
 		pickle.dump([(k,params[k][i]) for k in params.keys()], f)
 		pickle.dump(PER_PARAM_LOG, f)
-		print("thesis_results/full_info" + str(i) + " generated", file=sys.stderr)
+		print("thesis_results/fixed_teammate_" + str(i) + " generated", file=sys.stderr)

@@ -60,8 +60,12 @@ def run_n_games(n, mirror, general, id_strings):
 				P1 = from_dict("Teammate", 0, json_vals[id_string])
 				P2 = ChiefPlayer("CHIEF", 1, pool_ids, general=general)
 		else:
-			P1 = from_dict("Player 1", 0, json_vals[id_string])
-			P2 = from_dict("Player 2", 1, json_vals[id_string])
+			if np.random.rand() < 0.5:
+				P1 = from_dict("Player 1", 0, json_vals[id_string[0] + "9" + id_string[2:]])
+				P2 = from_dict("Player 2", 1, json_vals[id_string])
+			else:
+				P1 = from_dict("Player 1", 0, json_vals[id_string])
+				P2 = from_dict("Player 2", 1, json_vals[id_string[0] + "9" + id_string[2:]])
 		
 		pickle_file = open(pickle_file_name, "wb")
 		pickle.dump(["NEW"], pickle_file)
@@ -78,26 +82,32 @@ def run_n_games(n, mirror, general, id_strings):
 
 id_strings = [np.random.choice(pool_ids) for x in range(50)]
 print(id_strings, file=sys.stderr)
-PER_PARAM_LOG = run_n_games(50, False, False, id_strings)
-
-with open("thesis_results/chief_results_chief", "wb") as f:
-	pickle.dump("CHIEF", f)
-	pickle.dump(PER_PARAM_LOG, f)
-	print("thesis_results/chief_results_chief generated", file=sys.stderr)
-
-
-PER_PARAM_LOG = run_n_games(50, False, True, id_strings)
-
-with open("thesis_results/chief_results_general", "wb") as f:
-	pickle.dump("General", f)
-	pickle.dump(PER_PARAM_LOG, f)
-	print("thesis_results/chief_results_general generated", file=sys.stderr)
-
 
 PER_PARAM_LOG = run_n_games(50, True, False, id_strings)
 
-with open("thesis_results/chief_results_mirror", "wb") as f:
-	pickle.dump("Mirror", f)
-	pickle.dump(PER_PARAM_LOG, f)
-	print("thesis_results/chief_results_mirror generated", file=sys.stderr)
+print(np.mean([game["score"] for game in PER_PARAM_LOG]), file=sys.stderr)
+
+
+# PER_PARAM_LOG = run_n_games(50, False, False, id_strings)
+
+# with open("thesis_results/chief_results_chief", "wb") as f:
+# 	pickle.dump("CHIEF", f)
+# 	pickle.dump(PER_PARAM_LOG, f)
+# 	print("thesis_results/chief_results_chief generated", file=sys.stderr)
+
+
+# PER_PARAM_LOG = run_n_games(50, False, True, id_strings)
+
+# with open("thesis_results/chief_results_general", "wb") as f:
+# 	pickle.dump("General", f)
+# 	pickle.dump(PER_PARAM_LOG, f)
+# 	print("thesis_results/chief_results_general generated", file=sys.stderr)
+
+
+# PER_PARAM_LOG = run_n_games(50, True, False, id_strings)
+
+# with open("thesis_results/chief_results_mirror", "wb") as f:
+# 	pickle.dump("Mirror", f)
+# 	pickle.dump(PER_PARAM_LOG, f)
+# 	print("thesis_results/chief_results_mirror generated", file=sys.stderr)
 
