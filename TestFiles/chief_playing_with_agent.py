@@ -41,13 +41,13 @@ def try_pickle(file):
 with open("resultlog", "a") as f:
 	print("clearing resultlog", file=sys.stderr)
 
-def run_n_games(n, number_of_samples, avoid_knowledge_rollback):
+def run_n_games(n, number_of_samples, avoid_knowledge_rollback, id_string):
 	thesis_log = []
 
 	for i in range(n):
 		# id_string = np.random.choice(pool_ids)
-		id_string = "00001"
-		print(i)
+		# id_string = "00001"
+		# print(i, file=sys.stderr)
 		
 		if np.random.rand() < 0.5:
 			chief_idx = 0
@@ -70,11 +70,12 @@ def run_n_games(n, number_of_samples, avoid_knowledge_rollback):
 
 params = {'n': [1,50,50,50,50,50,50], 'num_samples': [1,1,2,5,10,2,2], 'akr': [False,False,False,False,False,False,True]}
 
-for i in range(5,7):
-	print(i, file=sys.stderr)
-	PER_PARAM_LOG = run_n_games(params['n'][i], params['num_samples'][i], params['akr'][i])
-	
-	with open("thesis_results/fixed_teammate_" + str(i), "wb") as f:
-		pickle.dump([(k,params[k][i]) for k in params.keys()], f)
-		pickle.dump(PER_PARAM_LOG, f)
-		print("thesis_results/fixed_teammate_" + str(i) + " generated", file=sys.stderr)
+for agent_teammate_ in ["00001", "00004", "10001"]:
+	for i in range(7):
+		print(i, file=sys.stderr)
+		PER_PARAM_LOG = run_n_games(params['n'][i], params['num_samples'][i], params['akr'][i], agent_teammate_)
+		
+		with open("thesis_results/knowledge_results_" + str(i) + "_" + agent_teammate_, "wb") as f:
+			pickle.dump([(k,params[k][i]) for k in params.keys()], f)
+			pickle.dump(PER_PARAM_LOG, f)
+			print("thesis_results/knowledge_results_" + str(i) + "_" + agent_teammate_ + " generated", file=sys.stderr)
